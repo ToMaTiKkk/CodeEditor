@@ -2,6 +2,7 @@
 #define MAINWINDOWCODEEDITOR_H
 
 #include <QMainWindow>
+#include <QFileSystemModel>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -17,16 +18,19 @@ public:
     MainWindowCodeEditor(QWidget *parent = nullptr);
     ~MainWindowCodeEditor();
 
-private slots:
-    void onOpenFileClicked();
-    void onSaveFileClicked();
-    void onSaveAsFileClicked();
-    void onExitClicked();
-    void onNewFileClicked();
-    void onOpenFolderClicked();
+private slots: // функции, которые будут вызваны в ответ на определенные события
+    void onOpenFileClicked(); // вызывается при вызове пункта мен дл открытия файлы
+    void onSaveFileClicked(); // сохранение файла
+    void onSaveAsFileClicked(); // сохрание под новым именем
+    void onExitClicked(); // для выхода из приложения
+    void onNewFileClicked(); // для создания нового файла (простое очищение редактора, файл надо будет сохранять вручную)
+    void onOpenFolderClicked(); // для открытия папки и отображения ее в дереве
+
+    void onFileSystemTreeViewDoubleClicked(const QModelIndex &index); // когда пользователь дважды кликает по файлу в дереве, то оно открывается в редакторе
 
 private:
-    Ui::MainWindowCodeEditor *ui;
-    QString currentFilePath;
+    Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
+    QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
+    QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
 };
 #endif // MAINWINDOWCODEEDITOR_H
