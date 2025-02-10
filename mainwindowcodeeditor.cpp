@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QDir>
 
+
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
@@ -23,6 +24,23 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     // установка центрального виджета, чтобы сохранить весь интерфейс
     setCentralWidget(ui->centralwidget);
+
+    // управлние размерами окон для дерева и редактора
+    ui->splitter->setStretchFactor(0, 0); // для дерева файлов (левый элемент)
+    ui->splitter->setStretchFactor(1, 1); // для окна редактирования (правый элемент)
+    // ограничение размера древа файлов
+    connect(ui->splitter, &QSplitter::splitterMoved, this, [this](int pos, int index) { // [this] - анонимная лямба-функция, которая может использовать переменные их текущего класса, int pos - позиция сплита от начала, int index - указывает, какой из элементов был перемещен
+        int currentTreeViewWidth = ui->fileSystemTreeView->width(); // текущая ширина виджета древа
+        int maxAllowedWidth = 350;
+        if (currentTreeViewWidth > maxAllowedWidth) {
+            QList<int> sizes = ui->splitter->sizes();
+            int diff = currentTreeViewWidth - maxAllowedWidth;
+            sizes[0] = maxAllowedWidth;
+            sizes[1] += diff;
+            if (sizes[1] < 0) sizes[1] = 0;
+            ui->splitter->setSizes(sizes);
+        }
+    });
 
     // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
     fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
