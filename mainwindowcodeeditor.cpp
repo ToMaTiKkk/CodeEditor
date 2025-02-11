@@ -6,6 +6,8 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
@@ -53,6 +55,9 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     ui->fileSystemTreeView->hideColumn(3);
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
     connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
+
+    connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentChange);
+    connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
@@ -162,5 +167,48 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
         } else {
             QMessageBox::critical(this, "Error", "Could not open file: " + filePath);
         }
+    }
+}
+
+
+void MainWindowCodeEditor::onContentChange(int position, int charsRemoved, int charsAdded)
+{
+    QString insertText;
+    if (charsAdded > 0) {
+        insertText = ui->codeEditor->toPlainText().mid(position, charsAdded);
+    }
+    QJsonObject op;
+    if (charsAdded > 0) {
+        op["type"] = "insert";
+        op["position"] = position;
+        op["text"] = insertText;
+    } else if (charsRemoved > 0) {
+        op["type"] = "delete";
+        op["position"] = position;
+        op["count"] = charsRemoved;
+    }
+    QJsonDocument doc(op);
+    QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    if (socket && socket->state() == QAbstractSocket::ConnectedState)
+        socket->sendTextMessage(jsonString);
+}
+
+void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
+{
+    QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
+    QJsonObject op = doc.object();
+    QString type = op["type"].toString();
+    int position = op["position"].toInt();
+    if (type == "insert") {
+        QString text = op["text"].toString();
+        QTextCursor cursor(ui->codeEditor->document());
+        cursor.setPosition(position);
+        cursor.insertText(text);
+    } else if (type == "delete") {
+        int count = op["count"].toInt();
+        QTextCursor cursor(ui->codeEditor->document());
+        cursor.setPosition(position);
+        cursor.setPosition(position + count, QTextCursor::KeepAnchor);
+        cursor.removeSelectedText();
     }
 }
