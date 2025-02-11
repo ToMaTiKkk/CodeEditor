@@ -56,8 +56,13 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
     connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
 
+    socket = new QWebSocket();
+    connect(socket, &QWebSocket::connected, this, [](){
+        qDebug() << "Connected to collaboration server";
+    });
     connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentChange);
     connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
+    socket->open(QUrl("ws://localhost:5000"));
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
