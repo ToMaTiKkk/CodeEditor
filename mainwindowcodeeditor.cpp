@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QtWebSockets/QWebSocket>
 
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
@@ -62,7 +63,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     });
     connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentChange);
     connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
-    socket->open(QUrl("ws://localhost:5000"));
+    socket->open(QUrl("ws://localhost:8080"));
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
@@ -200,10 +201,13 @@ void MainWindowCodeEditor::onContentChange(int position, int charsRemoved, int c
 
 void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 {
+    // statusBar()->showMessage("WebSocket error: " + socket->errorString());
+    // qDebug() << "Второй клиент получил сообщение: " << message;
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     QJsonObject op = doc.object();
     QString type = op["type"].toString();
     int position = op["position"].toInt();
+    QSignalBlocker blocker(ui->codeEditor->document());
     if (type == "insert") {
         QString text = op["text"].toString();
         QTextCursor cursor(ui->codeEditor->document());

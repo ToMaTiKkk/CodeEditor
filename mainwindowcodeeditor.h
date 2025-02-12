@@ -29,8 +29,8 @@ private slots: // функции, которые будут вызваны в о
 
     void onFileSystemTreeViewDoubleClicked(const QModelIndex &index); // когда пользователь дважды кликает по файлу в дереве, то оно открывается в редакторе
 
-    void onContentChange();
-    void onTextMessageReceived();
+    void onContentChange(int position, int charsRemoved, int charsAdded);
+    void onTextMessageReceived(const QString &mwssage);
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
