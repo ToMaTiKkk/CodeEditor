@@ -9,7 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtWebSockets/QWebSocket>
-// #include <QAbstractSocket>
+#include <QSignalBlocker>
 
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
@@ -58,44 +58,24 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
     connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
 
-    // socket = new QWebSocket();
-    // connect(socket, &QWebSocket::connected, this, [](){
-    //     qDebug() << "Connected to collaboration server";
-    // });
-    // connect(socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError error) {
-    //     qDebug() << "WebSocket ошибка:" << socket->errorString();
-    //     statusBar()->showMessage("Ошибка WebSocket: " + socket->errorString());
-    // });
-    // connect(socket, &QWebSocket::disconnected, this, [this]() {
-    //     qDebug() << "WebSocket отключился!";
-    // });
-    // connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentChange); // отправка сообщений на сервер
-    // connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
-    // qDebug() << "Signal success";
-    // socket->open(QUrl("ws://localhost:8080"));
     // Создаем QWebSocket и подключаем его сигналы
     socket = new QWebSocket();
-
     // Сигнал "connected" – когда соединение установлено
     connect(socket, &QWebSocket::connected, this, [this]() {
         qDebug() << "Клиент успешно подключился к серверу";
         statusBar()->showMessage("Подключено к серверу");
     });
-
-    // Сигнал "errorOccurred" – если возникают ошибки при соединении
+    // // Сигнал "errorOccurred" – если возникают ошибки при соединении
     // connect(socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError error) {
     //     qDebug() << "Ошибка WebSocket:" << socket->errorString();
     //     statusBar()->showMessage("Ошибка: " + socket->errorString());
     // });
 
-    connect(ui->codeEditor->document(), &QTextDocument::contentsChange,
-            this, &MainWindowCodeEditor::onContentsChange);
-    // Сигнал "textMessageReceived" – когда приходит текстовое сообщение от сервера
-    connect(socket, &QWebSocket::textMessageReceived,
-            this, &MainWindowCodeEditor::onTextMessageReceived);
-
-    // Открываем соединение с сервером (здесь адрес сервера для локального тестирования)
+    // Сигнал, когда приходит сообщение от сервера
+    connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     socket->open(QUrl("ws://localhost:8080"));
+    // Сигнал изменения документа клиентом и
+    connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
 
 }
 
@@ -209,73 +189,25 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
     }
 }
 
-
-// void MainWindowCodeEditor::onContentChange(int position, int charsRemoved, int charsAdded)
-// {
-//     QString insertText;
-//     if (charsAdded > 0) {
-//         insertText = ui->codeEditor->toPlainText().mid(position, charsAdded);
-//     }
-//     QJsonObject op;
-//     if (charsAdded > 0) {
-//         op["type"] = "insert";
-//         op["position"] = position;
-//         op["text"] = insertText;
-//     } else if (charsRemoved > 0) {
-//         op["type"] = "delete";
-//         op["position"] = position;
-//         op["count"] = charsRemoved;
-//     }
-//     QJsonDocument doc(op);
-//     QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-//     if (socket && socket->state() == QAbstractSocket::ConnectedState)
-//         socket->sendTextMessage(jsonString);
-// }
-
-// void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
-// {
-//     qDebug() << "Получено сообщение от сервера: " << message;
-//     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
-//     QJsonObject op = doc.object();
-//     QString type = op["type"].toString();
-//     int position = op["position"].toInt();
-//     // QSignalBlocker blocker(ui->codeEditor->document());
-//     if (type == "insert") {
-//         QString text = op["text"].toString();
-//         QTextCursor cursor(ui->codeEditor->document());
-//         cursor.setPosition(position);
-//         cursor.insertText(text);
-//     } else if (type == "delete") {
-//         int count = op["count"].toInt();
-//         QTextCursor cursor(ui->codeEditor->document());
-//         cursor.setPosition(position);
-//         cursor.setPosition(position + count, QTextCursor::KeepAnchor);
-//         cursor.removeSelectedText();
-//     }
-// }
-
-void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int charsAdded)
+void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int charsAdded) // получает позицию, количество удаленных символов и добавленных символов
 {
-    // Формируем JSON-объект, описывающий операцию редактирования
-    QJsonObject op;
-
-    if (charsAdded > 0) {
+    QJsonObject op; // формирование джсон с информацией
+    if (charsAdded > 0)
+    {
         op["type"] = "insert";
-        op["position"] = position;
-        // Извлекаем вставленный текст
-        QString insertedText = ui->codeEditor->toPlainText().mid(position, charsAdded);
+        op["position"] = "position";
+        QString insertedText = ui->codeEditor->toPlainText().mid(position, charsAdded); // извлечение вставленного текста
         op["text"] = insertedText;
-    } else if (charsRemoved > 0) {
+    } else if (charsRemoved > 0)
+    {
         op["type"] = "delete";
         op["position"] = position;
         op["count"] = charsRemoved;
     }
-
     QJsonDocument doc(op);
-    QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-
-    // Отправляем сообщение на сервер, если соединение установлено
-    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+    QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact)); // преобразование джсон в строку и отправка на сервер
+    if (socket && socket->state() == QAbstractSocket::ConnectedState)
+    {
         socket->sendTextMessage(message);
         qDebug() << "Отправлено сообщение:" << message;
     }
@@ -284,22 +216,20 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
 void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 {
     qDebug() << "Получено сообщение от сервера:" << message;
-
-    // Используем QSignalBlocker, чтобы не генерировать повторный сигнал при изменении документа
-    QSignalBlocker blocker(ui->codeEditor->document());
-
+    QSignalBlocker blocker(ui->codeEditor->document()); // предотвращение циклического обмена, чтобы примененные изменения снова не отправились на сервер
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     QJsonObject op = doc.object();
     QString opType = op["type"].toString();
     int position = op["position"].toInt();
-
-    if (opType == "insert") {
-        QString text = op["text"].toString();
+    if (opType == "insert")
+    {
+        QString text = op["tetx"].toString();
         QTextCursor cursor(ui->codeEditor->document());
         cursor.setPosition(position);
         cursor.insertText(text);
         qDebug() << "Применена операция вставки";
-    } else if (opType == "delete") {
+    } else if (opType == "delete")
+    {
         int count = op["count"].toInt();
         QTextCursor cursor(ui->codeEditor->document());
         cursor.setPosition(position);
