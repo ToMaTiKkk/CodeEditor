@@ -41,5 +41,6 @@ private:
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
     QWebSocket *socket;
+    // bool loadingFile = false;
 };
 #endif // MAINWINDOWCODEEDITOR_H
