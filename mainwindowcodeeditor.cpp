@@ -1,5 +1,6 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
+#include "cursorwidget.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -65,6 +66,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
         qDebug() << "Клиент успешно подключился к серверу";
         statusBar()->showMessage("Подключено к серверу");
     });
+    connect(socket, &QWebSocket::disconnected, this, &MainWindowCodeEditor::onDisconnected);
     // // Сигнал "errorOccurred" – если возникают ошибки при соединении
     // connect(socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError error) {
     //     qDebug() << "Ошибка WebSocket:" << socket->errorString();
@@ -77,11 +79,15 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // Сигнал изменения документа клиентом и
     connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
 
+    connect(ui->codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
+
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
 {
     delete ui; // освобождает память, выделенную под интерфейс
+    qDeleteAll(remoteCursors);
+    delete socket;
 }
 
 void MainWindowCodeEditor::onOpenFileClicked()
@@ -219,6 +225,12 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
     }
 }
 
+void MainWindowCodeEditor::onDisconnected()
+{
+    statusBar()->showMessage("WebSocket disconnected");
+    qDebug() << "WebSocket disconnected";
+}
+
 void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int charsAdded) // получает позицию, количество удаленных символов и добавленных символов
 {
     QJsonObject op; // формирование джсон с информацией
@@ -255,6 +267,29 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString fileText = op["text"].toString();
         ui->codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
         qDebug() << "Применено обновление содержимого файла";
+    } else if (opType == "cursor_position_update")
+    {
+        int position = op["position"].toInt();
+        QWebSocket* senderSocket = qobject_cast<QWebSocket*>(sender());
+        if (!senderSocket) return;
+        if (!remoteCursors.contains(senderSocket))
+        {
+            CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor, QColor::colorNames()[remoteCursors.size() % QColor::colorNames().size()]);
+            remoteCursors[senderSocket] = cursorWidget;
+            cursorWidget->show();
+        }
+        CursorWidget* cursorWidget = remoteCursors[senderSocket];
+        if (cursorWidget)
+        {
+            QTextCursor textCursor = ui->codeEditor->textCursor();
+            textCursor.setPosition(position);
+            QRect cursorRect = ui->codeEditor->cursorRect(textCursor);
+            QPoint widgetPos = ui->codeEditor->mapToGlobal(cursorRect.topLeft());
+            QPoint relativePos = ui->centralwidget->mapFromGlobal(widgetPos);
+            cursorWidget->move(relativePos.x(), relativePos.y());
+            cursorWidget->setFixedHeight(cursorRect.height());
+            cursorWidget->setVisible(true);
+        }
     } else if (opType == "insert")
     {
         QString text = op["text"].toString();
@@ -271,5 +306,20 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         cursor.setPosition(position + count, QTextCursor::KeepAnchor);
         cursor.removeSelectedText();
         qDebug() << "Применена операция удаления";
+    }
+}
+
+void MainWindowCodeEditor::onCursorPositionChanged()
+{
+    int cursorPosition = ui->codeEditor->textCursor().position();
+    QJsonObject cursorUpdate;
+    cursorUpdate["type"] = "cursor_position_update";
+    cursorUpdate["position"] = cursorPosition;
+    QJsonDocument doc(cursorUpdate);
+    QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    if (socket && socket->state() == QAbstractSocket::ConnectedState)
+    {
+        socket->sendTextMessage(message);
+        qDebug() << "Отправлено сообщение о позиции курсора" << message;
     }
 }

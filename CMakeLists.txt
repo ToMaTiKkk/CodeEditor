@@ -17,6 +17,8 @@ set(PROJECT_SOURCES
         mainwindowcodeeditor.cpp
         mainwindowcodeeditor.h
         mainwindowcodeeditor.ui
+        cursorwidget.cpp
+        cursorwidget.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
