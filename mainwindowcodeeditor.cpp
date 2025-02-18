@@ -104,7 +104,9 @@ void MainWindowCodeEditor::onOpenFileClicked()
             currentFilePath = fileName;
             {
                 QSignalBlocker blocker(ui->codeEditor->document());
+                loadingFile = true;
                 ui->codeEditor->setPlainText(fileContent); // установка текста локально
+                loadingFile = false;
             }
             // ОТправка соо на сервер с полным содержимым файла
             QJsonObject fileUpdate;
@@ -205,7 +207,9 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
             currentFilePath = filePath;
             {
                 QSignalBlocker blocker(ui->codeEditor->document());
+                loadingFile = true;
                 ui->codeEditor->setPlainText(fileContent); // установка текста локально
+                loadingFile = false;
             }
             // ОТправка соо на сервер с полным содержимым файла
             QJsonObject fileUpdate;
@@ -233,11 +237,12 @@ void MainWindowCodeEditor::onDisconnected()
 
 void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int charsAdded) // получает позицию, количество удаленных символов и добавленных символов
 {
+    if (loadingFile) return;
     QJsonObject op; // формирование джсон с информацией
     if (charsAdded > 0)
     {
         op["type"] = "insert";
-        op["position"] = "position";
+        op["position"] = position;
         QString insertedText = ui->codeEditor->toPlainText().mid(position, charsAdded); // извлечение вставленного текста
         op["text"] = insertedText;
     } else if (charsRemoved > 0)
