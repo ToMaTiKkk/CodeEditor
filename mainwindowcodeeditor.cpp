@@ -77,7 +77,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     // Сигнал, когда приходит сообщение от сервера
     connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
-    socket->open(QUrl("ws://localhost:8080"));
+    socket->open(QUrl("ws://192.168.185.18:8080"));
     // Сигнал изменения документа клиентом и
     connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
 
