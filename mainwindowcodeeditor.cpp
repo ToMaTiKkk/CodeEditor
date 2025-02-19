@@ -281,8 +281,9 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         int position = op["position"].toInt();
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
-            QStringList colors = QColor::colorNames();
-            QColor cursorColor = QColor(colors[remoteCursors.size() % colors.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
+            // QStringList colors = QColor::colorNames();
+            QStringList colorNames = { "#D81B60", "#8E24AA", "#3949AB", "#00897B", "#F4511E", "#FDD835" };
+            QColor cursorColor = QColor(colorNames[remoteCursors.size() % colorNames.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
             CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), cursorColor); // создается курсор имнено на области отображения текста для правильного позиционирвоания
             remoteCursors[senderId] = cursorWidget;
             cursorWidget->show();
