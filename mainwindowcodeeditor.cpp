@@ -59,6 +59,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
     connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
 
+    m_clientId = QUuid::createUuid().toString();
+    qDebug() << "Уникальный идентификатор клиента:" << m_clientId;
     // Создаем QWebSocket и подключаем его сигналы
     socket = new QWebSocket();
     // Сигнал "connected" – когда соединение установлено
@@ -86,7 +88,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 MainWindowCodeEditor::~MainWindowCodeEditor()
 {
     delete ui; // освобождает память, выделенную под интерфейс
-    qDeleteAll(remoteCursors);
+    qDeleteAll(remoteCursors); // удаление курсоров всех пользователей
     delete socket;
 }
 
@@ -274,25 +276,25 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         qDebug() << "Применено обновление содержимого файла";
     } else if (opType == "cursor_position_update")
     {
+        QString senderId = op["client_id"].toString();
+        if (senderId == m_clientId) return; // игнорирование собственных сообщений
         int position = op["position"].toInt();
-        QWebSocket* senderSocket = qobject_cast<QWebSocket*>(sender());
-        if (!senderSocket) return;
-        if (!remoteCursors.contains(senderSocket))
+        if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
-            CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor, QColor::colorNames()[remoteCursors.size() % QColor::colorNames().size()]);
-            remoteCursors[senderSocket] = cursorWidget;
+            QStringList colors = QColor::colorNames();
+            QColor cursorColor = QColor(colors[remoteCursors.size() % colors.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
+            CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), cursorColor); // создается курсор имнено на области отображения текста для правильного позиционирвоания
+            remoteCursors[senderId] = cursorWidget;
             cursorWidget->show();
         }
-        CursorWidget* cursorWidget = remoteCursors[senderSocket];
+        CursorWidget* cursorWidget = remoteCursors[senderId];
         if (cursorWidget)
         {
-            QTextCursor textCursor = ui->codeEditor->textCursor();
+            QTextCursor textCursor(ui->codeEditor->document());
             textCursor.setPosition(position);
-            QRect cursorRect = ui->codeEditor->cursorRect(textCursor);
-            QPoint widgetPos = ui->codeEditor->mapToGlobal(cursorRect.topLeft());
-            QPoint relativePos = ui->centralwidget->mapFromGlobal(widgetPos);
-            cursorWidget->move(relativePos.x(), relativePos.y());
-            cursorWidget->setFixedHeight(cursorRect.height());
+            QRect cursorRect = ui->codeEditor->cursorRect(textCursor); // возвращает прямоугольник с координатами относительно области отображения текста
+            cursorWidget->move(cursorRect.topLeft()); // перемещение курсора в начало этого прямоугольника
+            cursorWidget->setFixedHeight(cursorRect.height()); // виджет высотой строки
             cursorWidget->setVisible(true);
         }
     } else if (opType == "insert")
@@ -316,12 +318,13 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
 void MainWindowCodeEditor::onCursorPositionChanged()
 {
-    int cursorPosition = ui->codeEditor->textCursor().position();
+    int cursorPosition = ui->codeEditor->textCursor().position(); // номер символа, где курсор
     QJsonObject cursorUpdate;
     cursorUpdate["type"] = "cursor_position_update";
     cursorUpdate["position"] = cursorPosition;
-    QJsonDocument doc(cursorUpdate);
-    QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    cursorUpdate["client_id"] = m_clientId;
+    QJsonDocument doc(cursorUpdate); // джсон объект в документ
+    QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact)); // документ в строку в компактном виде
     if (socket && socket->state() == QAbstractSocket::ConnectedState)
     {
         socket->sendTextMessage(message);

@@ -7,7 +7,7 @@ CursorWidget::CursorWidget(QWidget *parent, const QColor& color)
     setAttribute(Qt::WA_TransparentForMouseEvents);
     setAttribute(Qt::WA_NoSystemBackground);
     setAutoFillBackground(false);
-    setFixedWidth(2);
+    setFixedWidth(1);
     setVisible(false);
 }
 

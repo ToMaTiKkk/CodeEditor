@@ -9,6 +9,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QUuid>
+#include <QMap>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -46,6 +48,7 @@ private:
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
     QWebSocket *socket;
     bool loadingFile = false;
-    QMap<QWebSocket*, CursorWidget*> remoteCursors;
+    QString m_clientId; // хранение уникального идентификатора клиента, пересоздается при каждом запуске программы
+    QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
 };
 #endif // MAINWINDOWCODEEDITOR_H
