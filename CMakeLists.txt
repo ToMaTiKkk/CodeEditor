@@ -19,6 +19,7 @@ set(PROJECT_SOURCES
         mainwindowcodeeditor.ui
         cursorwidget.cpp
         cursorwidget.h
+        resources.qrc
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -40,7 +41,7 @@ else()
     else()
         add_executable(BAM_IDE
             ${PROJECT_SOURCES}
-        )
+            resources.qrc)
     endif()
 endif()
 

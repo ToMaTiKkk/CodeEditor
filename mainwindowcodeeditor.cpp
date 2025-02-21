@@ -11,6 +11,9 @@
 #include <QJsonObject>
 #include <QtWebSockets/QWebSocket>
 #include <QSignalBlocker>
+#include <QCoreApplication>
+#include <QPropertyAnimation>
+#include <QGraphicsOpacityEffect>
 
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
@@ -18,6 +21,12 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , ui(new Ui::MainWindowCodeEditor)
 {
     ui->setupUi(this);
+    QFile styleFile(":/styles/dark.qss");
+    styleFile.open(QFile::ReadOnly);
+    QString styleSheet = QLatin1String(styleFile.readAll());
+    this->setStyleSheet(styleSheet);
+    QFont font("Fira Code", 12);
+    QApplication::setFont(font);
 
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
     connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);

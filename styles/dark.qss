@@ -1,0 +1,134 @@
+QMainWindow {
+    background-color: rgb(34, 33, 50); /* темно-синий, фиолетовый оттенок фона главного окна */
+}
+
+QMenuBar { /* панель меню */
+        background-color: rgb(34, 33, 50);
+        color: rgba(255, 255, 255, 0.9); /* цвет текст почти белый */
+        border-bottom: 1px solid rgb(92, 84, 155); /* нижняя граница панели тонкой линией, фиолетовый оттенок */
+        padding: 4px; /* внутренние отступы вокруг содержимого панели */
+}
+
+QMenuBar::item { 		/* элементы меню, пункты */
+        padding: 8px 15px;  /* отступы 8 пикселей сверху и снизу, 15 слева и справа */
+        border-radius: 4px; /* скругление */
+}
+
+QMenuBar::item:selected {
+        background-color: rgb(92, 84, 165); /* стиль при наведение курсора или выбранный пункт */
+}
+
+QMenu { /* панель выпадающего окна меню */
+        background-color: rgb(34, 33, 50);
+        border: 1px solid rgb(92, 84, 165);
+        color: rgba(255, 255, 255, 0.9);
+        padding: 8px;
+}
+
+QMenu::item { /* элементы внутри выпадающего окна */
+        padding: 8px 25px 8px 15px;
+        margin: 2px 0; /* внешние отступы по 2 пикселя сверху и снизу между элементами */
+        border-radius: 4px;
+}
+
+QMenu::item:selected {
+        background-color: rgb(92, 84, 165);
+}
+
+QStatusBar {
+        background-color: rgb(34, 33, 50);
+        color: rgba(255, 255, 255, 0.5);
+        border-top: 1px solid rgb(92, 84, 165); /* верхняя граница в 1 пиксель фиолетовым цветом */
+}
+
+QTreeView {
+        background-color: rgba(255, 255, 255, 0.05);
+        border: none;
+        color: rgba(255, 255, 255, 0.9);
+        outline: 0; /* отстутствие рамки при фокусе */
+        font-family: 'Fira Code', monospace;
+        font-size: 12px;
+}
+
+QTreeView::item {
+        height: 28px;
+        padding: 4px 0;
+}
+
+QTreeView::item:hover { /* при наведении */
+        background-color: rgba(127, 127, 218, 0.7);
+}
+
+QTreeView::item:selected {
+        background-color: rgb(92, 84, 165);
+        color: white;
+        border: 6px;
+}
+
+QPlainTextEdit {
+        background-color: rgb(34, 33, 50);
+        color: rgba(255, 255, 255, 0.9);
+        border: none;
+        font-family: 'Fira Code', monospace;
+        font-size: 14px;
+        padding: 0 15px;
+}
+
+QScrollBar:vertical { /* стиль полосы */
+        border: none;
+        background: rgba(255, 255, 255, 0.05);
+        width: 8px; /* ширина полосы */
+        margin: 0; /* нет отступов */
+}
+
+QScrollBar::handle:vertical { /* стиль ползунка прокрутки */
+        background: rgba(92, 84, 165, 0.7);
+        min-height: 20px; /* минимальная высота пользунка, чтобы всегда было видно */
+        border-radius: 6px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { /* элементы для уменьшения и увеличения прокрутки скрыты */
+        height: 0;
+}
+
+QSplitter::handle { /* элементы, за который можно потянуть, чтобы изменить размер областей */
+        background: rgba(127, 117, 218, 0.1);
+        width: 1px;
+}
+
+QScrollBar::handle:hover { /* когда курсор наводится на элементы разделителя областей, то он становится ярче и шире, как подсказка пользователю */
+        background: rgb(127, 117, 218);
+        width: 4px;
+}
+
+QPushButton {
+        background-color: rgb(92, 84, 165);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        min-width: 80px;
+        translition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
+}
+
+QPushButton:hover {
+        background-color: rgba(127, 117, 218, 0.85);
+        transform: translateY(-3px); /* кнопка при наведении поднимается на 3 пикселя и фон более светлый становится */
+}
+
+QPushButton:pressed {
+        transform: translateY(3px); /* эффект нажатия, кнопка опускается вниз */
+}
+
+@keyframes pulse { /* эффект пульсации, меняется плавно прозрачность и размер */
+        0% { opacity: 0.4; transform: scale(0.2); }
+        50% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0.4; transform: scale(0.2); }
+}
+
+CursorWidget {
+        border-left: 2px solid rgba(245, 236, 64, 0.8);
+        animation: pulse 1.5s infinite;  /* бесконечная анимация мигания курсора */
+        margin-top: 2px; /* отступ верхний */
+        height: 18px !important; /* повышение приоритетность стиля над прочими, любые попытки изменить высоту курсора будут, будут игнорироваться, если нет метки приоритета */
+}

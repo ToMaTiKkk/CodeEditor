@@ -20,6 +20,13 @@ CursorWidget::CursorWidget(QWidget *parent, const QColor& color)
 
 void CursorWidget::paintEvent(QPaintEvent *event)
 {
+    /*QPainter painter(this);
+    painter.fillRect(rect(), m_color);*/ // заполняем виджет выбраным цветом
     QPainter painter(this);
-    painter.fillRect(rect(), m_color); // заполняем виджет выбраным цветом
+    painter.setPen(QColor(184, 64, 245));
+    painter.setOpacity(0.8);
+    painter.drawLine(0, 0, 0, height());
+    painter.setOpacity(0.3);
+    painter.fillRect(rect(), QColor(184, 64, 245));
 }
+
