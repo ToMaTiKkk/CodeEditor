@@ -12,9 +12,7 @@
 #include <QtWebSockets/QWebSocket>
 #include <QSignalBlocker>
 #include <QCoreApplication>
-#include <QPropertyAnimation>
-#include <QGraphicsOpacityEffect>
-
+#include <QInputDialog>
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
@@ -27,7 +25,11 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     this->setStyleSheet(styleSheet);
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
-
+    bool ok;
+    m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok);
+    if (!ok || m_username.isEmpty()) {
+        m_username = "User" + QString::number(qrand() % 1000);
+    }
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
     connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
     connect(ui->actionOpen_File, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFileClicked);
@@ -76,6 +78,15 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(socket, &QWebSocket::connected, this, [this]() {
         qDebug() << "Клиент успешно подключился к серверу";
         statusBar()->showMessage("Подключено к серверу");
+        QJsonObject usernameMessage;
+        usernameMessage["type"] = "set_username";
+        usernameMessage["username"] = m_username;
+        QJsonDocument doc(usernameMessage);
+        QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        if (socket->state() == QAbstractSocket::ConnectedState) {
+            socket->sendTextMessage(message);
+            qDebug() << "Send username to server:" << message;
+        }
     });
     connect(socket, &QWebSocket::disconnected, this, &MainWindowCodeEditor::onDisconnected);
     // // Сигнал "errorOccurred" – если возникают ошибки при соединении
@@ -86,12 +97,11 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     // Сигнал, когда приходит сообщение от сервера
     connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
-    socket->open(QUrl("ws://192.168.185.18:8080"));
+    socket->open(QUrl("ws://localhost:8080"));
     // Сигнал изменения документа клиентом и
     connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
 
     connect(ui->codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
-
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
@@ -288,6 +298,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
         int position = op["position"].toInt();
+        QString username = op["username"].toString();
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
             // QStringList colors = QColor::colorNames();
@@ -295,14 +306,20 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             QColor cursorColor = QColor(colorNames[remoteCursors.size() % colorNames.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
             CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), cursorColor); // создается курсор имнено на области отображения текста для правильного позиционирвоания
             remoteCursors[senderId] = cursorWidget;
+            //cursorWidget->raise();
             cursorWidget->show();
         }
         CursorWidget* cursorWidget = remoteCursors[senderId];
         if (cursorWidget)
         {
+            cursorWidget->setUsername(username);
             QTextCursor textCursor(ui->codeEditor->document());
             textCursor.setPosition(position);
             QRect cursorRect = ui->codeEditor->cursorRect(textCursor); // возвращает прямоугольник с координатами относительно области отображения текста
+            //QMargins margins = ui->codeEditor->contentsMargins();
+            //cursorRect.translate(margins.left(), margins.top());
+            //QPoint widgetPos = ui->codeEditor->viewport()->mapToParent(cursorRect.topLeft());
+            //cursorWidget->move(widgetPos);
             cursorWidget->move(cursorRect.topLeft()); // перемещение курсора в начало этого прямоугольника
             cursorWidget->setFixedHeight(cursorRect.height()); // виджет высотой строки
             cursorWidget->setVisible(true);

@@ -1,13 +1,14 @@
 #include "cursorwidget.h"
 #include <QPainter>
+#include <QDebug>
 
 CursorWidget::CursorWidget(QWidget *parent, const QColor& color)
     : QWidget(parent), m_color(color)
 {
-    setAttribute(Qt::WA_TransparentForMouseEvents); // виджет не принимает мышинные события, курсор только для отображения, события мыши не перехватываются
+    //setAttribute(Qt::WA_TransparentForMouseEvents); // виджет не принимает мышинные события, курсор только для отображения, события мыши не перехватываются
     setAttribute(Qt::WA_NoSystemBackground); // отказываемся от фоновой отрисовки системой, виджет прозрачный, кромер самого курсора
     setAutoFillBackground(false);
-    setFixedWidth(1);
+    setFixedWidth(2);
     setVisible(false); // по умолчанию курсор не видно
 
     m_blinkTimer.setInterval(500); // каждые 500 мс переключение видомости курсора
@@ -16,6 +17,11 @@ CursorWidget::CursorWidget(QWidget *parent, const QColor& color)
         update();
     });
     m_blinkTimer.start();
+
+    // В конструкторе инициализируйте:
+    m_usernameLabel = new QLabel(parent);
+    m_usernameLabel->setStyleSheet("background-color: rgba(0, 0, 0, 255); color: white; padding: 5px;");
+    m_usernameLabel->hide();
 }
 
 void CursorWidget::paintEvent(QPaintEvent *event)
@@ -30,3 +36,13 @@ void CursorWidget::paintEvent(QPaintEvent *event)
     painter.fillRect(rect(), QColor(184, 64, 245));
 }
 
+void CursorWidget::setUsername(const QString &username)
+{
+    m_username = username;
+    setToolTip(username);
+    m_usernameLabel->setText(username);
+    m_usernameLabel->adjustSize();
+    m_usernameLabel->show();
+    m_usernameLabel->move(this->pos() + QPoint(2, 2)); // Позиционирование метки рядом с курсором
+    qDebug() << "CursorWidget username set to:" << username;
+}

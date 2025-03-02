@@ -50,5 +50,6 @@ private:
     bool loadingFile = false;
     QString m_clientId; // хранение уникального идентификатора клиента, пересоздается при каждом запуске программы
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
+    QString m_username;
 };
 #endif // MAINWINDOWCODEEDITOR_H
