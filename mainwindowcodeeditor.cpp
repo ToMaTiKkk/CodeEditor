@@ -306,7 +306,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             QColor cursorColor = QColor(colorNames[remoteCursors.size() % colorNames.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
             CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), cursorColor); // создается курсор имнено на области отображения текста для правильного позиционирвоания
             remoteCursors[senderId] = cursorWidget;
-            cursorWidget->setStyleSheetForToolTip(cursorColor);
+            cursorWidget->setCustomToolTipStyle(cursorColor);
             cursorWidget->show();
         }
         CursorWidget* cursorWidget = remoteCursors[senderId];

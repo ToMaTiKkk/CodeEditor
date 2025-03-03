@@ -20,6 +20,7 @@ set(PROJECT_SOURCES
         cursorwidget.cpp
         cursorwidget.h
         resources.qrc
+        customtooltip.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
