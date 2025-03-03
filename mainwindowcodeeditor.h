@@ -3,6 +3,11 @@
 
 #include <QMainWindow>
 #include <QFileSystemModel>
+#include <QtWebSockets/QWebSocket>
+#include <QUrl>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -28,9 +33,13 @@ private slots: // функции, которые будут вызваны в о
 
     void onFileSystemTreeViewDoubleClicked(const QModelIndex &index); // когда пользователь дважды кликает по файлу в дереве, то оно открывается в редакторе
 
+    void onContentsChange(int position, int charsRemoved, int charsAdded);
+    void onTextMessageReceived(const QString &message);
+
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
+    QWebSocket *socket;
 };
 #endif // MAINWINDOWCODEEDITOR_H
