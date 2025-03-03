@@ -26,8 +26,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
     bool ok;
-    m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok);
-    if (!ok || m_username.isEmpty()) {
+    m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
+    if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
         m_username = "User" + QString::number(qrand() % 1000);
     }
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
@@ -306,7 +306,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             QColor cursorColor = QColor(colorNames[remoteCursors.size() % colorNames.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
             CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), cursorColor); // создается курсор имнено на области отображения текста для правильного позиционирвоания
             remoteCursors[senderId] = cursorWidget;
-            //cursorWidget->raise();
+            cursorWidget->setStyleSheetForToolTip(cursorColor);
             cursorWidget->show();
         }
         CursorWidget* cursorWidget = remoteCursors[senderId];
