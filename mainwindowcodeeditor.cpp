@@ -1,6 +1,7 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
 #include "cursorwidget.h"
+#include "linehighlightwidget.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -17,6 +18,7 @@
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
+   // , m_istextChangingProgrammatically(false)
 {
     ui->setupUi(this);
     QFile styleFile(":/styles/dark.qss");
@@ -108,6 +110,7 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
 {
     delete ui; // освобождает память, выделенную под интерфейс
     qDeleteAll(remoteCursors); // удаление курсоров всех пользователей
+    qDeleteAll(remoteLineHighlights);
     delete socket;
 }
 
@@ -297,8 +300,10 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
     {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
+
         int position = op["position"].toInt();
         QString username = op["username"].toString();
+
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
             // QStringList colors = QColor::colorNames();
@@ -308,8 +313,14 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             remoteCursors[senderId] = cursorWidget;
             cursorWidget->setCustomToolTipStyle(cursorColor);
             cursorWidget->show();
+            // LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), cursorColor.lighter(150));
+            // remoteLineHighlights[senderId] = lineHighlight;
+            // lineHighlight->show();
         }
+
         CursorWidget* cursorWidget = remoteCursors[senderId];
+        LineHighlightWidget* lineHighlight = remoteLineHighlights[senderId];
+
         if (cursorWidget)
         {
             cursorWidget->setUsername(username);
@@ -323,6 +334,11 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             cursorWidget->move(cursorRect.topLeft()); // перемещение курсора в начало этого прямоугольника
             cursorWidget->setFixedHeight(cursorRect.height()); // виджет высотой строки
             cursorWidget->setVisible(true);
+
+            // if (lineHighlight)
+            // {
+            //     lineHighlight->setGeometry(ui->codeEditor->x(), cursorRect.top() + ui->codeEditor, ui->codeEditor->viewport()->rect().width(), cursorRect.height());
+            // }
         }
     } else if (opType == "insert")
     {
