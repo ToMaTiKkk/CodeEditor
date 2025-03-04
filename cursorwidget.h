@@ -11,6 +11,7 @@ class CursorWidget : public QWidget
 {
     Q_OBJECT
 public:
+    ~CursorWidget();
     // конструктор, принимающий родительский виджет и цвет курсора (по умолчанию красный)
     explicit CursorWidget(QWidget *parent = nullptr, const QColor& color = Qt::white);
     QColor getColor() const { return m_color; } // получение цвета курсора

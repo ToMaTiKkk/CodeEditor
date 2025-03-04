@@ -26,6 +26,15 @@ CursorWidget::CursorWidget(QWidget *parent, const QColor& color)
     m_customToolTip->hide();
 }
 
+CursorWidget::~CursorWidget()
+{
+    if (m_customToolTip)
+    {
+        m_customToolTip->hide();
+        m_customToolTip->deleteLater();
+    }
+}
+
 void CursorWidget::paintEvent(QPaintEvent *event)
 {
     /*QPainter painter(this);

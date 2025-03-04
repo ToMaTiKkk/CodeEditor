@@ -14,6 +14,7 @@
 #include <QSignalBlocker>
 #include <QCoreApplication>
 #include <QInputDialog>
+#include <QRandomGenerator>
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
@@ -30,7 +31,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     bool ok;
     m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
     if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
-        m_username = "User" + QString::number(qrand() % 1000);
+        m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
     }
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
     connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
@@ -83,6 +84,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
         QJsonObject usernameMessage;
         usernameMessage["type"] = "set_username";
         usernameMessage["username"] = m_username;
+        usernameMessage["Uuid"] = m_clientId;
         QJsonDocument doc(usernameMessage);
         QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
         if (socket->state() == QAbstractSocket::ConnectedState) {
@@ -292,7 +294,19 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
     QJsonObject op = doc.object();
     QString opType = op["type"].toString();
     int position = op["position"].toInt();
-    if (opType == "file_content_update"){
+    if (opType == "user_disconnected")
+    {
+        QString disconnectedId = op["Uuid"].toString(); // Uuid == m_clientId
+        QString userDisconneted = op["username"].toString();
+        if (remoteCursors.contains(disconnectedId))
+        {
+            CursorWidget* widget = remoteCursors.take(disconnectedId);
+            widget->hide();
+            widget->deleteLater();
+            qDebug() << "Удален курсор для отключенного пользователя:" << userDisconneted;
+            statusBar()->showMessage("Пользователь '" + userDisconneted + "' отключился");
+        }
+    } else if (opType == "file_content_update"){
         QString fileText = op["text"].toString();
         ui->codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
         qDebug() << "Применено обновление содержимого файла";
