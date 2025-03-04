@@ -2,6 +2,7 @@
 #define MAINWINDOWCODEEDITOR_H
 
 #include "cursorwidget.h"
+#include "linehighlightwidget.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -51,5 +52,6 @@ private:
     QString m_clientId; // хранение уникального идентификатора клиента, пересоздается при каждом запуске программы
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QString m_username;
+    QMap<QString, LineHighlightWidget*> remoteLineHighlights;
 };
 #endif // MAINWINDOWCODEEDITOR_H
