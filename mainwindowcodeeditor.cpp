@@ -1,5 +1,7 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
+#include "cursorwidget.h"
+#include "linehighlightwidget.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -17,6 +19,7 @@
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
+   // , m_istextChangingProgrammatically(false)
 {
     ui->setupUi(this);
     QFile styleFile(":/styles/dark.qss");
@@ -108,6 +111,9 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 MainWindowCodeEditor::~MainWindowCodeEditor()
 {
     delete ui; // освобождает память, выделенную под интерфейс
+    qDeleteAll(remoteCursors); // удаление курсоров всех пользователей
+    qDeleteAll(remoteLineHighlights);
+    delete socket;
 }
 
 void MainWindowCodeEditor::onOpenFileClicked()
@@ -118,10 +124,27 @@ void MainWindowCodeEditor::onOpenFileClicked()
         if (file.open(QFile::ReadOnly | QFile::Text)) { // открытие файла для чтения в текстовом режиме
             // считывание всего текста из файла и устанавливание в редактор CodeEditor
             QTextStream in(&file);
-            ui->codeEditor->setPlainText(in.readAll());
+            QString fileContent = in.readAll();
             // закрытие файла и записи пути в переменную
             file.close();
             currentFilePath = fileName;
+            {
+                QSignalBlocker blocker(ui->codeEditor->document());
+                loadingFile = true;
+                ui->codeEditor->setPlainText(fileContent); // установка текста локально
+                loadingFile = false;
+            }
+            // ОТправка соо на сервер с полным содержимым файла
+            QJsonObject fileUpdate;
+            fileUpdate["type"] = "file_content_update";
+            fileUpdate["text"] = fileContent;
+            QJsonDocument doc(fileUpdate);
+            QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+            if (socket && socket->state() == QAbstractSocket::ConnectedState)
+            {
+                socket->sendTextMessage(message);
+                qDebug() << "Отправлено сообщение о загрузку файла на сервер";
+            }
         } else {
             QMessageBox::critical(this, "Error", "Could not open file");
         }
@@ -205,9 +228,26 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
         QFile file(filePath);
         if (file.open(QFile::ReadOnly | QFile::Text)) {
             QTextStream in(&file);
-            ui->codeEditor->setPlainText(in.readAll());
+            QString fileContent = in.readAll();
             file.close();
             currentFilePath = filePath;
+            {
+                QSignalBlocker blocker(ui->codeEditor->document());
+                loadingFile = true;
+                ui->codeEditor->setPlainText(fileContent); // установка текста локально
+                loadingFile = false;
+            }
+            // ОТправка соо на сервер с полным содержимым файла
+            QJsonObject fileUpdate;
+            fileUpdate["type"] = "file_content_update";
+            fileUpdate["text"] = fileContent;
+            QJsonDocument doc(fileUpdate);
+            QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+            if (socket && socket->state() == QAbstractSocket::ConnectedState)
+            {
+                socket->sendTextMessage(message);
+                qDebug() << "Отправлено сообщение о загрузку файла на сервер";
+            }
             statusBar()->showMessage("Opened file: " + filePath);
         } else {
             QMessageBox::critical(this, "Error", "Could not open file: " + filePath);
