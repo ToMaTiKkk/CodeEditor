@@ -19,7 +19,6 @@
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
-   // , m_istextChangingProgrammatically(false)
 {
     ui->setupUi(this);
     QFile styleFile(":/styles/dark.qss");
@@ -33,6 +32,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
         m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
     }
+    // подключение сигнала измнения значения вертикального скроллбара
+    connect(ui->codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
     connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
     connect(ui->actionOpen_File, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFileClicked);
@@ -300,10 +301,14 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString userDisconneted = op["username"].toString();
         if (remoteCursors.contains(disconnectedId))
         {
+            // при отключении пользователя у других удаляется его курсор с тултипом и подсветка строки, где он был
             CursorWidget* widget = remoteCursors.take(disconnectedId);
             widget->hide();
             widget->deleteLater();
-            qDebug() << "Удален курсор для отключенного пользователя:" << userDisconneted;
+            LineHighlightWidget* lineWidget = remoteLineHighlights.take(disconnectedId);
+            lineWidget->hide();
+            lineWidget->deleteLater();
+            qDebug() << "Удален курсор и подсветка для отключенного пользователя:" << userDisconneted;
             statusBar()->showMessage("Пользователь '" + userDisconneted + "' отключился");
         }
     } else if (opType == "file_content_update"){
@@ -320,6 +325,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
+            // создание виджетов курсора и подсветки строки курсора
             // QStringList colors = QColor::colorNames();
             QStringList colorNames = { "#D81B60", "#8E24AA", "#3949AB", "#00897B", "#F4511E", "#FDD835" };
             QColor cursorColor = QColor(colorNames[remoteCursors.size() % colorNames.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
@@ -327,33 +333,31 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             remoteCursors[senderId] = cursorWidget;
             cursorWidget->setCustomToolTipStyle(cursorColor);
             cursorWidget->show();
-            // LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), cursorColor.lighter(150));
-            // remoteLineHighlights[senderId] = lineHighlight;
-            // lineHighlight->show();
+            LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), cursorColor.lighter(150));
+            remoteLineHighlights[senderId] = lineHighlight;
+            lineHighlight->show();
         }
 
         CursorWidget* cursorWidget = remoteCursors[senderId];
-        LineHighlightWidget* lineHighlight = remoteLineHighlights[senderId];
 
         if (cursorWidget)
         {
             cursorWidget->setUsername(username);
-            QTextCursor textCursor(ui->codeEditor->document());
-            textCursor.setPosition(position);
-            QRect cursorRect = ui->codeEditor->cursorRect(textCursor); // возвращает прямоугольник с координатами относительно области отображения текста
-            //QMargins margins = ui->codeEditor->contentsMargins();
-            //cursorRect.translate(margins.left(), margins.top());
-            //QPoint widgetPos = ui->codeEditor->viewport()->mapToParent(cursorRect.topLeft());
-            //cursorWidget->move(widgetPos);
-            cursorWidget->move(cursorRect.topLeft()); // перемещение курсора в начало этого прямоугольника
-            cursorWidget->setFixedHeight(cursorRect.height()); // виджет высотой строки
-            cursorWidget->setVisible(true);
+            updateRemoteWidgetGeometry(cursorWidget, position); // обновляем позицию курсора
+            // QTextCursor textCursor(ui->codeEditor->document());
+            // textCursor.setPosition(position);
+            // QRect cursorRect = ui->codeEditor->cursorRect(textCursor); // возвращает прямоугольник с координатами относительно области отображения текста
+            // //QMargins margins = ui->codeEditor->contentsMargins();
+            // //cursorRect.translate(margins.left(), margins.top());
+            // //QPoint widgetPos = ui->codeEditor->viewport()->mapToParent(cursorRect.topLeft());
+            // //cursorWidget->move(widgetPos);
+            // cursorWidget->move(cursorRect.topLeft()); // перемещение курсора в начало этого прямоугольника
+            // cursorWidget->setFixedHeight(cursorRect.height()); // виджет высотой строки
+            // cursorWidget->setVisible(true);
 
-            // if (lineHighlight)
-            // {
-            //     lineHighlight->setGeometry(ui->codeEditor->x(), cursorRect.top() + ui->codeEditor, ui->codeEditor->viewport()->rect().width(), cursorRect.height());
-            // }
         }
+
+        updateLineHighlight(senderId, position); // обновляем подсветку строки
     } else if (opType == "insert")
     {
         QString text = op["text"].toString();
@@ -386,5 +390,60 @@ void MainWindowCodeEditor::onCursorPositionChanged()
     {
         socket->sendTextMessage(message);
         qDebug() << "Отправлено сообщение о позиции курсора" << message;
+    }
+}
+
+// обновление позиции и размера курсора (тултипа соответственно)
+void MainWindowCodeEditor::updateRemoteWidgetGeometry(QWidget* widget, int position)
+{
+    if (!widget) return;
+
+    QTextCursor tempCursor(ui->codeEditor->document());
+    tempCursor.setPosition(position);
+    QRect cursorRect = ui->codeEditor->cursorRect(tempCursor);
+    widget->move(cursorRect.topLeft());
+    widget->setFixedHeight(cursorRect.height());
+}
+
+void MainWindowCodeEditor::updateLineHighlight(const QString& senderId, int position)
+{
+    if (!remoteLineHighlights.contains(senderId)) return;
+
+    LineHighlightWidget* lineHighlight = remoteLineHighlights[senderId];
+    if (!lineHighlight) return;
+
+    QTextCursor tempCursor(ui->codeEditor->document());
+    tempCursor.setPosition(position);
+    QRect cursorRect = ui->codeEditor->cursorRect(tempCursor);
+    lineHighlight->setGeometry(
+        0, // х относительно viewport`а
+        cursorRect.top(), // y - верхняя граница cursorRect
+        ui->codeEditor->viewport()->width(),
+        cursorRect.height()
+        );
+    lineHighlight->setVisible(true);
+}
+
+// обновлении позиции подсветки при прокрутке
+void MainWindowCodeEditor::onVerticalScrollBarValueChanged(int value)
+{
+    Q_UNUSED(value);
+    // обновляем позицию всех виджетов при прокрутке
+    for (auto i = remoteLineHighlights.begin(); i != remoteLineHighlights.end(); ++i)
+    {
+        QString senderId = "";
+        int position = -1; // значение по умолчанию, если позиция курсора для данного клиента не найдена
+        for (const auto& cursorUpdate : cursorUpdates)
+        {
+            if (cursorUpdate["client_id"].toString() == senderId)
+            {
+                position = cursorUpdate["position"].toInt();
+                break;
+            }
+        }
+        if (position != -1)
+        {
+            updateLineHighlight(senderId, position);
+        }
     }
 }

@@ -12,6 +12,7 @@
 #include <QJsonParseError>
 #include <QUuid>
 #include <QMap>
+#include <QScrollBar>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -43,6 +44,10 @@ private slots: // функции, которые будут вызваны в о
 
     void onCursorPositionChanged();
 
+    void onVerticalScrollBarValueChanged(int value);
+    void updateRemoteWidgetGeometry(QWidget* widget, int position);
+    void updateLineHighlight(const QString& senderId, int position);
+
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
@@ -52,6 +57,7 @@ private:
     QString m_clientId; // хранение уникального идентификатора клиента, пересоздается при каждом запуске программы
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QString m_username;
-    QMap<QString, LineHighlightWidget*> remoteLineHighlights;
+    QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
+    QList<QJsonObject> cursorUpdates; // хранение последних обновлений позиций курсора
 };
 #endif // MAINWINDOWCODEEDITOR_H
