@@ -32,6 +32,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
         m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
     }
+    ui->codeEditor->viewport()->installEventFilter(this); // фильтр чтобы отслеживать изменения размеров viewport
+
     // подключение сигнала измнения значения вертикального скроллбара
     connect(ui->codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
@@ -115,6 +117,21 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     qDeleteAll(remoteCursors); // удаление курсоров всех пользователей
     qDeleteAll(remoteLineHighlights);
     delete socket;
+}
+
+// пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
+bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == ui->codeEditor->viewport() && event->type() == QEvent::Resize) {
+        for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
+            QString senderId = it.key();
+            int position = lastCursorPositions.value(senderId, -1);
+            if (position != -1) {
+                updateLineHighlight(senderId, position);
+            }
+        }
+    }
+    return QMainWindow::eventFilter(obj, event);
 }
 
 void MainWindowCodeEditor::onOpenFileClicked()
@@ -322,6 +339,8 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
         int position = op["position"].toInt();
         QString username = op["username"].toString();
+
+        lastCursorPositions[senderId] = position;
 
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {

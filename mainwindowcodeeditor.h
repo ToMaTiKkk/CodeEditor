@@ -29,6 +29,8 @@ public:
     ~MainWindowCodeEditor();
 
 private slots: // функции, которые будут вызваны в ответ на определенные события
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
     void onOpenFileClicked(); // вызывается при вызове пункта мен дл открытия файлы
     void onSaveFileClicked(); // сохранение файла
     void onSaveAsFileClicked(); // сохрание под новым именем
@@ -59,5 +61,6 @@ private:
     QString m_username;
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
     QList<QJsonObject> cursorUpdates; // хранение последних обновлений позиций курсора
+    QMap<QString, int> lastCursorPositions; // хранение позиций всех курсоров других пользователей
 };
 #endif // MAINWINDOWCODEEDITOR_H
