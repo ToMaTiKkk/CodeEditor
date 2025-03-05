@@ -13,5 +13,6 @@ LineHighlightWidget::LineHighlightWidget(QWidget *parent, const QColor& color)
 void LineHighlightWidget::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
+    painter.setOpacity(0.08);
     painter.fillRect(rect(), m_color);
 }

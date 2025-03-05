@@ -20,7 +20,7 @@ public:
     void setCustomToolTipStyle(const QColor &color);
 
 protected:
-    // переопределение метода, чтобы отрисовывать курсор
+    // переопределение метода, чтобы отрисовывать курсор и тултип
     void paintEvent(QPaintEvent *event) override;
 
 private:
