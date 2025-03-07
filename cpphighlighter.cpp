@@ -58,15 +58,15 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //quolationFormat.setForeground(Qt::darkGreen);
     //quolationFormat.setForeground(QColor("#E6DB74"));
     //quolationFormat.setForeground(QColor(245, 236, 64));
-    quolationFormat.setForeground(QColor(152, 195, 121));
+    quolationFormat.setForeground(QColor(152, 229, 121));
     rule.pattern = QRegularExpression(QStringLiteral("\".*\""));
     rule.format = quolationFormat;
     highlightingRules.append(rule);
 
-    functionFormat.setFontItalic(true);
+    //functionFormat.setFontItalic(true);
     //functionFormat.setForeground(Qt::blue);
     //functionFormat.setForeground(QColor("#A6E22E"));
-    functionFormat.setForeground(QColor(64, 224, 208));
+    functionFormat.setForeground(QColor(64, 170, 255));
     //functionFormat.setForeground(QColor(255, 255, 255));
     rule.pattern = QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()\\b"));
     rule.format = functionFormat;
@@ -74,10 +74,10 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
 
     //preprocessorFormat.setForeground(Qt::darkCyan);
     //preprocessorFormat.setForeground(QColor("#7F849C"));
-    preprocessorFormat.setForeground(QColor(92, 84, 165));
+    preprocessorFormat.setForeground(QColor(64, 170, 255));
     //preprocessorFormat.setForeground(QColor(127, 117, 218));
     preprocessorFormat.setFontWeight(QFont::Bold);
-    rule.pattern = QRegularExpression(QStringLiteral("#.*"));
+    rule.pattern = QRegularExpression(QStringLiteral("#include\\b"));
     rule.format = preprocessorFormat;
     highlightingRules.append(rule);
 
