@@ -109,6 +109,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
 
     connect(ui->codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
+
+    highlighter = new CppHighlighter(ui->codeEditor->document());
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
@@ -117,6 +119,7 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     qDeleteAll(remoteCursors); // удаление курсоров всех пользователей
     qDeleteAll(remoteLineHighlights);
     delete socket;
+    delete highlighter;
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -152,6 +155,8 @@ void MainWindowCodeEditor::onOpenFileClicked()
                 ui->codeEditor->setPlainText(fileContent); // установка текста локально
                 loadingFile = false;
             }
+            highlighter->rehighlight();
+
             // ОТправка соо на сервер с полным содержимым файла
             QJsonObject fileUpdate;
             fileUpdate["type"] = "file_content_update";
@@ -255,6 +260,8 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
                 ui->codeEditor->setPlainText(fileContent); // установка текста локально
                 loadingFile = false;
             }
+            highlighter->rehighlight();
+
             // ОТправка соо на сервер с полным содержимым файла
             QJsonObject fileUpdate;
             fileUpdate["type"] = "file_content_update";

@@ -3,6 +3,7 @@
 
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
+#include "cpphighlighter.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -62,5 +63,6 @@ private:
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
     QList<QJsonObject> cursorUpdates; // хранение последних обновлений позиций курсора
     QMap<QString, int> lastCursorPositions; // хранение позиций всех курсоров других пользователей
+    CppHighlighter *highlighter;
 };
 #endif // MAINWINDOWCODEEDITOR_H

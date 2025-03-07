@@ -23,6 +23,8 @@ set(PROJECT_SOURCES
         customtooltip.h
         linehighlightwidget.cpp
         linehighlightwidget.h
+        cpphighlighter.cpp
+        cpphighlighter.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
