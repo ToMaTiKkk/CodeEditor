@@ -9,14 +9,22 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Network Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Network Widgets)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Network Widgets WebSockets)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Network Widgets WebSockets)
 
 set(PROJECT_SOURCES
         main.cpp
         mainwindowcodeeditor.cpp
         mainwindowcodeeditor.h
         mainwindowcodeeditor.ui
+        cursorwidget.cpp
+        cursorwidget.h
+        resources.qrc
+        customtooltip.h
+        linehighlightwidget.cpp
+        linehighlightwidget.h
+        cpphighlighter.cpp
+        cpphighlighter.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -38,11 +46,12 @@ else()
     else()
         add_executable(BAM_IDE
             ${PROJECT_SOURCES}
-        )
+            resources.qrc)
     endif()
 endif()
 
 target_link_libraries(BAM_IDE PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(BAM_IDE PRIVATE Qt::WebSockets)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
