@@ -35,7 +35,7 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //classFormat.setForeground(Qt::darkMagenta);
     //classFormat.setForeground(QColor("#A6E22E"));
     //classFormat.setForeground(QColor(135, 206, 250));
-    classFormat.setForeground(QColor(197, 134, 192));
+    classFormat.setForeground(QColor(200, 70, 190));
     rule.pattern = QRegularExpression(QStringLiteral("\\bQ[A-Za-z]+\\b"));
     rule.format = classFormat;
     highlightingRules.append(rule);
@@ -58,7 +58,7 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //quolationFormat.setForeground(Qt::darkGreen);
     //quolationFormat.setForeground(QColor("#E6DB74"));
     //quolationFormat.setForeground(QColor(245, 236, 64));
-    quolationFormat.setForeground(QColor(152, 229, 121));
+    quolationFormat.setForeground(QColor(80, 150, 50));
     rule.pattern = QRegularExpression(QStringLiteral("\".*\""));
     rule.format = quolationFormat;
     highlightingRules.append(rule);
@@ -66,7 +66,7 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //functionFormat.setFontItalic(true);
     //functionFormat.setForeground(Qt::blue);
     //functionFormat.setForeground(QColor("#A6E22E"));
-    functionFormat.setForeground(QColor(64, 170, 255));
+    functionFormat.setForeground(QColor(10, 138, 240));
     //functionFormat.setForeground(QColor(255, 255, 255));
     rule.pattern = QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()\\b"));
     rule.format = functionFormat;

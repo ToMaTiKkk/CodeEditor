@@ -21,10 +21,10 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , ui(new Ui::MainWindowCodeEditor)
 {
     ui->setupUi(this);
-    QFile styleFile(":/styles/dark.qss");
+    QFile styleFile(":/styles/light.qss");
     styleFile.open(QFile::ReadOnly);
     QString styleSheet = QLatin1String(styleFile.readAll());
-    this->setStyleSheet(styleSheet);
+    //qApp->setStyleSheet(styleSheet);
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
     bool ok;
@@ -478,3 +478,37 @@ void MainWindowCodeEditor::onVerticalScrollBarValueChanged(int value)
         }
     }
 }
+
+
+
+void MainWindowCodeEditor::on_toolButton_clicked() {
+    static bool isDarkTheme = false;
+
+    if (isDarkTheme) {
+        QFile lightFile(":/styles/light.qss");
+        if (lightFile.open(QFile::ReadOnly)) {
+            QString lightStyle = lightFile.readAll();
+            qApp->setStyleSheet(lightStyle);
+            lightFile.close();
+            qDebug() << "Light theme applied successfully";
+        } else {
+            qDebug() << "Failed to open light.qss";
+        }
+    } else {
+        QFile darkFile(":/styles/dark.qss");
+        if (darkFile.open(QFile::ReadOnly)) {
+            QString darkStyle = darkFile.readAll();
+            qApp->setStyleSheet(darkStyle);
+            darkFile.close();
+            qDebug() << "Dark theme applied successfully";
+        } else {
+            qDebug() << "Failed to open dark.qss";
+        }
+    }
+
+    isDarkTheme = !isDarkTheme;
+}
+
+
+
+

@@ -38,7 +38,7 @@ private slots: // функции, которые будут вызваны в о
     void onExitClicked(); // для выхода из приложения
     void onNewFileClicked(); // для создания нового файла (простое очищение редактора, файл надо будет сохранять вручную)
     void onOpenFolderClicked(); // для открытия папки и отображения ее в дереве
-
+    //void toggleTheme(); //смена темы
     void onFileSystemTreeViewDoubleClicked(const QModelIndex &index); // когда пользователь дважды кликает по файлу в дереве, то оно открывается в редакторе
 
     void onContentsChange(int position, int charsRemoved, int charsAdded);
@@ -50,6 +50,9 @@ private slots: // функции, которые будут вызваны в о
     void onVerticalScrollBarValueChanged(int value);
     void updateRemoteWidgetGeometry(QWidget* widget, int position);
     void updateLineHighlight(const QString& senderId, int position);
+
+    void on_toolButton_clicked();
+
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
