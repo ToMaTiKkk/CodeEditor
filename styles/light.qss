@@ -1,0 +1,171 @@
+QMainWindow {
+    background-color: rgb(240, 240, 240); /* Светло-серый фон главного окна */
+}
+
+QMenuBar { /* панель меню */
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.9); /* Черный текст */
+    border-bottom: 1px solid rgb(240, 20, 200); /* Серая нижняя граница */
+    padding: 4px; /* внутренние отступы вокруг содержимого панели */
+}
+
+QMenuBar::item { /* элементы меню, пункты */
+    padding: 8px 15px; /* отступы 8 пикселей сверху и снизу, 15 слева и справа */
+    border-radius: 4px; /* скругление */
+}
+
+QMenuBar::item:selected {
+    background-color: rgb(200, 200, 200);
+}
+
+QMenu { /* панель выпадающего окна меню */
+    background-color: rgb(240, 240, 240);
+    border: 1px solid rgb(200, 200, 200);
+    color: rgba(0, 0, 0, 0.9);
+    padding: 8px;
+}
+
+QMenu::item { /* элементы внутри выпадающего окна */
+    padding: 8px 25px 8px 15px;
+    margin: 2px 0; /* внешние отступы по 2 пикселя сверху и снизу между элементами */
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background-color: rgb(200, 200, 200); /* Светло-серый фон при наведении */
+}
+
+QStatusBar {
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.7); /* Темно-серый текст */
+    border-top: 1px solid rgb(200, 200, 200); /* Серая верхняя граница */
+}
+
+QTreeView {
+    background-color: rgba(255, 255, 255, 0.9); /* Почти белый фон */
+    border: none;
+    color: rgba(0, 0, 0, 0.9); /* Черный текст */
+    outline: 0; /* отсутствие рамки при фокусе */
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+}
+
+QTreeView::item {
+    height: 28px;
+    padding: 4px 0;
+}
+
+
+QPlainTextEdit {
+    background-color: rgb(240, 240, 240); /* Светло-серый фон */
+    color: rgba(0, 0, 0, 0.9); /* Черный текст */
+    border: none;
+    font-family: 'Fira Code', monospace;
+    font-size: 14px;
+    padding: 0 15px;
+}
+
+QScrollBar:vertical { /* стиль полосы */
+    border: none;
+    background: rgba(200, 200, 200, 0.5); /* Светло-серый фон */
+    width: 8px; /* ширина полосы */
+    margin: 0; /* нет отступов */
+}
+
+QScrollBar::handle:vertical { /* стиль ползунка прокрутки */
+    background: rgba(200, 200, 200, 0.5); /* Серый ползунок */
+    min-height: 20px; /* минимальная высота ползунка */
+    border-radius: 6px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { /* элементы для уменьшения и увеличения прокрутки скрыты */
+    height: 0;
+}
+
+QSplitter::handle { /* элементы, за которые можно потянуть, чтобы изменить размер областей */
+    background: rgba(200, 200, 200, 0.3); /* Серый разделитель */
+    width: 1px;
+}
+
+QScrollBar::handle:hover { /* при наведении на ползунок */
+    background: rgb(200, 200, 200); /* Серый ползунок */
+    width: 4px;
+}
+
+QPushButton {
+    background-color: rgb(200, 200, 200); /* Светло-серый фон */
+    color: black; /* Черный текст */
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    min-width: 80px;
+    transition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
+}
+
+QPushButton:hover {
+    background-color: rgba(160, 160, 160, 0.85); /* Серый фон при наведении */
+    transform: translateY(-3px); /* кнопка при наведении поднимается на 3 пикселя */
+}
+
+QPushButton:pressed {
+    transform: translateY(3px); /* эффект нажатия, кнопка опускается вниз */
+}
+
+@keyframes pulse { /* эффект пульсации */
+    0% { opacity: 0.4; transform: scale(0.2); }
+    50% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0.4; transform: scale(0.2); }
+}
+
+CursorWidget {
+    border-left: 2px solid rgba(0, 0, 0, 0.8); /* Черный курсор */
+    animation: pulse 1.5s infinite; /* бесконечная анимация мигания курсора */
+    margin-top: 2px; /* отступ сверху */
+    height: 18px !important; /* приоритет стиля */
+}
+
+/* Стили для полосы прокрутки */
+QScrollBar:vertical {
+    background: rgba(240, 240, 240, 0.5); /* Светло-серый фон для свободного места */
+    width: 12px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(150, 150, 150, 0.7); /* Серый цвет ползунка */
+    min-height: 20px;
+    border-radius: 6px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0; /* Скрываем кнопки увеличения/уменьшения */
+}
+
+QScrollBar::handle:vertical:hover {
+    background: rgba(150, 150, 150, 0.9); /* Темнее при наведении */
+}
+
+/* Стили для дерева (QTreeView) */
+QTreeView {
+    background-color: white; /* Белый фон */
+    color: black; /* Черный текст */
+    border: none;
+    outline: 0;
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+}
+
+QTreeView::item {
+    height: 28px;
+    padding: 4px 0;
+    icon: url(:/icons/folder_black.png); /* Путь к вашей иконке */
+}
+
+QTreeView::item:hover {
+    background-color: rgba(200, 200, 200, 0.7); /* Светло-серый фон при наведении */
+}
+
+QTreeView::item:selected {
+    background-color: rgb(200, 200, 200); /* Светло-серый фон для выбранного элемента */
+    color: black; /* Черный текст */
+}
