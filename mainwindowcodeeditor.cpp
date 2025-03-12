@@ -21,15 +21,32 @@
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
+    , m_isDarkTheme(true)
 {
     ui->setupUi(this);
     this->setWindowTitle("CoEdit");
-    QFile styleFile(":/styles/light.qss");
-    styleFile.open(QFile::ReadOnly);
-    QString styleSheet = QLatin1String(styleFile.readAll());
-    //qApp->setStyleSheet(styleSheet);
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
+
+    m_themeCheckBox = new QCheckBox(this);
+    m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
+    connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
+        m_isDarkTheme = (state == Qt::Unchecked); // Unchecked - темная, Checked - светлая
+        applyCurrentTheme();
+        if (m_isDarkTheme) {
+            m_themeCheckBox->setToolTip(tr("Темная тема"));
+        } else {
+            m_themeCheckBox->setToolTip(tr("Светлая тема"));
+        }
+    });
+    QLabel* themeLabel = new QLabel("Тема:", this);
+    QHBoxLayout *themeLayout = new QHBoxLayout;
+    themeLayout->addWidget(themeLabel);
+    themeLayout->addWidget(m_themeCheckBox);
+    QWidget *themeWidget = new QWidget(this);
+    themeWidget->setLayout(themeLayout);
+    ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол
+    applyCurrentTheme();
 
     bool ok;
     m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
@@ -111,6 +128,7 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     qDeleteAll(remoteLineHighlights);
     delete socket;
     delete highlighter;
+    delete m_themeCheckBox;
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -163,6 +181,7 @@ void MainWindowCodeEditor::onDisconnected()
     remoteUsers.clear();
     ui->actionShowListUsers->setEnabled(false);
     ui->actionLeaveSession->setEnabled(false);
+    statusBar()->clearMessage();
 }
 
 void MainWindowCodeEditor::connectToServer()
@@ -400,12 +419,14 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
     QJsonObject op; // формирование джсон с информацией
     if (charsAdded > 0)
     {
+        op["client_id"] = m_clientId;
         op["type"] = "insert";
         op["position"] = position;
         QString insertedText = ui->codeEditor->toPlainText().mid(position, charsAdded); // извлечение вставленного текста
         op["text"] = insertedText;
     } else if (charsRemoved > 0)
     {
+        op["client_id"] = m_clientId;
         op["type"] = "delete";
         op["position"] = position;
         op["count"] = charsRemoved;
@@ -431,7 +452,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
     if (opType == "session_info")
     {
         m_sessionId = op["session_id"].toString();
-        statusBar()->showMessage("ID сессии: " + m_sessionId);
+        statusBar()->showMessage("Session ID: " + m_sessionId);
         qDebug() << "ID session" << m_sessionId;
         QString fileText = op["text"].toString();
         ui->codeEditor->setPlainText(fileText);
@@ -640,11 +661,9 @@ void MainWindowCodeEditor::onVerticalScrollBarValueChanged(int value)
     }
 }
 
-void MainWindowCodeEditor::onToolButtonClicked()
+void MainWindowCodeEditor::applyCurrentTheme()
 {
-    bool isDarkTheme = false;
-
-    if (isDarkTheme) {
+    if (!m_isDarkTheme) {
         QFile lightFile(":/styles/light.qss");
         if (lightFile.open(QFile::ReadOnly)) {
             QString lightStyle = lightFile.readAll();
@@ -665,6 +684,10 @@ void MainWindowCodeEditor::onToolButtonClicked()
             qDebug() << "Failed to open dark.qss";
         }
     }
+}
 
-    isDarkTheme = !isDarkTheme;
+void MainWindowCodeEditor::onToolButtonClicked()
+{
+    m_isDarkTheme = !m_isDarkTheme;
+    applyCurrentTheme();
 }

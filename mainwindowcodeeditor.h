@@ -14,6 +14,7 @@
 #include <QUuid>
 #include <QMap>
 #include <QScrollBar>
+#include <QCheckBox>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -53,6 +54,7 @@ private slots: // функции, которые будут вызваны в о
     void updateLineHighlight(const QString& senderId, int position);
 
     void onToolButtonClicked();
+    void applyCurrentTheme();
 
     void onCreateSession();
     void onJoinSession();
@@ -71,6 +73,8 @@ private:
     QWebSocket *socket = nullptr;
     CppHighlighter *highlighter;
     bool loadingFile = false;
+    bool m_isDarkTheme;
+    QCheckBox* m_themeCheckBox;
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
     QString m_username;

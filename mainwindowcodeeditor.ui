@@ -24,7 +24,7 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="2" column="0">
+    <item row="1" column="0">
      <widget class="QSplitter" name="splitter">
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
@@ -62,16 +62,12 @@
       </widget>
      </widget>
     </item>
-    <item row="1" column="0" alignment="Qt::AlignRight">
-     <widget class="QToolButton" name="toolButton">
-      <property name="text">
-       <string>Change Theme</string>
-      </property>
-     </widget>
-    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
    <property name="geometry">
     <rect>
      <x>0</x>
@@ -87,6 +83,9 @@
      <height>21</height>
 >>>>>>> 94330e5 (add session with sync bug)
     </rect>
+   </property>
+   <property name="defaultUp">
+    <bool>false</bool>
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
