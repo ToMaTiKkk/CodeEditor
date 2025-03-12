@@ -44,6 +44,7 @@ private slots: // функции, которые будут вызваны в о
     void onContentsChange(int position, int charsRemoved, int charsAdded);
     void onTextMessageReceived(const QString &message);
     void onDisconnected();
+    void onConnected();
 
     void onCursorPositionChanged();
 
@@ -51,21 +52,32 @@ private slots: // функции, которые будут вызваны в о
     void updateRemoteWidgetGeometry(QWidget* widget, int position);
     void updateLineHighlight(const QString& senderId, int position);
 
-    void on_toolButton_clicked();
+    void onToolButtonClicked();
+
+    void onCreateSession();
+    void onJoinSession();
+    void onShowUserList();
+    void onLeaveSession();
+
+    void connectToServer(); // функция для подключения или переподключения
+    void disconnectFromServer(); // функция для отключения
+    void updateUserListUI(); // обновление списка пользователей в интерфейсе
 
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
-    QWebSocket *socket;
+    QWebSocket *socket = nullptr;
+    CppHighlighter *highlighter;
     bool loadingFile = false;
-    QString m_clientId; // хранение уникального идентификатора клиента, пересоздается при каждом запуске программы
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
-    QString m_username;
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
+    QString m_username;
+    QString m_clientId; // хранение уникального идентификатора клиента, пересоздается при каждом запуске программы
+    QString m_sessionId;
     QList<QJsonObject> cursorUpdates; // хранение последних обновлений позиций курсора
     QMap<QString, int> lastCursorPositions; // хранение позиций всех курсоров других пользователей
-    CppHighlighter *highlighter;
+    QMap<QString, QJsonObject> remoteUsers; // client_id -> {username, color}
 };
 #endif // MAINWINDOWCODEEDITOR_H
