@@ -10,32 +10,62 @@
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QtWebSockets/QWebSocket>
+#include <QJsonArray>
+#include <QWebSocket>
 #include <QSignalBlocker>
 #include <QCoreApplication>
 #include <QInputDialog>
 #include <QRandomGenerator>
+#include <QPushButton>
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
+    , m_isDarkTheme(true)
 {
     ui->setupUi(this);
-    QFile styleFile(":/styles/light.qss");
-    styleFile.open(QFile::ReadOnly);
-    QString styleSheet = QLatin1String(styleFile.readAll());
-    //qApp->setStyleSheet(styleSheet);
+    this->setWindowTitle("CoEdit");
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
+
+    m_themeCheckBox = new QCheckBox(this);
+    m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
+    connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
+        m_isDarkTheme = (state == Qt::Unchecked); // Unchecked - темная, Checked - светлая
+        applyCurrentTheme();
+        if (m_isDarkTheme) {
+            m_themeCheckBox->setToolTip(tr("Темная тема"));
+        } else {
+            m_themeCheckBox->setToolTip(tr("Светлая тема"));
+        }
+    });
+    QLabel* themeLabel = new QLabel("Тема:", this);
+    QHBoxLayout *themeLayout = new QHBoxLayout;
+    themeLayout->addWidget(themeLabel);
+    themeLayout->addWidget(m_themeCheckBox);
+    QWidget *themeWidget = new QWidget(this);
+    themeWidget->setLayout(themeLayout);
+    ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол
+    applyCurrentTheme();
+
     bool ok;
     m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
     if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
         m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
     }
+    qDebug() << "Set username to" << m_username;
     ui->codeEditor->viewport()->installEventFilter(this); // фильтр чтобы отслеживать изменения размеров viewport
 
     // подключение сигнала измнения значения вертикального скроллбара
     connect(ui->codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
+
+    // сигнал для "сессий"
+    connect(ui->actionCreateSession, &QAction::triggered, this, &MainWindowCodeEditor::onCreateSession);
+    connect(ui->actionJoinSession, &QAction::triggered, this, &MainWindowCodeEditor::onJoinSession);
+    connect(ui->actionLeaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onLeaveSession);
+    connect(ui->actionShowListUsers, &QAction::triggered, this, &MainWindowCodeEditor::onShowUserList);
+    ui->actionShowListUsers->setEnabled(false);
+    ui->actionLeaveSession->setEnabled(false);
 
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
     connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
@@ -79,33 +109,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     m_clientId = QUuid::createUuid().toString();
     qDebug() << "Уникальный идентификатор клиента:" << m_clientId;
-    // Создаем QWebSocket и подключаем его сигналы
-    socket = new QWebSocket();
-    // Сигнал "connected" – когда соединение установлено
-    connect(socket, &QWebSocket::connected, this, [this]() {
-        qDebug() << "Клиент успешно подключился к серверу";
-        statusBar()->showMessage("Подключено к серверу");
-        QJsonObject usernameMessage;
-        usernameMessage["type"] = "set_username";
-        usernameMessage["username"] = m_username;
-        usernameMessage["Uuid"] = m_clientId;
-        QJsonDocument doc(usernameMessage);
-        QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-        if (socket->state() == QAbstractSocket::ConnectedState) {
-            socket->sendTextMessage(message);
-            qDebug() << "Send username to server:" << message;
-        }
-    });
-    connect(socket, &QWebSocket::disconnected, this, &MainWindowCodeEditor::onDisconnected);
-    // // Сигнал "errorOccurred" – если возникают ошибки при соединении
-    // connect(socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError error) {
-    //     qDebug() << "Ошибка WebSocket:" << socket->errorString();
-    //     statusBar()->showMessage("Ошибка: " + socket->errorString());
-    // });
 
-    // Сигнал, когда приходит сообщение от сервера
-    connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
-    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
     // Сигнал изменения документа клиентом и
     connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
 
@@ -121,6 +125,7 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     qDeleteAll(remoteLineHighlights);
     delete socket;
     delete highlighter;
+    delete m_themeCheckBox;
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -136,6 +141,131 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
         }
     }
     return QMainWindow::eventFilter(obj, event);
+}
+
+void MainWindowCodeEditor::onConnected()
+{
+    qDebug() << "Клиент успешно подключился к серверу";
+    statusBar()->showMessage("Подключено к серверу");
+
+    if (m_sessionId.isEmpty())
+    {
+        qDebug() << "Error: клиент не выбрал или не создал сессию";
+        return;
+    }
+    QJsonObject message;
+    if (m_sessionId == "NEW") {
+        message["type"] = "create_session";
+    } else {
+        message["type"] = "join_session";
+        message["session_id"] = m_sessionId;
+    }
+    message["username"] = m_username;
+    message["client_id"] = m_clientId;
+    QJsonDocument doc(message);
+    socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+}
+
+void MainWindowCodeEditor::onDisconnected()
+{
+    statusBar()->showMessage("Отключено от сервера");
+    qDebug() << "WebSocket disconnected";
+
+    // очистка данных, связанных с сессией
+    m_sessionId.clear();
+    remoteCursors.clear();
+    remoteLineHighlights.clear();
+    remoteUsers.clear();
+    ui->actionShowListUsers->setEnabled(false);
+    ui->actionLeaveSession->setEnabled(false);
+    statusBar()->clearMessage();
+}
+
+void MainWindowCodeEditor::connectToServer()
+{
+    if (socket && socket->state() == QAbstractSocket::ConnectedState) return; // уже подключены
+
+    if (!socket) {
+        // Создаем QWebSocket и подключаем его сигналы
+        socket = new QWebSocket();
+
+        // Сигнал "connected" – когда соединение установлено
+        connect(socket, &QWebSocket::connected, this, &MainWindowCodeEditor::onConnected);
+        connect(socket, &QWebSocket::disconnected, this, &MainWindowCodeEditor::onDisconnected);
+        // // Сигнал "errorOccurred" – если возникают ошибки при соединении
+        // connect(socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError error) {
+        //     qDebug() << "Ошибка WebSocket:" << socket->errorString();
+        //     statusBar()->showMessage("Ошибка: " + socket->errorString());
+        // });
+        // Сигнал, когда приходит сообщение от сервера
+        connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
+    }
+
+    socket->open(QUrl("ws://localhost:8080"));
+}
+
+void MainWindowCodeEditor::disconnectFromServer()
+{
+    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+        socket->close();
+    }
+}
+
+void MainWindowCodeEditor::onCreateSession()
+{
+    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+        QMessageBox msgBoxConfirm;
+        msgBoxConfirm.setWindowTitle("Confirm");
+        msgBoxConfirm.setText("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано.");
+        QPushButton *yes = msgBoxConfirm.addButton("YES", QMessageBox::AcceptRole);
+        QPushButton *no = msgBoxConfirm.addButton("no", QMessageBox::RejectRole);
+
+        if (msgBoxConfirm.clickedButton() == yes) {
+            disconnectFromServer();
+        } else if (msgBoxConfirm.clickedButton() == no) return;
+    }
+
+    m_sessionId = "NEW";
+    connectToServer();
+    ui->actionShowListUsers->setEnabled(true);
+    ui->actionLeaveSession->setEnabled(true);
+}
+
+void MainWindowCodeEditor::onJoinSession()
+{
+    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+        QMessageBox msgBoxConfirm;
+        msgBoxConfirm.setWindowTitle("Confirm");
+        msgBoxConfirm.setText("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано.");
+        QPushButton *yes = msgBoxConfirm.addButton("YES", QMessageBox::AcceptRole);
+        QPushButton *no = msgBoxConfirm.addButton("no", QMessageBox::RejectRole);
+
+        if (msgBoxConfirm.clickedButton() == yes) {
+            disconnectFromServer();
+        } else if (msgBoxConfirm.clickedButton() == no) return;
+    }
+
+    bool ok;
+    QString sessionId = QInputDialog::getText(this, tr("Join Session"), tr("Session ID:"), QLineEdit::Normal, "", &ok);
+    if (ok && !sessionId.isEmpty()) {
+        m_sessionId = sessionId;
+        connectToServer(); // подключение с отправкой на сервер соо с join_session
+        ui->actionShowListUsers->setEnabled(true);
+        ui->actionLeaveSession->setEnabled(true);
+    }
+}
+
+void MainWindowCodeEditor::onLeaveSession()
+{
+    if (!m_sessionId.isEmpty() && socket->state() == QAbstractSocket::ConnectedState)
+    {
+        QJsonObject message;
+        message["type"] = "leave_session";
+        message["client_id"] = m_clientId;
+        QJsonDocument doc(message);
+        socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    }
+    disconnectFromServer();
 }
 
 void MainWindowCodeEditor::onOpenFileClicked()
@@ -245,7 +375,6 @@ void MainWindowCodeEditor::onOpenFolderClicked()
             QMessageBox::warning(this, "Warning", "Выбранная папка несуществует или не является папкой.");
         }
     }
-
 }
 
 void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &index)
@@ -285,24 +414,20 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
     }
 }
 
-void MainWindowCodeEditor::onDisconnected()
-{
-    statusBar()->showMessage("WebSocket disconnected");
-    qDebug() << "WebSocket disconnected";
-}
-
 void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int charsAdded) // получает позицию, количество удаленных символов и добавленных символов
 {
     if (loadingFile) return;
     QJsonObject op; // формирование джсон с информацией
     if (charsAdded > 0)
     {
+        op["client_id"] = m_clientId;
         op["type"] = "insert";
         op["position"] = position;
         QString insertedText = ui->codeEditor->toPlainText().mid(position, charsAdded); // извлечение вставленного текста
         op["text"] = insertedText;
     } else if (charsRemoved > 0)
     {
+        op["client_id"] = m_clientId;
         op["type"] = "delete";
         op["position"] = position;
         op["count"] = charsRemoved;
@@ -323,27 +448,77 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     QJsonObject op = doc.object();
     QString opType = op["type"].toString();
-    int position = op["position"].toInt();
-    if (opType == "user_disconnected")
+    //int position = op["position"].toInt();
+
+    if (opType == "session_info")
     {
-        QString disconnectedId = op["Uuid"].toString(); // Uuid == m_clientId
-        QString userDisconneted = op["username"].toString();
-        if (remoteCursors.contains(disconnectedId))
-        {
-            // при отключении пользователя у других удаляется его курсор с тултипом и подсветка строки, где он был
-            CursorWidget* widget = remoteCursors.take(disconnectedId);
-            widget->hide();
-            widget->deleteLater();
-            LineHighlightWidget* lineWidget = remoteLineHighlights.take(disconnectedId);
-            lineWidget->hide();
-            lineWidget->deleteLater();
-            qDebug() << "Удален курсор и подсветка для отключенного пользователя:" << userDisconneted;
-            statusBar()->showMessage("Пользователь '" + userDisconneted + "' отключился");
+        m_sessionId = op["session_id"].toString();
+        statusBar()->showMessage("Session ID: " + m_sessionId);
+        qDebug() << "ID session" << m_sessionId;
+        QString fileText = op["text"].toString();
+        ui->codeEditor->setPlainText(fileText);
+        QJsonObject cursors = op["cursors"].toObject();
+        for (const QString& otherClientId : cursors.keys()) {
+            QJsonObject cursorInfo = cursors[otherClientId].toObject();
+            int position = cursorInfo["position"].toInt();
+            QString username = cursorInfo["username"].toString();
+            QColor color = cursorInfo["color"].toString();
+
+            // создаем/обновляем виджеты курсоров и подсветок
+            if (!remoteCursors.contains(otherClientId))
+            {
+                CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), color);
+                remoteCursors[otherClientId] = cursorWidget;
+                cursorWidget->show();
+                cursorWidget->setCustomToolTipStyle(color);
+                cursorWidget->setUsername(username);
+
+                LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), color.lighter(150));
+                remoteLineHighlights[otherClientId] = lineHighlight;
+                lineHighlight->show();
+            }
+            updateRemoteWidgetGeometry(remoteCursors[otherClientId], position);
+            updateLineHighlight(otherClientId, position);
         }
-    } else if (opType == "file_content_update"){
+        highlighter->rehighlight();
+        ui->actionShowListUsers->setEnabled(true);
+        ui->actionLeaveSession->setEnabled(true);
+
+    } else if (opType == "user_list_update") 
+    {
+        remoteUsers.clear();
+        QJsonArray users = op["users"].toArray();
+        for (const QJsonValue& userValue : users) {
+            QJsonObject user = userValue.toObject();
+            QString clientId = user["client_id"].toString();
+            remoteUsers[clientId] = user;
+        }
+        updateUserListUI();
+
+    } else if (opType == "user_disconnected")
+    {
+        QString disconnectedClientId = op["client_id"].toString();
+        QString disconnectedUsername = op["username"].toString();
+        qDebug() << "Клиент отключился (уведомление)" << disconnectedUsername << disconnectedClientId;
+        statusBar()->showMessage("Клиент отключился (уведомление) " + disconnectedUsername);
+
+        if (remoteCursors.contains(disconnectedClientId)) {
+            delete remoteCursors.take(disconnectedClientId);
+        }
+
+        if (remoteLineHighlights.contains(disconnectedClientId)) {
+            delete remoteLineHighlights.take(disconnectedClientId);
+        }
+
+        remoteUsers.remove(disconnectedClientId);
+        updateUserListUI();
+
+    } else if (opType == "file_content_update")
+    {
         QString fileText = op["text"].toString();
         ui->codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
         qDebug() << "Применено обновление содержимого файла";
+
     } else if (opType == "cursor_position_update")
     {
         QString senderId = op["client_id"].toString();
@@ -352,7 +527,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         int position = op["position"].toInt();
         QString username = op["username"].toString();
 
-        lastCursorPositions[senderId] = position;
+        cursorUpdates.append(QJsonDocument::fromJson(message.toUtf8()).object());
 
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
@@ -364,6 +539,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             remoteCursors[senderId] = cursorWidget;
             cursorWidget->setCustomToolTipStyle(cursorColor);
             cursorWidget->show();
+
             LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), cursorColor.lighter(150));
             remoteLineHighlights[senderId] = lineHighlight;
             lineHighlight->show();
@@ -375,29 +551,26 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         {
             cursorWidget->setUsername(username);
             updateRemoteWidgetGeometry(cursorWidget, position); // обновляем позицию курсора
-            // QTextCursor textCursor(ui->codeEditor->document());
-            // textCursor.setPosition(position);
-            // QRect cursorRect = ui->codeEditor->cursorRect(textCursor); // возвращает прямоугольник с координатами относительно области отображения текста
-            // //QMargins margins = ui->codeEditor->contentsMargins();
-            // //cursorRect.translate(margins.left(), margins.top());
-            // //QPoint widgetPos = ui->codeEditor->viewport()->mapToParent(cursorRect.topLeft());
-            // //cursorWidget->move(widgetPos);
-            // cursorWidget->move(cursorRect.topLeft()); // перемещение курсора в начало этого прямоугольника
-            // cursorWidget->setFixedHeight(cursorRect.height()); // виджет высотой строки
-            // cursorWidget->setVisible(true);
-
         }
-
         updateLineHighlight(senderId, position); // обновляем подсветку строки
+    
     } else if (opType == "insert")
     {
+        QString senderId = op["client_id"].toString();
+        if (m_clientId == senderId) return;
+
         QString text = op["text"].toString();
+        int position = op["position"].toInt();
         QTextCursor cursor(ui->codeEditor->document());
         cursor.setPosition(position);
         cursor.insertText(text);
         qDebug() << "Применена операция вставки";
+
     } else if (opType == "delete")
     {
+        QString senderId = op["client_id"].toString();
+        if (m_clientId == senderId) return;
+
         int count = op["count"].toInt();
         int position = op["position"].toInt();
         QTextCursor cursor(ui->codeEditor->document());
@@ -422,6 +595,16 @@ void MainWindowCodeEditor::onCursorPositionChanged()
         socket->sendTextMessage(message);
         qDebug() << "Отправлено сообщение о позиции курсора" << message;
     }
+}
+
+void MainWindowCodeEditor::onShowUserList()
+{
+
+}
+
+void MainWindowCodeEditor::updateUserListUI()
+{
+
 }
 
 // обновление позиции и размера курсора (тултипа соответственно)
@@ -452,7 +635,7 @@ void MainWindowCodeEditor::updateLineHighlight(const QString& senderId, int posi
         ui->codeEditor->viewport()->width(),
         cursorRect.height()
         );
-    lineHighlight->setVisible(true);
+    lineHighlight->setEnabled(true);
 }
 
 // обновлении позиции подсветки при прокрутке
@@ -479,12 +662,9 @@ void MainWindowCodeEditor::onVerticalScrollBarValueChanged(int value)
     }
 }
 
-
-
-void MainWindowCodeEditor::on_toolButton_clicked() {
-    static bool isDarkTheme = false;
-
-    if (isDarkTheme) {
+void MainWindowCodeEditor::applyCurrentTheme()
+{
+    if (!m_isDarkTheme) {
         QFile lightFile(":/styles/light.qss");
         if (lightFile.open(QFile::ReadOnly)) {
             QString lightStyle = lightFile.readAll();
@@ -505,10 +685,10 @@ void MainWindowCodeEditor::on_toolButton_clicked() {
             qDebug() << "Failed to open dark.qss";
         }
     }
-
-    isDarkTheme = !isDarkTheme;
 }
 
-
-
-
+void MainWindowCodeEditor::onToolButtonClicked()
+{
+    m_isDarkTheme = !m_isDarkTheme;
+    applyCurrentTheme();
+}

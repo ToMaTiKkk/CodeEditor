@@ -169,3 +169,28 @@ QTreeView::item:selected {
     background-color: rgb(200, 200, 200); /* Светло-серый фон для выбранного элемента */
     color: black; /* Черный текст */
 }
+
+QCheckBox::indicator {
+    width: 30px;
+    height: 10px;
+    border-radius: 5px;
+    background-color: #ddd; /* Светло-серый фон */
+    border: 2px solid #bbb;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #4CAF50; /* Зелёный фон */
+    border-color: #45a049;
+}
+QCheckBox::indicator:unchecked {
+    background-color: #ddd;
+}
+
+QCheckBox::indicator:checked:disabled {
+     background-color: #ddd;
+     border-color: #bbb;
+}
+
+QCheckBox::indicator:unchecked:disabled {
+     background-color: #ddd;
+}

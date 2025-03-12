@@ -132,3 +132,28 @@ CursorWidget {
         margin-top: 2px; /* отступ верхний */
         height: 18px !important; /* повышение приоритетность стиля над прочими, любые попытки изменить высоту курсора будут, будут игнорироваться, если нет метки приоритета */
 }
+
+QCheckBox::indicator { /* Общий стиль индикатора (квадратика) */
+    width: 30px;
+    height: 10px;
+    border-radius: 5px; /* Скругляем углы */
+    background-color: #555; /* Тёмно-серый фон */
+    border: 2px solid #777;
+}
+
+QCheckBox::indicator:checked { /* Стиль для включенного состояния */
+    background-color: #2ecc71; /* Зелёный фон */
+    border-color: #27ae60;
+}
+QCheckBox::indicator:unchecked {
+     background-color: #555;
+}
+
+QCheckBox::indicator:checked:disabled {
+    background-color: #555;
+    border-color: #777;
+}
+
+QCheckBox::indicator:unchecked:disabled {
+     background-color: #555;
+}
