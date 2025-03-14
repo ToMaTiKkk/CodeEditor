@@ -60,6 +60,8 @@ private slots: // функции, которые будут вызваны в о
     void onJoinSession();
     void onShowUserList();
     void onLeaveSession();
+    bool confirmChangeSession(const QString& message);
+    void clearRemoteInfo();
 
     void connectToServer(); // функция для подключения или переподключения
     void disconnectFromServer(); // функция для отключения

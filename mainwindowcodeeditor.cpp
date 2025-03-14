@@ -64,8 +64,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(ui->actionJoinSession, &QAction::triggered, this, &MainWindowCodeEditor::onJoinSession);
     connect(ui->actionLeaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onLeaveSession);
     connect(ui->actionShowListUsers, &QAction::triggered, this, &MainWindowCodeEditor::onShowUserList);
-    ui->actionShowListUsers->setEnabled(false);
-    ui->actionLeaveSession->setEnabled(false);
+    ui->actionShowListUsers->setVisible(false);
+    ui->actionLeaveSession->setVisible(false);
 
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
     connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
@@ -171,14 +171,9 @@ void MainWindowCodeEditor::onDisconnected()
     statusBar()->showMessage("Отключено от сервера");
     qDebug() << "WebSocket disconnected";
 
-    // очистка данных, связанных с сессией
-    m_sessionId.clear();
-    remoteCursors.clear();
-    remoteLineHighlights.clear();
-    remoteUsers.clear();
-    ui->actionShowListUsers->setEnabled(false);
-    ui->actionLeaveSession->setEnabled(false);
-    statusBar()->clearMessage();
+    clearRemoteInfo();
+    ui->actionShowListUsers->setVisible(false);
+    ui->actionLeaveSession->setVisible(false);
 }
 
 void MainWindowCodeEditor::connectToServer()
@@ -208,41 +203,55 @@ void MainWindowCodeEditor::disconnectFromServer()
 {
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         socket->close();
+        clearRemoteInfo();
     }
+}
+
+bool MainWindowCodeEditor::confirmChangeSession(const QString &message)
+{
+    QMessageBox msgBoxConfirm(this);
+    msgBoxConfirm.setWindowTitle("Confirm");
+    msgBoxConfirm.setText(message);
+    msgBoxConfirm.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBoxConfirm.setDefaultButton(QMessageBox::No); // кнопки "Нет" по умолчанию
+    return msgBoxConfirm.exec() == QMessageBox::Yes;
+}
+
+void MainWindowCodeEditor::clearRemoteInfo()
+{
+    // очистка данных, связанных с сессией
+    ui->codeEditor->setPlainText("");
+    m_sessionId.clear();
+    qDeleteAll(remoteCursors);
+    remoteCursors.clear();
+    qDeleteAll(remoteLineHighlights);
+    remoteLineHighlights.clear();
+    remoteUsers.clear();
+    statusBar()->clearMessage();
 }
 
 void MainWindowCodeEditor::onCreateSession()
 {
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
-        QMessageBox msgBoxConfirm;
-        msgBoxConfirm.setWindowTitle("Confirm");
-        msgBoxConfirm.setText("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано.");
-        QPushButton *yes = msgBoxConfirm.addButton("YES", QMessageBox::AcceptRole);
-        QPushButton *no = msgBoxConfirm.addButton("no", QMessageBox::RejectRole);
-
-        if (msgBoxConfirm.clickedButton() == yes) {
-            disconnectFromServer();
-        } else if (msgBoxConfirm.clickedButton() == no) return;
+        if (!confirmChangeSession(tr("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано."))) {
+            return;
+        }
+        disconnectFromServer();
     }
 
     m_sessionId = "NEW";
     connectToServer();
-    ui->actionShowListUsers->setEnabled(true);
-    ui->actionLeaveSession->setEnabled(true);
+    ui->actionShowListUsers->setVisible(true);
+    ui->actionLeaveSession->setVisible(true);
 }
 
 void MainWindowCodeEditor::onJoinSession()
 {
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
-        QMessageBox msgBoxConfirm;
-        msgBoxConfirm.setWindowTitle("Confirm");
-        msgBoxConfirm.setText("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано.");
-        QPushButton *yes = msgBoxConfirm.addButton("YES", QMessageBox::AcceptRole);
-        QPushButton *no = msgBoxConfirm.addButton("no", QMessageBox::RejectRole);
-
-        if (msgBoxConfirm.clickedButton() == yes) {
-            disconnectFromServer();
-        } else if (msgBoxConfirm.clickedButton() == no) return;
+        if (!confirmChangeSession(tr("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано."))) {
+            return;
+        }
+        disconnectFromServer();
     }
 
     bool ok;
@@ -250,13 +259,17 @@ void MainWindowCodeEditor::onJoinSession()
     if (ok && !sessionId.isEmpty()) {
         m_sessionId = sessionId;
         connectToServer(); // подключение с отправкой на сервер соо с join_session
-        ui->actionShowListUsers->setEnabled(true);
-        ui->actionLeaveSession->setEnabled(true);
+        ui->actionShowListUsers->setVisible(true);
+        ui->actionLeaveSession->setVisible(true);
     }
 }
 
 void MainWindowCodeEditor::onLeaveSession()
 {
+    if (!confirmChangeSession(tr("Вы уверены что хотите покинуть сессию? Подключение будет разорвано, данные пропадут"))) {
+        return;
+    }
+
     if (!m_sessionId.isEmpty() && socket->state() == QAbstractSocket::ConnectedState)
     {
         QJsonObject message;
@@ -450,7 +463,15 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
     QString opType = op["type"].toString();
     //int position = op["position"].toInt();
 
-    if (opType == "session_info")
+    if (opType == "error") {
+        QString error = op["message"].toString();
+        if (error == "Сессия не найдена") {
+            disconnectFromServer();
+            QString notFoundSession = op["session_id"].toString();
+            statusBar()->showMessage("Сессия с таким идентификатором '" + notFoundSession + "' не найдена");
+        }
+
+    } else if (opType == "session_info")
     {
         m_sessionId = op["session_id"].toString();
         statusBar()->showMessage("Session ID: " + m_sessionId);
@@ -481,8 +502,8 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             updateLineHighlight(otherClientId, position);
         }
         highlighter->rehighlight();
-        ui->actionShowListUsers->setEnabled(true);
-        ui->actionLeaveSession->setEnabled(true);
+        ui->actionShowListUsers->setVisible(true);
+        ui->actionLeaveSession->setVisible(true);
 
     } else if (opType == "user_list_update") 
     {
@@ -635,7 +656,7 @@ void MainWindowCodeEditor::updateLineHighlight(const QString& senderId, int posi
         ui->codeEditor->viewport()->width(),
         cursorRect.height()
         );
-    lineHighlight->setEnabled(true);
+    lineHighlight->setVisible(true);
 }
 
 // обновлении позиции подсветки при прокрутке

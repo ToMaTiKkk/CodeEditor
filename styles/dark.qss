@@ -133,10 +133,14 @@ CursorWidget {
         height: 18px !important; /* повышение приоритетность стиля над прочими, любые попытки изменить высоту курсора будут, будут игнорироваться, если нет метки приоритета */
 }
 
+QLabel {
+    color: rgba(255, 255, 255, 0.9);
+}
+
 QCheckBox::indicator { /* Общий стиль индикатора (квадратика) */
-    width: 30px;
-    height: 10px;
-    border-radius: 5px; /* Скругляем углы */
+    width: 25px;
+    height: 7px;
+    border-radius: 3px; /* Скругляем углы */
     background-color: #555; /* Тёмно-серый фон */
     border: 2px solid #777;
 }
