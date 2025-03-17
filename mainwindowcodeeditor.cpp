@@ -17,6 +17,8 @@
 #include <QInputDialog>
 #include <QRandomGenerator>
 #include <QPushButton>
+#include <QPainter>
+
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
@@ -28,6 +30,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
 
+    // создаем тумблер для переключения темы
     m_themeCheckBox = new QCheckBox(this);
     m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
     connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
@@ -39,6 +42,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
             m_themeCheckBox->setToolTip(tr("Светлая тема"));
         }
     });
+    // добавляем тумблер в layout
     QLabel* themeLabel = new QLabel("Тема:", this);
     QHBoxLayout *themeLayout = new QHBoxLayout;
     themeLayout->addWidget(themeLabel);
@@ -46,7 +50,24 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     QWidget *themeWidget = new QWidget(this);
     themeWidget->setLayout(themeLayout);
     ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол
-    applyCurrentTheme();
+
+    // создаем меню для списка пользователей
+    m_userListMenu = new QMenu(this);
+    ui->actionShowListUsers->setMenu(m_userListMenu); // Связываем QAction с QMenu
+
+    // создание действий контекстного меню для сессии
+    m_muteUnmuteAction = new QAction(tr("Mute/Unmute"), this);
+    m_transferAdminAction = new QAction(tr("Transfer Admin Rights"), this);
+    m_infoAction = new QAction(tr("Information"), this);
+    m_userListMenu->addAction(m_muteUnmuteAction);
+    m_userListMenu->addAction(m_transferAdminAction);
+    m_userListMenu->addAction(m_infoAction);
+    // подключаем сигналы данных кнопок
+    // connect(m_muteUnmuteAction, &QAction::triggered, this, &MainWindowCodeEditor::onMuteUnmute);
+    // connect(m_transferAdminAction, &QAction::triggered, this, &MainWindowCodeEditor::onTransferAdmin);
+    // connect(m_infoAction, &QAction::triggered, this, &MainWindowCodeEditor::showUserInfo);
+
+    applyCurrentTheme(); // применение темы, по умолчанию темная
 
     bool ok;
     m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
@@ -126,6 +147,7 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     delete socket;
     delete highlighter;
     delete m_themeCheckBox;
+    delete m_userListMenu;
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -196,7 +218,7 @@ void MainWindowCodeEditor::connectToServer()
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 
-    socket->open(QUrl("ws://localhost:8080"));
+    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
 }
 
 void MainWindowCodeEditor::disconnectFromServer()
@@ -483,7 +505,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             QJsonObject cursorInfo = cursors[otherClientId].toObject();
             int position = cursorInfo["position"].toInt();
             QString username = cursorInfo["username"].toString();
-            QColor color = cursorInfo["color"].toString();
+            QColor color = QColor(cursorInfo["color"].toString());
 
             // создаем/обновляем виджеты курсоров и подсветок
             if (!remoteCursors.contains(otherClientId))
@@ -500,7 +522,9 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             }
             updateRemoteWidgetGeometry(remoteCursors[otherClientId], position);
             updateLineHighlight(otherClientId, position);
+            
         }
+        updateUserListUI();
         highlighter->rehighlight();
         ui->actionShowListUsers->setVisible(true);
         ui->actionLeaveSession->setVisible(true);
@@ -547,33 +571,35 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
         int position = op["position"].toInt();
         QString username = op["username"].toString();
+        QColor color = QColor(op["color"].toString());
 
-        cursorUpdates.append(QJsonDocument::fromJson(message.toUtf8()).object());
+        cursorUpdates.append(op);
 
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
             // создание виджетов курсора и подсветки строки курсора
             // QStringList colors = QColor::colorNames();
-            QStringList colorNames = { "#D81B60", "#8E24AA", "#3949AB", "#00897B", "#F4511E", "#FDD835" };
-            QColor cursorColor = QColor(colorNames[remoteCursors.size() % colorNames.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
-            CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), cursorColor); // создается курсор имнено на области отображения текста для правильного позиционирвоания
+            //QStringList colorNames = { "#D81B60", "#8E24AA", "#3949AB", "#00897B", "#F4511E", "#FDD835" };
+            //QColor cursorColor = QColor(colorNames[remoteCursors.size() % colorNames.size()]); // выбираем цвет на основе количество клиентов, чтобы у каждого был свой цвет
+            CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), color); // создается курсор имнено на области отображения текста для правильного позиционирвоания
             remoteCursors[senderId] = cursorWidget;
-            cursorWidget->setCustomToolTipStyle(cursorColor);
+            cursorWidget->setCustomToolTipStyle(color);
             cursorWidget->show();
 
-            LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), cursorColor.lighter(150));
+            LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), color.lighter(150));
             remoteLineHighlights[senderId] = lineHighlight;
             lineHighlight->show();
         }
 
         CursorWidget* cursorWidget = remoteCursors[senderId];
-
-        if (cursorWidget)
+        LineHighlightWidget* lineHighlight = remoteLineHighlights[senderId];
+        if (cursorWidget && lineHighlight)
         {
             cursorWidget->setUsername(username);
             updateRemoteWidgetGeometry(cursorWidget, position); // обновляем позицию курсора
+            updateLineHighlight(senderId, position); // обновляем подсветку строки
         }
-        updateLineHighlight(senderId, position); // обновляем подсветку строки
+
     
     } else if (opType == "insert")
     {
@@ -620,12 +646,63 @@ void MainWindowCodeEditor::onCursorPositionChanged()
 
 void MainWindowCodeEditor::onShowUserList()
 {
-
+    updateUserListUI(); // обновляем содержмиое меню
+    QPoint globalPos = QCursor::pos();
+    m_userListMenu->exec(globalPos);
 }
 
 void MainWindowCodeEditor::updateUserListUI()
 {
+    m_userListMenu->clear();
 
+    for (const QString& clientId : remoteUsers.keys()) {
+        QJsonObject user = remoteUsers[clientId];
+        QString username = user["username"].toString();
+        QColor color = QColor(user["color"].toString());
+        bool isAdmin = user["is_admin"].toBool();
+        bool isMuted = m_mutedClients.contains(clientId) && m_mutedClients.value(clientId) != 0;
+
+        // создаем иконку с цветным кружком
+        QPixmap pixmap(13, 13); // размер кружка
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setBrush(color);
+        painter.setPen(Qt::NoPen); // без контура
+        painter.drawEllipse(0, 0, 12, 12); // рисуем кружок
+        QIcon icon(pixmap);
+
+        // создаем QAction
+        QString actionText = username;
+        if (isAdmin) {
+            actionText += " (Admin)";
+        }
+        if (isMuted) {
+            actionText += tr(" (Muted)");
+        }
+        QAction *userAction = new QAction(icon, actionText, this); // иконка + текст
+        userAction->setData(clientId);
+        m_userListMenu->addAction(userAction);
+
+        // if (m_isAdmin) {
+        //     if (!m_userListMenu->actions().contains(m_muteUnmuteAction)) {
+        //         m_userListMenu->addAction(m_muteUnmuteAction);
+        //     }
+        //     if (!m_userListMenu->actions().contains(m_transferAdminAction)) {
+        //         m_userListMenu->addAction(m_transferAdminAction);
+        //     }
+        //     if (!m_userListMenu->actions().contains(m_infoAction)) {
+        //         m_userListMenu->addAction(m_infoAction);
+        //     }
+        // } else {
+        //     if (m_userListMenu->actions().contains(m_muteUnmuteAction)) {
+        //         m_userListMenu->removeAction(m_muteUnmuteAction);
+        //     }
+        //     if (m_userListMenu->actions().contains(m_transferAdminAction)) {
+        //         m_userListMenu->removeAction(m_transferAdminAction);
+        //     }
+        // }
+    }
 }
 
 // обновление позиции и размера курсора (тултипа соответственно)
@@ -713,3 +790,95 @@ void MainWindowCodeEditor::onToolButtonClicked()
     m_isDarkTheme = !m_isDarkTheme;
     applyCurrentTheme();
 }
+
+// void MainWindowCodeEditor::updateMutedStatus()
+// {
+
+// }
+
+void MainWindowCodeEditor::onMutedStatusUpdate(const QString &clientId, bool isMuted)
+{
+
+}
+
+void MainWindowCodeEditor::onAdminChanged(const QString &newAdminId)
+{
+
+}
+
+// void MainWindowCodeEditor::onMuteUnmute()
+// {
+//     QAction *action = qobject_cast<QAction*>(sender());
+//     if (!action) return;
+
+//     QString targetClientId = action->data().toString(); // получаем клиент_айди из данных QAction
+//     if (targetClientId == m_clientId) return;
+//     if (m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != -1) {
+//         QJsonObject unmuteMessage;
+//         unmuteMessage["type"] = "unmute_client";
+//         unmuteMessage["target_client_id"] = targetClientId;
+//         unmuteMessage["client_id"] = m_clientId;
+//         QJsonDocument doc(unmuteMessage);
+//         if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+//             socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+//             qDebug() << "Отправлен запрос на размут:" << targetClientId;
+//         }
+
+//     } else {
+//         bool ok;
+//         int duration = QInputDialog::getInt(this, tr("Mute User"), tr("Enter mute duration (seconds), 0 - permanently:"), 0, 0, 2147483647, 1, &ok);
+//         if (ok) {
+//             QJsonObject muteMessage;
+//             muteMessage["type"] = "mute_client";
+//             muteMessage["target_client_id"] = targetClientId;
+//             muteMessage["duration"] = duration;
+//             muteMessage["client_id"] = m_clientId;
+//             QJsonDocument doc(muteMessage);
+//             if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+//                 socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+//                 qDebug() << "Отправлен запрос на мут:" << targetClientId << ", " << duration;
+//             }
+//         }
+//     }
+// }
+
+// void MainWindowCodeEditor::onTransferAdmin()
+// {
+//     QAction *action = qobject_cast<QAction*>(sender());
+//     if (!action) return;
+
+//     QString targetClientId = action->data().toString();
+//     if (targetClientId == m_clientId) return;
+//     QJsonObject transferAdminMessage;
+//     transferAdminMessage["type"] = "transfer_admin";
+//     transferAdminMessage["new_admin_id"] = targetClientId;
+//     transferAdminMessage["client_id"] = m_clientId;
+//     QJsonDocument doc(transferAdminMessage);
+//     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+//         socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+//     }
+// }
+
+// void MainWindowCodeEditor::showUserInfo()
+// {
+//     QAction *action = qobject_cast<QAction*>(sender());
+//     if (!action) return;
+
+//     QString username = "";
+//     bool isAdmin = false;
+//     QString targetClientId = action->data().toString();
+//     if (remoteUsers.contains(targetClientId)) {
+//         QJsonObject user = remoteUsers.value(targetClientId);
+//         username = user["username"].toString();
+//         isAdmin = user["is_admin"].toBool();
+//     }
+//     QString status;
+//     if (targetClientId == m_clientId) status = "Это Вы";
+//     else {
+//         if (m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != 0) status = "Заглушен";
+//         else status = "Не заглушен";
+//     }
+//     QString adminStatus = m_isAdmin ? "Админ" : "Не админ";
+//     QString message = QString("Username: %1\nClient ID: %2\nStatus: %3\nAdmin: %4").arg(username).arg(targetClientId).arg(status).arg(adminStatus);
+//     QMessageBox::information(this, "User Info", message);
+// }
