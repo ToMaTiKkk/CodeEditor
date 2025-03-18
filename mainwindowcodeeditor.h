@@ -68,13 +68,16 @@ private slots: // функции, которые будут вызваны в о
     void connectToServer(); // функция для подключения или переподключения
     void disconnectFromServer(); // функция для отключения
     void updateUserListUI(); // обновление списка пользователей в интерфейсе
+    void onUserMenuItemClicked(QAction* action);
 
     void onMutedStatusUpdate(const QString& clientId, bool isMuted);
+    bool canEdit();
+    void updateMutedStatus();
     void onAdminChanged(const QString& newAdminId);
 
-    // void onMuteUnmute();
-    // void onTransferAdmin();
-    // void showUserInfo();
+    void onMuteUnmute(const QString targetClientId);
+    void onTransferAdmin(const QString targetClientId);
+    void showUserInfo(const QString targetClientId);
     // void updateMutedStatus();
 
 private:
@@ -87,6 +90,7 @@ private:
     bool m_isDarkTheme;
     bool m_isAdmin;
     QMenu *m_userListMenu; // добавление для списка пользователей
+    QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
     QAction *m_muteUnmuteAction;
     QAction *m_transferAdminAction;
     QAction *m_infoAction;

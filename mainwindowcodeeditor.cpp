@@ -51,22 +51,6 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     themeWidget->setLayout(themeLayout);
     ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол
 
-    // создаем меню для списка пользователей
-    m_userListMenu = new QMenu(this);
-    ui->actionShowListUsers->setMenu(m_userListMenu); // Связываем QAction с QMenu
-
-    // создание действий контекстного меню для сессии
-    m_muteUnmuteAction = new QAction(tr("Mute/Unmute"), this);
-    m_transferAdminAction = new QAction(tr("Transfer Admin Rights"), this);
-    m_infoAction = new QAction(tr("Information"), this);
-    m_userListMenu->addAction(m_muteUnmuteAction);
-    m_userListMenu->addAction(m_transferAdminAction);
-    m_userListMenu->addAction(m_infoAction);
-    // подключаем сигналы данных кнопок
-    // connect(m_muteUnmuteAction, &QAction::triggered, this, &MainWindowCodeEditor::onMuteUnmute);
-    // connect(m_transferAdminAction, &QAction::triggered, this, &MainWindowCodeEditor::onTransferAdmin);
-    // connect(m_infoAction, &QAction::triggered, this, &MainWindowCodeEditor::showUserInfo);
-
     applyCurrentTheme(); // применение темы, по умолчанию темная
 
     bool ok;
@@ -136,7 +120,17 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     connect(ui->codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
 
+    // создаем меню для списка пользователей
+    m_userListMenu = new QMenu(this);
+    ui->actionShowListUsers->setMenu(m_userListMenu);
+
+    // подключаем сигналы кнопок
+    m_muteUnmuteAction = new QAction(this);
+    m_transferAdminAction = new QAction(tr("Transfer Admin Rights"), this);
+    m_infoAction = new QAction(tr("Information"), this);
+
     highlighter = new CppHighlighter(ui->codeEditor->document());
+    updateMutedStatus();
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
@@ -218,7 +212,7 @@ void MainWindowCodeEditor::connectToServer()
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 
-    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
+    socket->open(QUrl("ws://localhost:8080"));
 }
 
 void MainWindowCodeEditor::disconnectFromServer()
@@ -452,6 +446,10 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
 void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int charsAdded) // получает позицию, количество удаленных символов и добавленных символов
 {
     if (loadingFile) return;
+    //if (m_mutedClients.contains(m_clientId) && m_mutedClients.value(m_clientId) != -1) return;
+    if (!canEdit()) {
+        return;
+    }
     QJsonObject op; // формирование джсон с информацией
     if (charsAdded > 0)
     {
@@ -498,6 +496,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         m_sessionId = op["session_id"].toString();
         statusBar()->showMessage("Session ID: " + m_sessionId);
         qDebug() << "ID session" << m_sessionId;
+        m_isAdmin = (op["creator_client_id"].toString() == m_clientId);
         QString fileText = op["text"].toString();
         ui->codeEditor->setPlainText(fileText);
         QJsonObject cursors = op["cursors"].toObject();
@@ -556,6 +555,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         }
 
         remoteUsers.remove(disconnectedClientId);
+        lastCursorPositions.remove(disconnectedClientId);
         updateUserListUI();
 
     } else if (opType == "file_content_update")
@@ -682,7 +682,38 @@ void MainWindowCodeEditor::updateUserListUI()
         }
         QAction *userAction = new QAction(icon, actionText, this); // иконка + текст
         userAction->setData(clientId);
+
+        // создаем меню для списка пользователей
+        QMenu* userContextMenu = new QMenu(this);
+        if (m_isAdmin) {
+            QAction *muteUnmuteAction = new QAction(isMuted ? tr("Unmute") : tr("Mute"), this);
+            QAction *transferAdminAction = new QAction("Transfer Admin Rights", this);
+            QAction *userInfoAction = new QAction("Information", this);
+            userContextMenu->addAction(muteUnmuteAction);
+            userContextMenu->addAction(transferAdminAction);
+            userContextMenu->addAction(userInfoAction);
+
+            if (clientId == m_clientId) {
+                transferAdminAction->setVisible(false);
+                muteUnmuteAction->setVisible(false);
+            }
+
+            // подключаем сигналы данных кнопок, используем лямбда-функции для передачи clientId
+            connect(muteUnmuteAction, &QAction::triggered, this, [this, clientId]() { onMuteUnmute(clientId); });
+            connect(transferAdminAction, &QAction::triggered, this, [this, clientId]() { onTransferAdmin(clientId); });
+            connect(userInfoAction, &QAction::triggered, this, [this, clientId]() { showUserInfo(clientId); });
+        } else {
+            QAction *userInfoAction = new QAction(tr("Information"), this);
+            userContextMenu->addAction(userInfoAction);
+            connect(userInfoAction, &QAction::triggered, this, [this, clientId]() { showUserInfo(clientId); });
+        }
+        userAction->setMenu(userContextMenu); // Связываем QAction с QMenu
+
         m_userListMenu->addAction(userAction);
+        
+        // сохраняем client_id в UserData, чтобы потом получить его в слоте onUserMenuItemClicked
+        // userAction->setData(clientId);
+        // connect(userAction, &QAction::triggered, this, [this, userAction]() { onUserMenuItemClicked(userAction); });
 
         // if (m_isAdmin) {
         //     if (!m_userListMenu->actions().contains(m_muteUnmuteAction)) {
@@ -702,6 +733,32 @@ void MainWindowCodeEditor::updateUserListUI()
         //         m_userListMenu->removeAction(m_transferAdminAction);
         //     }
         // }
+    }
+}
+
+void MainWindowCodeEditor::onUserMenuItemClicked(QAction *action)
+{
+    m_currentUserAction = action;
+    if (!m_currentUserAction) return;
+
+    QString targetClientId = action->data().toString();
+    QJsonObject user = remoteUsers[targetClientId];
+    bool isAdmin = user["is_admin"].toBool();
+    QMenu* menu = action->menu();
+    if (!menu) return;
+
+    QAction *muteUnmuteAction = menu->actions()[0];
+    QAction *transferAdminAction = menu->actions()[1];
+
+    if (m_isAdmin) {
+        qDebug() << "Admin client ID" << m_clientId;
+        muteUnmuteAction->setVisible(true);
+        transferAdminAction->setVisible(targetClientId != m_clientId); // скрыть если клик на самом себе
+        muteUnmuteAction->setText(m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != -1 ? "Unmute" : "Mute");        
+    } else {
+        qDebug() << "Admin NOT client ID" << m_clientId;
+        muteUnmuteAction->setVisible(false);
+        transferAdminAction->setVisible(false);
     }
 }
 
@@ -791,94 +848,124 @@ void MainWindowCodeEditor::onToolButtonClicked()
     applyCurrentTheme();
 }
 
-// void MainWindowCodeEditor::updateMutedStatus()
-// {
-
-// }
+void MainWindowCodeEditor::updateMutedStatus()
+{
+    bool isMuted = m_mutedClients.value(m_clientId);
+    if (isMuted) {
+        statusBar()->showMessage("Вы заглушены и не можете писать");
+        // отключаем редактирование текста
+        ui->codeEditor->setReadOnly(true);
+        // LineHighlightWidget *lineHighlighter = remoteLineHighlights[m_clientId];
+        // lineHighlighter->setVisible(false);
+    } else {
+        statusBar()->clearMessage();
+        // включаем редактирование текста
+        ui->codeEditor->setReadOnly(false);
+        // LineHighlightWidget *lineHighlighter = remoteLineHighlights[m_clientId];
+        // lineHighlighter->setVisible(false);
+    }
+    // Блокируем/разблокируем ввод текста в зависимости от статуса m_mutedClients
+    // ui->codeEditor->setReadOnly(m_mutedClients.contains(m_clientId) && m_mutedClients.value(m_clientId) != -1);
+    // можно добавить смену цвета, когда замьючен
+}
 
 void MainWindowCodeEditor::onMutedStatusUpdate(const QString &clientId, bool isMuted)
 {
+    if (isMuted) {
+        m_mutedClients[clientId] = 1;
+    } else {
+        m_mutedClients.remove(clientId);
+    }
 
+    if (clientId == m_clientId) {
+        updateMutedStatus();
+    }
+    updateUserListUI();
 }
 
 void MainWindowCodeEditor::onAdminChanged(const QString &newAdminId)
 {
-
+    m_isAdmin = (newAdminId == m_clientId);
+    updateUserListUI();
 }
 
-// void MainWindowCodeEditor::onMuteUnmute()
-// {
-//     QAction *action = qobject_cast<QAction*>(sender());
-//     if (!action) return;
+void MainWindowCodeEditor::onMuteUnmute(const QString targetClientId)
+{
+    if (targetClientId == m_clientId) return;
+    if (m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != -1) {
+        QJsonObject unmuteMessage;
+        unmuteMessage["type"] = "unmute_client";
+        unmuteMessage["target_client_id"] = targetClientId;
+        unmuteMessage["client_id"] = m_clientId;
+        unmuteMessage["session_id"] = m_sessionId;
+        QJsonDocument doc(unmuteMessage);
+        if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+            socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+            qDebug() << "Отправлен запрос на размут:" << targetClientId;
+        }
 
-//     QString targetClientId = action->data().toString(); // получаем клиент_айди из данных QAction
-//     if (targetClientId == m_clientId) return;
-//     if (m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != -1) {
-//         QJsonObject unmuteMessage;
-//         unmuteMessage["type"] = "unmute_client";
-//         unmuteMessage["target_client_id"] = targetClientId;
-//         unmuteMessage["client_id"] = m_clientId;
-//         QJsonDocument doc(unmuteMessage);
-//         if (socket && socket->state() == QAbstractSocket::ConnectedState) {
-//             socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
-//             qDebug() << "Отправлен запрос на размут:" << targetClientId;
-//         }
+    } else {
+        bool ok;
+        int duration = QInputDialog::getInt(this, tr("Mute User"), tr("Enter mute duration (seconds), 0 - permanently:"), 0, 0, 2147483647, 1, &ok);
+        if (ok) {
+            QJsonObject muteMessage;
+            muteMessage["type"] = "mute_client";
+            muteMessage["target_client_id"] = targetClientId;
+            muteMessage["duration"] = duration;
+            muteMessage["client_id"] = m_clientId;
+            muteMessage["session_id"] = m_sessionId;
+            QJsonDocument doc(muteMessage);
+            if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+                socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+                qDebug() << "Отправлен запрос на мут:" << targetClientId << ", " << duration;
+            }
+        }
+    }
+}
 
-//     } else {
-//         bool ok;
-//         int duration = QInputDialog::getInt(this, tr("Mute User"), tr("Enter mute duration (seconds), 0 - permanently:"), 0, 0, 2147483647, 1, &ok);
-//         if (ok) {
-//             QJsonObject muteMessage;
-//             muteMessage["type"] = "mute_client";
-//             muteMessage["target_client_id"] = targetClientId;
-//             muteMessage["duration"] = duration;
-//             muteMessage["client_id"] = m_clientId;
-//             QJsonDocument doc(muteMessage);
-//             if (socket && socket->state() == QAbstractSocket::ConnectedState) {
-//                 socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
-//                 qDebug() << "Отправлен запрос на мут:" << targetClientId << ", " << duration;
-//             }
-//         }
-//     }
-// }
+bool MainWindowCodeEditor::canEdit()
+{
+    if (m_mutedClients.contains(m_clientId)) {
+        QMessageBox::information(this, "Ошибка", "Вы заглушены и не можете редактировать текст");
+        return false;
+    }
+    return true;
+}
 
-// void MainWindowCodeEditor::onTransferAdmin()
-// {
-//     QAction *action = qobject_cast<QAction*>(sender());
-//     if (!action) return;
+void MainWindowCodeEditor::onTransferAdmin(const QString targetClientId)
+{
+    if (targetClientId == m_clientId) return;
+    QJsonObject transferAdminMessage;
+    transferAdminMessage["type"] = "transfer_admin";
+    transferAdminMessage["new_admin_id"] = targetClientId;
+    transferAdminMessage["client_id"] = m_clientId;
+    QJsonDocument doc(transferAdminMessage);
+    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+        socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    }
+}
 
-//     QString targetClientId = action->data().toString();
-//     if (targetClientId == m_clientId) return;
-//     QJsonObject transferAdminMessage;
-//     transferAdminMessage["type"] = "transfer_admin";
-//     transferAdminMessage["new_admin_id"] = targetClientId;
-//     transferAdminMessage["client_id"] = m_clientId;
-//     QJsonDocument doc(transferAdminMessage);
-//     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
-//         socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
-//     }
-// }
+void MainWindowCodeEditor::showUserInfo(const QString targetClientId)
+{
+    QString username = remoteUsers.value(targetClientId)["username"].toString();
+    QString status;
+    if (targetClientId == m_clientId) {
+        if (m_mutedClients.contains(m_clientId)) {
+            status = "Вы заглушены";
+        } else {
+            status = "Это Вы";
+        }
+    } else {
+        if (m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != 0) status = "Заглушен";
+        else status = "Не заглушен";
+    }
+    QJsonObject user = remoteUsers.value(targetClientId);
+    bool isAdmin = false;
+    if (!user.isEmpty()) {
+       isAdmin = user["is_admin"].toBool();
+    }
 
-// void MainWindowCodeEditor::showUserInfo()
-// {
-//     QAction *action = qobject_cast<QAction*>(sender());
-//     if (!action) return;
-
-//     QString username = "";
-//     bool isAdmin = false;
-//     QString targetClientId = action->data().toString();
-//     if (remoteUsers.contains(targetClientId)) {
-//         QJsonObject user = remoteUsers.value(targetClientId);
-//         username = user["username"].toString();
-//         isAdmin = user["is_admin"].toBool();
-//     }
-//     QString status;
-//     if (targetClientId == m_clientId) status = "Это Вы";
-//     else {
-//         if (m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != 0) status = "Заглушен";
-//         else status = "Не заглушен";
-//     }
-//     QString adminStatus = m_isAdmin ? "Админ" : "Не админ";
-//     QString message = QString("Username: %1\nClient ID: %2\nStatus: %3\nAdmin: %4").arg(username).arg(targetClientId).arg(status).arg(adminStatus);
-//     QMessageBox::information(this, "User Info", message);
-// }
+    QString adminStatus = isAdmin ? "Админ" : "Не админ";
+    QString message = QString("Username: %1\nClient ID: %2\nStatus: %3\nAdmin: %4").arg(username).arg(targetClientId).arg(status).arg(adminStatus);
+    QMessageBox::information(this, "User Info", message);
+}
