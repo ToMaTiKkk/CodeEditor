@@ -1,5 +1,7 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
+#include "mainwindowcodeeditor.h"
+#include "chatwindow.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include <QFileDialog>
@@ -18,6 +20,7 @@
 #include <QRandomGenerator>
 #include <QPushButton>
 
+
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
@@ -30,7 +33,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     m_themeCheckBox = new QCheckBox(this);
     m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
-    connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
+    connect(m_themeCheckBox, &QCheckBox::checkStateChanged, this, [this](int state) {
         m_isDarkTheme = (state == Qt::Unchecked); // Unchecked - темная, Checked - светлая
         applyCurrentTheme();
         if (m_isDarkTheme) {
@@ -692,4 +695,17 @@ void MainWindowCodeEditor::onToolButtonClicked()
 {
     m_isDarkTheme = !m_isDarkTheme;
     applyCurrentTheme();
+}
+void MainWindowCodeEditor::openChatWindow() {
+    QString clientId = "client123"; // Замените на реальный ID клиента
+    QString username = "User1"; // Замените на реальное имя пользователя
+    ChatWindow *chatWindow = new ChatWindow(clientId, username, this); // Передаём все три аргумента
+    chatWindow->show();
+}
+
+void MainWindowCodeEditor::on_pushButton_clicked() {
+    QString clientId = "client123"; // Замените на реальный ID клиента
+    QString username = "User1"; // Замените на реальное имя пользователя
+    ChatWindow *chatWindow = new ChatWindow(clientId, username, this); // Передаём все три аргумента
+    chatWindow->show();
 }

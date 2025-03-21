@@ -32,7 +32,7 @@ public:
 
 private slots: // функции, которые будут вызваны в ответ на определенные события
     bool eventFilter(QObject *obj, QEvent *event) override;
-
+    //void openChatWindow(); // открытие чата
     void onOpenFileClicked(); // вызывается при вызове пункта мен дл открытия файлы
     void onSaveFileClicked(); // сохранение файла
     void onSaveAsFileClicked(); // сохрание под новым именем
@@ -66,6 +66,8 @@ private slots: // функции, которые будут вызваны в о
     void updateUserListUI(); // обновление списка пользователей в интерфейсе
 
 
+    void on_pushButton_clicked();
+
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
@@ -74,6 +76,7 @@ private:
     CppHighlighter *highlighter;
     bool loadingFile = false;
     bool m_isDarkTheme;
+    void openChatWindow(); // открытие чата
     QCheckBox* m_themeCheckBox;
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка

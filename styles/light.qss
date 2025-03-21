@@ -194,7 +194,6 @@ QCheckBox::indicator:checked:disabled {
 QCheckBox::indicator:unchecked:disabled {
      background-color: #ddd;
 }
-/* Стиль для текста "Тема:" */
 QLabel#themeLabel {
-    color: black; /* Чёрный цвет текста */
+    color: black;
 }
