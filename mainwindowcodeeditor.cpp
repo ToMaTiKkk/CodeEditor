@@ -40,6 +40,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
         }
     });
     QLabel* themeLabel = new QLabel("Тема:", this);
+    themeLabel->setObjectName("themeLabel");
     QHBoxLayout *themeLayout = new QHBoxLayout;
     themeLayout->addWidget(themeLabel);
     themeLayout->addWidget(m_themeCheckBox);
@@ -201,7 +202,7 @@ void MainWindowCodeEditor::connectToServer()
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 
-    socket->open(QUrl("ws://localhost:8080"));
+    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
 }
 
 void MainWindowCodeEditor::disconnectFromServer()
