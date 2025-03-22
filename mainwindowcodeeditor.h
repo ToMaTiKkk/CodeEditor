@@ -15,6 +15,8 @@
 #include <QMap>
 #include <QScrollBar>
 #include <QCheckBox>
+#include <QIcon>
+#include <QCursor>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -66,7 +68,17 @@ private slots: // функции, которые будут вызваны в о
     void connectToServer(); // функция для подключения или переподключения
     void disconnectFromServer(); // функция для отключения
     void updateUserListUI(); // обновление списка пользователей в интерфейсе
+    // void onUserMenuItemClicked(QAction* action);
 
+    void onMutedStatusUpdate(const QString& clientId, bool isMuted);
+    // bool canEdit();
+    void updateMutedStatus();
+    void onAdminChanged(const QString& newAdminId);
+
+    void onMuteUnmute(const QString targetClientId);
+    void onTransferAdmin(const QString targetClientId);
+    void showUserInfo(const QString targetClientId);
+    // void updateMutedStatus();
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -76,7 +88,14 @@ private:
     CppHighlighter *highlighter;
     bool loadingFile = false;
     bool m_isDarkTheme;
+    bool m_isAdmin;
+    QMenu *m_userListMenu; // добавление для списка пользователей
+    QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
+    QAction *m_muteUnmuteAction;
+    QAction *m_transferAdminAction;
+    QAction *m_infoAction;
     QCheckBox* m_themeCheckBox;
+    QMap<QString, int> m_mutedClients;
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
     QString m_username;
