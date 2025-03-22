@@ -82,3 +82,4 @@ void CursorWidget::setCustomToolTipStyle(const QColor &color)
 {
     m_customToolTip->setCustomStyle(color);
 }
+

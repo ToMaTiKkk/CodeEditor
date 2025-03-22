@@ -68,10 +68,10 @@ private slots: // функции, которые будут вызваны в о
     void connectToServer(); // функция для подключения или переподключения
     void disconnectFromServer(); // функция для отключения
     void updateUserListUI(); // обновление списка пользователей в интерфейсе
-    void onUserMenuItemClicked(QAction* action);
+    // void onUserMenuItemClicked(QAction* action);
 
     void onMutedStatusUpdate(const QString& clientId, bool isMuted);
-    bool canEdit();
+    // bool canEdit();
     void updateMutedStatus();
     void onAdminChanged(const QString& newAdminId);
 
