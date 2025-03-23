@@ -17,6 +17,11 @@
 #include <QCheckBox>
 #include <QIcon>
 #include <QCursor>
+#include <QTextEdit>
+#include <QLineEdit>
+#include <QToolButton>
+#include <QSplitter>
+
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -80,6 +85,13 @@ private slots: // функции, которые будут вызваны в о
     void showUserInfo(const QString targetClientId);
     // void updateMutedStatus();
 
+    // чатик
+    void toggleChat(); // Переключение видимости чата
+    void sendMessage(); // Отправка сообщения
+    //void onTextMessagesReceived(const QString &message);
+    void handleIncomingMessage(const QJsonObject &json);
+    void on_toolButton_clicked();
+
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
@@ -104,5 +116,11 @@ private:
     QList<QJsonObject> cursorUpdates; // хранение последних обновлений позиций курсора
     QMap<QString, int> lastCursorPositions; // хранение позиций всех курсоров других пользователей
     QMap<QString, QJsonObject> remoteUsers; // client_id -> {username, color}
+    QWidget *chatWidget; // Виджет чата
+    QTextEdit *chatDisplay; // Поле для отображения сообщений
+    QLineEdit *chatInput; // Поле для ввода сообщений
+
+    //новое разделение окон
+    bool isChatVisible = false;    // Флаг видимости чата
 };
 #endif // MAINWINDOWCODEEDITOR_H

@@ -2,5 +2,6 @@
     <qresource prefix="/">
         <file>styles/dark.qss</file>
         <file>styles/light.qss</file>
+        <file>styles/chat.png</file>
     </qresource>
 </RCC>

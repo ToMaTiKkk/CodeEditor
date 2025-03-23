@@ -24,11 +24,43 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
     , m_isDarkTheme(true)
+    , chatWidget(nullptr)
 {
     ui->setupUi(this);
     this->setWindowTitle("CoEdit");
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
+    // Создаем виджет чата
+    chatWidget = new QWidget(ui->horizontalWidget_2); // Указываем родителя
+    chatWidget->setObjectName("chatWidget");
+
+    // Устанавливаем layout для chatWidget
+    QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget);
+    chatLayout->setContentsMargins(10, 10, 10, 10); // Отступы
+    chatLayout->setSpacing(10); // Расстояние между элементами
+
+    // Поле для отображения сообщений
+    chatDisplay = new QTextEdit(chatWidget);
+    chatDisplay->setReadOnly(true); // Только для чтения
+    chatDisplay->setObjectName("chatDisplay");
+    chatLayout->addWidget(chatDisplay);
+
+    // Поле для ввода сообщений
+    chatInput = new QLineEdit(chatWidget);
+    chatInput->setObjectName("chatInput");
+    chatLayout->addWidget(chatInput);
+
+    // Кнопка отправки сообщения
+    QPushButton *sendButton = new QPushButton("Send", chatWidget);
+    sendButton->setObjectName("sendButton");
+    chatLayout->addWidget(sendButton);
+    connect(sendButton, &QPushButton::clicked, this, &MainWindowCodeEditor::sendMessage);
+
+    chatLayout->setStretch(0, 1);
+    chatLayout->setStretch(1, 0);
+    chatLayout->setStretch(2, 0);
+    ui->horizontalWidget_2->layout()->addWidget(chatWidget);
+    chatWidget->hide();
 
     // создаем тумблер для переключения темы
     m_themeCheckBox = new QCheckBox(this);
@@ -80,25 +112,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
     connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
 
-    // установка центрального виджета, чтобы сохранить весь интерфейс
-    setCentralWidget(ui->centralwidget);
 
-    // управлние размерами окон для дерева и редактора
-    ui->splitter->setStretchFactor(0, 0); // для дерева файлов (левый элемент)
-    ui->splitter->setStretchFactor(1, 1); // для окна редактирования (правый элемент)
-    // ограничение размера древа файлов
-    connect(ui->splitter, &QSplitter::splitterMoved, this, [this](int pos, int index) { // [this] - анонимная лямба-функция, которая может использовать переменные их текущего класса, int pos - позиция сплита от начала, int index - указывает, какой из элементов был перемещен
-        int currentTreeViewWidth = ui->fileSystemTreeView->width(); // текущая ширина виджета древа
-        int maxAllowedWidth = 350;
-        if (currentTreeViewWidth > maxAllowedWidth) {
-            QList<int> sizes = ui->splitter->sizes();
-            int diff = currentTreeViewWidth - maxAllowedWidth;
-            sizes[0] = maxAllowedWidth;
-            sizes[1] += diff;
-            if (sizes[1] < 0) sizes[1] = 0;
-            ui->splitter->setSizes(sizes);
-        }
-    });
 
     // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
     fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
@@ -564,7 +578,19 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         ui->codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
         qDebug() << "Применено обновление содержимого файла";
 
-    } else if (opType == "cursor_position_update")
+    } else if (opType == "cursor_position_update") { // ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!//
+        QString senderId = op["client_id"].toString();// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        QString username = op["username"].toString();// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        if (op.contains("chat_message")) {// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            QString chatMessage = op["chat_message"].toString();// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            chatDisplay->append(username + ": " + chatMessage);// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        }// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        // Остальную логику (курсоры) оставляем без изменений
+        if (senderId == m_clientId) return; // ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    }/*else if (opType == "cursor_position_update")
     {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
@@ -601,6 +627,8 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         }
 
     } else if (opType == "muted_status_update") {
+
+    }*/ else if (opType == "muted_status_update") {
         QString mutedClientId = op["client_id"].toString();
         bool mutedClientStatus = op["is_muted"].toBool();
         m_mutedClients[mutedClientId] = mutedClientStatus;
@@ -833,6 +861,7 @@ void MainWindowCodeEditor::applyCurrentTheme()
         if (lightFile.open(QFile::ReadOnly)) {
             QString lightStyle = lightFile.readAll();
             qApp->setStyleSheet(lightStyle);
+            chatWidget->setStyleSheet(lightStyle);
             lightFile.close();
             qDebug() << "Light theme applied successfully";
         } else {
@@ -843,6 +872,7 @@ void MainWindowCodeEditor::applyCurrentTheme()
         if (darkFile.open(QFile::ReadOnly)) {
             QString darkStyle = darkFile.readAll();
             qApp->setStyleSheet(darkStyle);
+            chatWidget->setStyleSheet(darkStyle);
             darkFile.close();
             qDebug() << "Dark theme applied successfully";
         } else {
@@ -982,3 +1012,76 @@ void MainWindowCodeEditor::showUserInfo(const QString targetClientId)
     QString message = QString("Username: %1\nClient ID: %2\nStatus: %3\nAdmin: %4").arg(username).arg(targetClientId).arg(status).arg(adminStatus);
     QMessageBox::information(this, "User Info", message);
 }
+
+// чатик
+void MainWindowCodeEditor::toggleChat() {
+    if (chatWidget->isVisible()) {
+        chatWidget->hide(); // Скрыть чат
+    } else {
+        chatWidget->show(); // Показать чат
+    }
+}
+/*void MainWindowCodeEditor::sendMessage() {
+    QString message = chatInput->text().trimmed(); // Получаем текст сообщения
+    if (!message.isEmpty()) {
+        // Форматируем сообщение: "Имя пользователя: сообщение"
+        QString formattedMessage = m_username + ": " + message;
+        chatDisplay->append(formattedMessage); // Добавляем в поле отображения
+        chatInput->clear(); // Очищаем поле ввода
+    }
+}*/
+void MainWindowCodeEditor::sendMessage() { // ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    QString message = chatInput->text().trimmed();
+    if (!message.isEmpty()) {
+        // Форматируем сообщение
+        QString formattedMessage = m_username + ": " + message;
+
+        // Добавляем сообщение в свой чат сразу
+        chatDisplay->append(formattedMessage);
+
+        // Отправляем через существующий канал
+        QJsonObject chatOp;
+        chatOp["type"] = "cursor_position_update";
+        chatOp["client_id"] = m_clientId;
+        chatOp["position"] = 0; // Фиктивная позиция
+        chatOp["chat_message"] = message;
+        chatOp["username"] = m_username;
+
+        if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+            QJsonDocument doc(chatOp);
+            socket->sendTextMessage(doc.toJson(QJsonDocument::Compact));
+        }
+
+        chatInput->clear();
+    }
+}
+
+
+void MainWindowCodeEditor::handleIncomingMessage(const QJsonObject &json) {
+    QString type = json["type"].toString();
+
+    if (type == "chat_message") {
+        // Обработка сообщений чата
+        QString username = json["username"].toString();
+        QString messageText = json["message"].toString();
+        QString formattedMessage = username + ": " + messageText;
+        chatDisplay->append(formattedMessage);
+    }
+}
+
+
+void MainWindowCodeEditor::on_toolButton_clicked()
+{
+    if (!chatWidget) {
+        chatWidget = new QWidget(ui->horizontalWidget_2); // Привязываем к нужному виджету
+
+        if (!ui->horizontalWidget_2->layout()) {
+            ui->horizontalWidget_2->setLayout(new QHBoxLayout()); // Если нет лейаута, добавляем
+        }
+
+        ui->horizontalWidget_2->layout()->addWidget(chatWidget); // Добавляем чат в нужный слой
+    }
+
+    chatWidget->setVisible(!chatWidget->isVisible()); // Переключаем видимость
+}
+

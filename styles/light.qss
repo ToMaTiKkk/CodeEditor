@@ -198,3 +198,53 @@ QCheckBox::indicator:checked:disabled {
 QCheckBox::indicator:unchecked:disabled {
      background-color: #ddd;
 }
+QWidget#chatWidget {
+    background-color: #ffffff;
+    border: 1px solid #d3d3d3;
+    border-radius: 5px;
+}
+
+/* Поле отображения сообщений */
+QTextEdit#chatDisplay {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    color: #212529;
+    font-family: "Segoe UI", Arial;
+    font-size: 14px;
+    padding: 8px;
+    selection-background-color: #90cdf4;
+}
+
+/* Поле ввода сообщения */
+QLineEdit#chatInput {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 15px;
+    color: #212529;
+    padding: 5px 12px;
+    font-size: 14px;
+}
+
+QLineEdit#chatInput:focus {
+    border: 1px solid #90cdf4;
+}
+
+/* Кнопка отправки */
+QPushButton#sendButton {
+    background-color: #007bff;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 12px;
+    min-width: 60px;
+}
+
+QPushButton#sendButton:hover {
+    background-color: #0056b3;
+}
+
+QPushButton#sendButton:pressed {
+    background-color: #004085;
+}
+
