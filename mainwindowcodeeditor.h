@@ -46,7 +46,6 @@ private slots: // функции, которые будут вызваны в о
     void onExitClicked(); // для выхода из приложения
     void onNewFileClicked(); // для создания нового файла (простое очищение редактора, файл надо будет сохранять вручную)
     void onOpenFolderClicked(); // для открытия папки и отображения ее в дереве
-    //void toggleTheme(); //смена темы
     void onFileSystemTreeViewDoubleClicked(const QModelIndex &index); // когда пользователь дважды кликает по файлу в дереве, то оно открывается в редакторе
 
     void onContentsChange(int position, int charsRemoved, int charsAdded);
@@ -73,17 +72,15 @@ private slots: // функции, которые будут вызваны в о
     void connectToServer(); // функция для подключения или переподключения
     void disconnectFromServer(); // функция для отключения
     void updateUserListUI(); // обновление списка пользователей в интерфейсе
-    // void onUserMenuItemClicked(QAction* action);
 
     void onMutedStatusUpdate(const QString& clientId, bool isMuted);
-    // bool canEdit();
     void updateMutedStatus();
+    void updateMuteTimeDisplay(const QString& clientId);
     void onAdminChanged(const QString& newAdminId);
 
     void onMuteUnmute(const QString targetClientId);
     void onTransferAdmin(const QString targetClientId);
     void showUserInfo(const QString targetClientId);
-    // void updateMutedStatus();
 
     // чатик
     void toggleChat(); // Переключение видимости чата
@@ -107,6 +104,9 @@ private:
     QAction *m_transferAdminAction;
     QAction *m_infoAction;
     QCheckBox* m_themeCheckBox;
+    QTimer *m_muteTimer; // таймер для обновления времени мута
+    QLabel *m_muteTimeLabel; // для отображения времени мута (в списке пользователей)
+    QHash<QString, qint64> m_muteEndTimes; // словарь для хранения времени мута каждого клиента
     QMap<QString, int> m_mutedClients;
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
