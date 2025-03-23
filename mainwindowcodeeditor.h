@@ -15,6 +15,12 @@
 #include <QMap>
 #include <QScrollBar>
 #include <QCheckBox>
+#include <QIcon>
+#include <QCursor>
+#include <QTextEdit>
+#include <QLineEdit>
+#include <QToolButton>
+#include <QSplitter>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -32,7 +38,7 @@ public:
 
 private slots: // функции, которые будут вызваны в ответ на определенные события
     bool eventFilter(QObject *obj, QEvent *event) override;
-    //void openChatWindow(); // открытие чата
+
     void onOpenFileClicked(); // вызывается при вызове пункта мен дл открытия файлы
     void onSaveFileClicked(); // сохранение файла
     void onSaveAsFileClicked(); // сохрание под новым именем
@@ -60,13 +66,30 @@ private slots: // функции, которые будут вызваны в о
     void onJoinSession();
     void onShowUserList();
     void onLeaveSession();
+    bool confirmChangeSession(const QString& message);
+    void clearRemoteInfo();
 
     void connectToServer(); // функция для подключения или переподключения
     void disconnectFromServer(); // функция для отключения
     void updateUserListUI(); // обновление списка пользователей в интерфейсе
+    // void onUserMenuItemClicked(QAction* action);
 
+    void onMutedStatusUpdate(const QString& clientId, bool isMuted);
+    // bool canEdit();
+    void updateMutedStatus();
+    void onAdminChanged(const QString& newAdminId);
 
-    void on_pushButton_clicked();
+    void onMuteUnmute(const QString targetClientId);
+    void onTransferAdmin(const QString targetClientId);
+    void showUserInfo(const QString targetClientId);
+    // void updateMutedStatus();
+
+    // чатик
+    void toggleChat(); // Переключение видимости чата
+    void sendMessage(); // Отправка сообщения
+    //void onTextMessagesReceived(const QString &message);
+    void handleIncomingMessage(const QJsonObject &json);
+    void on_toolButton_clicked();
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -76,8 +99,14 @@ private:
     CppHighlighter *highlighter;
     bool loadingFile = false;
     bool m_isDarkTheme;
-    void openChatWindow(); // открытие чата
+    bool m_isAdmin;
+    QMenu *m_userListMenu; // добавление для списка пользователей
+    QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
+    QAction *m_muteUnmuteAction;
+    QAction *m_transferAdminAction;
+    QAction *m_infoAction;
     QCheckBox* m_themeCheckBox;
+    QMap<QString, int> m_mutedClients;
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
     QString m_username;
@@ -86,5 +115,11 @@ private:
     QList<QJsonObject> cursorUpdates; // хранение последних обновлений позиций курсора
     QMap<QString, int> lastCursorPositions; // хранение позиций всех курсоров других пользователей
     QMap<QString, QJsonObject> remoteUsers; // client_id -> {username, color}
+    QWidget *chatWidget; // Виджет чата
+    QTextEdit *chatDisplay; // Поле для отображения сообщений
+    QLineEdit *chatInput; // Поле для ввода сообщений
+
+    //новое разделение окон
+    bool isChatVisible = false;    // Флаг видимости чата
 };
 #endif // MAINWINDOWCODEEDITOR_H

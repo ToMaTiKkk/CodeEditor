@@ -4,7 +4,7 @@ QMainWindow {
 
 QMenuBar { /* панель меню */
     background-color: rgb(240, 240, 240);
-    color: rgba(0, 0, 0, 0.9); /* Черный текст */
+    color: rgba(0, 0, 0, 0.8); /* Черный текст */
     border-bottom: 1px solid rgb(240, 20, 200); /* Серая нижняя граница */
     padding: 4px; /* внутренние отступы вокруг содержимого панели */
 }
@@ -21,7 +21,7 @@ QMenuBar::item:selected {
 QMenu { /* панель выпадающего окна меню */
     background-color: rgb(240, 240, 240);
     border: 1px solid rgb(200, 200, 200);
-    color: rgba(0, 0, 0, 0.9);
+    color: rgba(0, 0, 0, 0.8);
     padding: 8px;
 }
 
@@ -42,9 +42,9 @@ QStatusBar {
 }
 
 QTreeView {
-    background-color: rgba(255, 255, 255, 0.9); /* Почти белый фон */
+    background-color: rgba(0, 0, 0, 0.8); /* Почти белый фон */
     border: none;
-    color: rgba(0, 0, 0, 0.9); /* Черный текст */
+    color: rgba(0, 0, 0, 0.8); /* Черный текст */
     outline: 0; /* отсутствие рамки при фокусе */
     font-family: 'Fira Code', monospace;
     font-size: 12px;
@@ -58,7 +58,7 @@ QTreeView::item {
 
 QPlainTextEdit {
     background-color: rgb(240, 240, 240); /* Светло-серый фон */
-    color: rgba(0, 0, 0, 0.9); /* Черный текст */
+    color: rgba(0, 0, 0, 0.8); /* Черный текст */
     border: none;
     font-family: 'Fira Code', monospace;
     font-size: 14px;
@@ -94,7 +94,7 @@ QScrollBar::handle:hover { /* при наведении на ползунок */
 
 QPushButton {
     background-color: rgb(200, 200, 200); /* Светло-серый фон */
-    color: black; /* Черный текст */
+    color: rgba(0, 0, 0, 0.8); /* Черный текст */
     border: none;
     padding: 8px 16px;
     border-radius: 6px;
@@ -148,7 +148,7 @@ QScrollBar::handle:vertical:hover {
 /* Стили для дерева (QTreeView) */
 QTreeView {
     background-color: white; /* Белый фон */
-    color: black; /* Черный текст */
+    color: rgba(0, 0, 0, 0.8); /* Черный текст */
     border: none;
     outline: 0;
     font-family: 'Fira Code', monospace;
@@ -158,7 +158,7 @@ QTreeView {
 QTreeView::item {
     height: 28px;
     padding: 4px 0;
-    icon: url(:/icons/folder_black.png); /* Путь к вашей иконке */
+    icon: url(:/icons/folder_rgba(0, 0, 0, 0.8).png); /* Путь к вашей иконке */
 }
 
 QTreeView::item:hover {
@@ -167,13 +167,17 @@ QTreeView::item:hover {
 
 QTreeView::item:selected {
     background-color: rgb(200, 200, 200); /* Светло-серый фон для выбранного элемента */
-    color: black; /* Черный текст */
+    color: rgba(0, 0, 0, 0.8); /* Черный текст */
+}
+
+QLabel {
+    color: rgba(0, 0, 0, 0.8);
 }
 
 QCheckBox::indicator {
-    width: 30px;
-    height: 10px;
-    border-radius: 5px;
+    width: 25px;
+    height: 7px;
+    border-radius: 3px;
     background-color: #ddd; /* Светло-серый фон */
     border: 2px solid #bbb;
 }
@@ -194,6 +198,53 @@ QCheckBox::indicator:checked:disabled {
 QCheckBox::indicator:unchecked:disabled {
      background-color: #ddd;
 }
-QLabel#themeLabel {
-    color: black;
+QWidget#chatWidget {
+    background-color: #ffffff;
+    border: 1px solid #d3d3d3;
+    border-radius: 5px;
 }
+
+/* Поле отображения сообщений */
+QTextEdit#chatDisplay {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    color: #212529;
+    font-family: "Segoe UI", Arial;
+    font-size: 14px;
+    padding: 8px;
+    selection-background-color: #90cdf4;
+}
+
+/* Поле ввода сообщения */
+QLineEdit#chatInput {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 15px;
+    color: #212529;
+    padding: 5px 12px;
+    font-size: 14px;
+}
+
+QLineEdit#chatInput:focus {
+    border: 1px solid #90cdf4;
+}
+
+/* Кнопка отправки */
+QPushButton#sendButton {
+    background-color: #007bff;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 12px;
+    min-width: 60px;
+}
+
+QPushButton#sendButton:hover {
+    background-color: #0056b3;
+}
+
+QPushButton#sendButton:pressed {
+    background-color: #004085;
+}
+

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>500</height>
+    <width>918</width>
+    <height>472</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -22,9 +22,12 @@
   <property name="styleSheet">
    <string notr="true"/>
   </property>
+  <property name="animated">
+   <bool>false</bool>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="1" column="0">
+    <item row="0" column="0">
      <widget class="QSplitter" name="splitter">
       <property name="orientation">
        <enum>Qt::Orientation::Horizontal</enum>
@@ -60,24 +63,33 @@
         <double>25.000000000000000</double>
        </property>
       </widget>
+      <widget class="QWidget" name="horizontalWidget_2" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout_9"/>
+      </widget>
      </widget>
     </item>
-    <item row="0" column="0">
-     <widget class="QPushButton" name="pushButton">
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>26</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>782</width>
-        <height>26</height>
-       </size>
+    <item row="2" column="0" alignment="Qt::AlignmentFlag::AlignRight">
+     <widget class="QToolButton" name="toolButton">
+      <property name="autoFillBackground">
+       <bool>false</bool>
       </property>
       <property name="text">
-       <string>Open Chat</string>
+       <string notr="true"/>
+      </property>
+      <property name="icon">
+       <iconset theme="QIcon::ThemeIcon::MailUnread"/>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>24</width>
+        <height>24</height>
+       </size>
+      </property>
+      <property name="shortcut">
+       <string notr="true"/>
+      </property>
+      <property name="autoRaise">
+       <bool>true</bool>
       </property>
      </widget>
     </item>
@@ -91,7 +103,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>918</width>
      <height>23</height>
     </rect>
    </property>
