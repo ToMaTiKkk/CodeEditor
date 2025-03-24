@@ -21,7 +21,8 @@
 #include <QLineEdit>
 #include <QToolButton>
 #include <QSplitter>
-
+#include <QKeyEvent>
+#include <QTextDocumentFragment>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -90,8 +91,9 @@ private slots: // функции, которые будут вызваны в о
     void toggleChat(); // Переключение видимости чата
     void sendMessage(); // Отправка сообщения
     //void onTextMessagesReceived(const QString &message);
-    void handleIncomingMessage(const QJsonObject &json);
+    //void handleIncomingMessage(const QJsonObject &json);
     void on_toolButton_clicked();
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui

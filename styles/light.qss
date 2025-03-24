@@ -83,8 +83,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { /* элемент
 }
 
 QSplitter::handle { /* элементы, за которые можно потянуть, чтобы изменить размер областей */
-    background: rgba(200, 200, 200, 0.3); /* Серый разделитель */
-    width: 1px;
+    background: rgba(240, 240, 240, 0.3); /* откат разделителя */
+    width: 3px;
 }
 
 QScrollBar::handle:hover { /* при наведении на ползунок */

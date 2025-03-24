@@ -19,6 +19,7 @@
 #include <QPushButton>
 #include <QPainter>
 #include <QDateTime>
+#include <QKeyEvent>
 
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
@@ -31,8 +32,9 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     this->setWindowTitle("CoEdit");
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
+
     // Создаем виджет чата
-    chatWidget = new QWidget(ui->horizontalWidget_2); // Указываем родителя
+    chatWidget = new QWidget(ui->horizontalWidget_2);
     chatWidget->setObjectName("chatWidget");
 
     // Устанавливаем layout для chatWidget
@@ -46,20 +48,29 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     chatDisplay->setObjectName("chatDisplay");
     chatLayout->addWidget(chatDisplay);
 
+    // Создаем горизонтальный layout для поля ввода и кнопки
+    QHBoxLayout *inputLayout = new QHBoxLayout();
+    inputLayout->setSpacing(10);
+
     // Поле для ввода сообщений
     chatInput = new QLineEdit(chatWidget);
     chatInput->setObjectName("chatInput");
-    chatLayout->addWidget(chatInput);
+    inputLayout->addWidget(chatInput, 1); // Расширяется на доступное пространство
 
     // Кнопка отправки сообщения
     QPushButton *sendButton = new QPushButton("Send", chatWidget);
     sendButton->setObjectName("sendButton");
-    chatLayout->addWidget(sendButton);
+    inputLayout->addWidget(sendButton, 0); // Фиксированный размер кнопки
+
+    // Добавляем горизонтальный layout в вертикальный
+    chatLayout->addLayout(inputLayout);
+
+    // Подключаем сигнал кнопки к слоту sendMessage
     connect(sendButton, &QPushButton::clicked, this, &MainWindowCodeEditor::sendMessage);
 
+    // При необходимости можно задать растяжку для chatDisplay
     chatLayout->setStretch(0, 1);
-    chatLayout->setStretch(1, 0);
-    chatLayout->setStretch(2, 0);
+
     ui->horizontalWidget_2->layout()->addWidget(chatWidget);
     chatWidget->hide();
 
@@ -587,16 +598,22 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         ui->codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
         qDebug() << "Применено обновление содержимого файла";
 
-    } else if (opType == "chat_message") { // ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!//
-        QString senderId = op["client_id"].toString();// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        QString username = op["username"].toString();// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    } else if (opType == "chat_message") {
+        QString username = op["username"].toString();
+        QString clientId = op["client_id"].toString();
 
-        if (op.contains("text_message")) {// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            QString chatMessage = op["text_message"].toString();// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            chatDisplay->append(username + ": " + chatMessage);// ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        if (op.contains("text_message")) {
+            QString chatMessage = op["text_message"].toString();
+
+            if (clientId == m_clientId) {
+                chatDisplay->append("<p style='text-align: right;'>" + username + ": " + chatMessage + "</p>");
+                //chatDisplay->append("<p style='text-align: left;'></p>");
+            } else {
+                chatDisplay->append("<p style='text-align: left;'>" + username + ": " + chatMessage + "</p>");
+                //chatDisplay->append("<p style='text-align: right;'></p>");
+            }
         }
-
-    } else if (opType == "cursor_position_update") {
+    }else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
 
@@ -1170,35 +1187,38 @@ void MainWindowCodeEditor::toggleChat() {
     }
 }
 
-void MainWindowCodeEditor::sendMessage() { // ЭТО ЧАТ ЕГОР!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    QString message = chatInput->text().trimmed();
-    if (!message.isEmpty()) {
+void MainWindowCodeEditor::sendMessage() {
+    QString text = chatInput->text().trimmed();
+    if (!text.isEmpty()) {
         // Форматируем сообщение
-        QString formattedMessage = m_username + ": " + message;
+        QString formattedMessage = m_username + ": " + text;
 
-        // Добавляем сообщение в свой чат сразу
-        chatDisplay->append(formattedMessage);
+        // Добавляем сообщение в свой чат сразу с выравниванием справа
+        chatDisplay->append("<p align='right'>" + formattedMessage + "</p>\n");
 
-        // Отправляем через существующий канал
+        // Подготавливаем JSON для отправки
         QJsonObject chatOp;
         chatOp["type"] = "chat_message";
         chatOp["session_id"] = m_sessionId;
         chatOp["client_id"] = m_clientId;
         chatOp["username"] = m_username;
-        chatOp["text_message"] = message;
+        chatOp["text_message"] = text;
         QJsonDocument doc(chatOp);
-        QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        QString jsonMessage = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
 
         if (socket && socket->state() == QAbstractSocket::ConnectedState) {
-            socket->sendTextMessage(message);
-            qDebug() << "Отправлено сообщение в чате: " << message;
+            socket->sendTextMessage(jsonMessage);
+            qDebug() << "Отправлено сообщение в чате: " << jsonMessage;
         }
-
         chatInput->clear();
     }
 }
-
-void MainWindowCodeEditor::handleIncomingMessage(const QJsonObject &json) {
+void MainWindowCodeEditor::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        sendMessage();
+    }
+}
+/*void MainWindowCodeEditor::handleIncomingMessage(const QJsonObject &json) {
     QString type = json["type"].toString();
 
     if (type == "chat_message") {
@@ -1208,7 +1228,7 @@ void MainWindowCodeEditor::handleIncomingMessage(const QJsonObject &json) {
         QString formattedMessage = username + ": " + messageText;
         chatDisplay->append(formattedMessage);
     }
-}
+}*/
 
 void MainWindowCodeEditor::on_toolButton_clicked()
 {
@@ -1224,3 +1244,4 @@ void MainWindowCodeEditor::on_toolButton_clicked()
 
     chatWidget->setVisible(!chatWidget->isVisible()); // Переключаем видимость
 }
+
