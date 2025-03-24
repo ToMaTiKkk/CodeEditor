@@ -189,17 +189,19 @@ void MainWindowCodeEditor::onConnected()
     qDebug() << "Клиент успешно подключился к серверу";
     statusBar()->showMessage("Подключено к серверу");
 
-    if (m_sessionId.isEmpty())
-    {
+    if (m_sessionId.isEmpty()) {
         qDebug() << "Error: клиент не выбрал или не создал сессию";
         return;
     }
+
     QJsonObject message;
     if (m_sessionId == "NEW") {
         message["type"] = "create_session";
+        message["password"] = m_sessionPassword; // Добавляем пароль
     } else {
         message["type"] = "join_session";
         message["session_id"] = m_sessionId;
+        message["password"] = m_sessionPassword; // Добавляем пароль
     }
     message["username"] = m_username;
     message["client_id"] = m_clientId;
@@ -237,7 +239,7 @@ void MainWindowCodeEditor::connectToServer()
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 
-    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
+    socket->open(QUrl("ws://localhost:8080"));
 }
 
 void MainWindowCodeEditor::disconnectFromServer()
@@ -282,12 +284,27 @@ void MainWindowCodeEditor::onCreateSession()
         disconnectFromServer();
     }
 
+    // Запрос пароля для новой сессии
+    bool ok;
+    QString password = QInputDialog::getText(this, tr("Создание сессии"),
+                                             tr("Введите пароль для сессии (мин. 4 символа):"),
+                                             QLineEdit::Password, "", &ok);
+
+    if (!ok || password.isEmpty()) {
+        return;
+    }
+
+    if (password.length() < 4) {
+        QMessageBox::warning(this, tr("Ошибка"), tr("Пароль должен содержать минимум 4 символа"));
+        return;
+    }
+
+    m_sessionPassword = password;
     m_sessionId = "NEW";
     connectToServer();
     ui->actionShowListUsers->setVisible(true);
     ui->actionLeaveSession->setVisible(true);
 }
-
 void MainWindowCodeEditor::onJoinSession()
 {
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
@@ -297,14 +314,28 @@ void MainWindowCodeEditor::onJoinSession()
         disconnectFromServer();
     }
 
+    // Запрос ID сессии
     bool ok;
-    QString sessionId = QInputDialog::getText(this, tr("Join Session"), tr("Session ID:"), QLineEdit::Normal, "", &ok);
-    if (ok && !sessionId.isEmpty()) {
-        m_sessionId = sessionId;
-        connectToServer(); // подключение с отправкой на сервер соо с join_session
-        ui->actionShowListUsers->setVisible(true);
-        ui->actionLeaveSession->setVisible(true);
+    QString sessionId = QInputDialog::getText(this, tr("Присоединение к сессии"),
+                                              tr("Введите ID сессии:"),
+                                              QLineEdit::Normal, "", &ok);
+    if (!ok || sessionId.isEmpty()) {
+        return;
     }
+
+    // Запрос пароля
+    QString password = QInputDialog::getText(this, tr("Присоединение к сессии"),
+                                             tr("Введите пароль сессии:"),
+                                             QLineEdit::Password, "", &ok);
+    if (!ok || password.isEmpty()) {
+        return;
+    }
+
+    m_sessionPassword = password; // Сохраняем пароль
+    m_sessionId = sessionId;
+    connectToServer();
+    ui->actionShowListUsers->setVisible(true);
+    ui->actionLeaveSession->setVisible(true);
 }
 
 void MainWindowCodeEditor::onLeaveSession()
@@ -514,7 +545,22 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             statusBar()->showMessage("Сессия с таким идентификатором '" + notFoundSession + "' не найдена");
             QMessageBox::critical(this, "Ошибка", "Сессия не найдена. Проверьте корректность данных");
         }
+        else if (error == "Неверный пароль") {
+            disconnectFromServer();
+            QString sessionId = op.value("session_id").toString();
+            statusBar()->showMessage("Неверный пароль для сессии " + sessionId);
+            QMessageBox::critical(this, "Ошибка", "Введен неверный пароль для сессии");
 
+            // Предлагаем повторить ввод пароля
+            if (!sessionId.isEmpty()) {
+                onJoinSession(); // Повторный вызов диалога подключения
+            }
+        }
+        else if (error == "Пароль должен содержать минимум 4 символа") {
+            QMessageBox::critical(this, "Ошибка", error);
+            onCreateSession(); // Повторный вызов диалога создания сессии
+        }
+        return;
     } else if (opType == "session_info")
     {
         m_sessionId = op["session_id"].toString();

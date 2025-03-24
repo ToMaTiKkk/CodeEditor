@@ -126,7 +126,7 @@ private:
     QWidget *chatWidget; // Виджет чата
     QTextEdit *chatDisplay; // Поле для отображения сообщений
     QLineEdit *chatInput; // Поле для ввода сообщений
-
+    QString m_sessionPassword;
     //новое разделение окон
     bool isChatVisible = false;    // Флаг видимости чата
 };
