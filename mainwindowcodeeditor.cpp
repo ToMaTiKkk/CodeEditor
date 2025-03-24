@@ -18,6 +18,7 @@
 #include <QRandomGenerator>
 #include <QPushButton>
 #include <QPainter>
+#include <QDateTime>
 
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
@@ -87,10 +88,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     m_userListMenu = new QMenu(this);
     ui->actionShowListUsers->setMenu(m_userListMenu);
 
-    // m_muteTimer = new QTimer(this);
-    // connect(m_muteTimer, &QTimer::timeout, this, [this]() {
-    //     if (!m_)
-    // })
+    m_muteTimer = new QTimer(this);
+    connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateStatusBarMuteTime); // вызывает каждую секунду, когда таймер запущен, чтоы обновлять время мьюта в статус-баре
 
     applyCurrentTheme(); // применение темы, по умолчанию темная
 
@@ -155,6 +154,8 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     delete highlighter;
     delete m_themeCheckBox;
     delete m_userListMenu;
+    delete m_muteTimer;
+    delete m_muteTimeLabel;
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -225,7 +226,7 @@ void MainWindowCodeEditor::connectToServer()
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 
-    socket->open(QUrl("ws://localhost:8080"));
+    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
 }
 
 void MainWindowCodeEditor::disconnectFromServer()
@@ -246,6 +247,7 @@ bool MainWindowCodeEditor::confirmChangeSession(const QString &message)
     return msgBoxConfirm.exec() == QMessageBox::Yes;
 }
 
+// функция после выхода из сессии
 void MainWindowCodeEditor::clearRemoteInfo()
 {
     // очистка данных, связанных с сессией
@@ -257,6 +259,7 @@ void MainWindowCodeEditor::clearRemoteInfo()
     remoteLineHighlights.clear();
     remoteUsers.clear();
     statusBar()->clearMessage();
+    m_muteTimer->stop();
 }
 
 void MainWindowCodeEditor::onCreateSession()
@@ -546,6 +549,16 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             QJsonObject user = userValue.toObject();
             QString clientId = user["client_id"].toString();
             remoteUsers[clientId] = user;
+
+            // Добавляем обработку mute_end_time
+            if(user.contains("mute_end_time")) {
+                QJsonValue muteEndTimeValue = user["mute_end_time"];
+                if(muteEndTimeValue.isNull()){
+                    m_muteEndTimes.remove(clientId);
+                } else {
+                    m_muteEndTimes[clientId] = muteEndTimeValue.toVariant().toLongLong();
+                }
+            }
         }
         updateUserListUI();
 
@@ -614,10 +627,31 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             updateLineHighlight(senderId, position); // обновляем подсветку строки
         }
 
+    } else if (opType == "mute_notification") {
+        int duration = op["duration"].toInt();
+        QString messageText;
+        if(duration == 0) {
+            messageText = tr("Вы бессрочно заглушены и не можете редактировать текст");
+        } else {
+            messageText = tr("Вы заглушены на %1 секунд. Вы не можете редактировать текст").arg(duration);
+        }
+        QMessageBox::warning(this, tr("Заглушены"), messageText);
+        //updateMutedStatus(); //обновляем мьют, так как это сообщение говорит о том, что пользователя замьютили
+
     } else if (opType == "muted_status_update") {
         QString mutedClientId = op["client_id"].toString();
         bool mutedClientStatus = op["is_muted"].toBool();
         m_mutedClients[mutedClientId] = mutedClientStatus;
+
+        // Добавляем обработку времени окончания мьюта
+        if (op.contains("mute_end_time")) {
+            QJsonValue muteEndTimeValue = op["mute_end_time"];
+            if (muteEndTimeValue.isNull()) {
+                m_muteEndTimes.remove(mutedClientId);
+            } else {
+                m_muteEndTimes[mutedClientId] = muteEndTimeValue.toVariant().toLongLong();
+            }
+        }
         // if (mutedClientStatus) {
         //     CursorWidget* cursorWidget = remoteCursors[mutedClientId];
         //     cursorWidget->setVisible(false);
@@ -713,6 +747,9 @@ void MainWindowCodeEditor::updateUserListUI()
         }
         if (isMuted) {
             actionText += tr(" (Muted)");
+            if (m_muteEndTimes.contains(clientId)) {
+                actionText += " " + formatMuteTime(clientId); // к (Muted) доавбляется форматированный вывод оставшегося времени мьюта
+            }
         }
         QAction *userAction = new QAction(icon, actionText, this); // иконка + текст
         userAction->setData(clientId);
@@ -745,6 +782,51 @@ void MainWindowCodeEditor::updateUserListUI()
 
         m_userListMenu->addAction(userAction);
     }
+}
+
+// функция обновления информации об одном конкретном пользователе в списке, вместо полного обновления списка, что снизить нагрузку
+void MainWindowCodeEditor::updateUserListUser(const QString& clientId) 
+{
+    // находим нужный QAction (кнопку в списке меню пользователей), конкретного пользователя
+    QAction* userAction = nullptr;
+    for (QAction* action : m_userListMenu->actions()) {
+        if (action->data().toString() == clientId) {
+            userAction - action;
+            return;
+        }
+    }
+
+    if (!userAction) return;
+
+    QJsonObject user = remoteUsers[clientId];
+    QString username = user["username"].toString();
+    QColor color = user["color"].toString();
+    bool isAdmin = user["is_admin"].toBool();
+    bool isMuted = m_mutedClients.contains(clientId) && m_mutedClients.value(clientId) != 0;
+
+    // создаем иконку с цветным кружком
+    QPixmap pixmap(13, 13); // размер кружка
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setBrush(color);
+    painter.setPen(Qt::NoPen); // без контура
+    painter.drawEllipse(0, 0, 12, 12); // рисуем кружок
+    QIcon icon(pixmap);
+
+    // создаем QAction
+    QString actionText = username;
+    if (isAdmin) {
+        actionText += " (Admin)";
+    }
+    if (isMuted) {
+        actionText += tr(" (Muted)");
+        if (m_muteEndTimes.contains(clientId)) {
+            actionText += " " + formatMuteTime(clientId); // к (Muted) доавбляется форматированный вывод оставшегося времени мьюта
+        }
+    }
+    userAction->setIcon(icon);
+    userAction->setText(actionText); // устанавливаем иконку + обновленный текст
 }
 
 // обновление позиции и размера курсора (тултипа соответственно)
@@ -839,14 +921,31 @@ void MainWindowCodeEditor::updateMutedStatus()
 {
     bool isMuted = m_mutedClients.value(m_clientId);
     if (isMuted) {
-        statusBar()->showMessage("Вы заглушены и не можете писать");
+        //statusBar()->showMessage("Вы заглушены и не можете писать");
         // отключаем редактирование текста
+        qint64 muteEndTime = m_muteEndTimes.value(m_clientId, -1); // Получаем время окончания мьюта. -1 если нет записи
+        if (muteEndTime == -1) {
+            statusBar()->showMessage(tr("Вы заглушены бессрочно"));
+            //QMessageBox::warning(this, "Ошибка", "Вы бессрочно заглушены и не можете редактировать текст");
+        }
+        else
+        {
+            // если таймер не запущен, то запускаем
+            if (!m_muteTimer->isActive()) {
+                m_muteTimer->start(1000);
+            }
+            updateStatusBarMuteTime(); // вызываем чтобы обновить сразу, а не через секунду
+            //qint64 currentTime = QDateTime::currentDateTime().toSecsSinceEpoch(); // Текущее время
+            //qint64 timeLeft = muteEndTime - currentTime; // Сколько осталось до конца мьюта в секундах
+            //statusBar()->showMessage(tr("Вы заглушены, осталось: %1 сек.").arg(timeLeft));
+            //QMessageBox::warning(this, "Ошибка", tr("Вы заглушены и не можете редактировать текст. Осталось: %1 сек.").arg(timeLeft));
+        }
         ui->codeEditor->setReadOnly(true);
-        QMessageBox::warning(this, "Ошибка", "Вы заглушены и не можете редактировать текст");
     } else {
         statusBar()->clearMessage();
         // включаем редактирование текста
         ui->codeEditor->setReadOnly(false);
+        m_muteTimer->stop();
         QMessageBox::information(this, "Успех!", "Вы разблокированы, можете писать в чат");
     }
 }
@@ -860,16 +959,56 @@ void MainWindowCodeEditor::onMutedStatusUpdate(const QString &clientId, bool isM
     }
 
     if (clientId == m_clientId) {
-        updateMutedStatus();
+        updateMutedStatus(); // обновляем статус, когда мьют накладывается на самого пользователя
     }
-    updateUserListUI();
+    updateUserListUI(); // обновляем статус пользователя в списке
 }
 
-void MainWindowCodeEditor::onAdminChanged(const QString &newAdminId)
+void MainWindowCodeEditor::updateMuteTimeDisplay(const QString& clientId)
 {
-    m_isAdmin = (newAdminId == m_clientId);
+    QMessageBox* msgBox = qobject_cast<QMessageBox*>(sender()); //пытаемся получить объект QMessageBox, который отправил сигнал
+    if(!msgBox && m_currentMessageBoxClientId.isEmpty()) return; // если не получилось, выходим
+
+    QString currentText;
+    if (msgBox) // если был объект, то берем из него текст
+    {
+        msgBox->setText(msgBox->text()); //Если мьюта нет, оставляем, что было, а не затираем пустой строкой
+    }
+
+    // если строка равна "", то значит мьюта нет
+    QString muteTimeStr = formatMuteTime(clientId);
+    if (!muteTimeStr.isEmpty()) {
+        int startIndex = currentText.indexOf("<br><b>" + tr("Осталось времени мьюта:"));
+        if (startIndex != -1) { // если строка найдена, то заменяем
+            int endIndex = currentText.indexOf("</b>", startIndex);
+            if (endIndex != -1) {
+                currentText.replace(startIndex, endIndex - startIndex + 4, "<br><b>" + muteTimeStr + "</b>");
+            }
+        } else if (!currentText.contains(tr("Заглушен бессрочно"))) { // если строки нет и нет уопминания о бессрочном мьюте
+            currentText += "<br><b>" + muteTimeStr + "</b>";
+        }
+    }
+
+    if (msgBox) {
+        msgBox->setText(currentText); // устанавливаем обновленный текст или оригинальный, если нет мьюта
+    }
+}
+
+void MainWindowCodeEditor::stopMuteTimer()
+{
+    m_muteTimer->stop(); // если окно закрылось, то таймер останавливаем
+}
+
+// обновление статус бара, вызывается по таймеру
+void MainWindowCodeEditor::updateStatusBarMuteTime()
+{
+    if (m_mutedClients.contains(m_clientId) && m_mutedClients.value(m_clientId) != 0) {
+        statusBar()->showMessage(formatMuteTime(m_clientId));
+    } else {
+        statusBar()->clearMessage();
+        if (m_muteTimer->isActive()) m_muteTimer->stop();
+    }
     updateUserListUI();
-    qDebug() << "Admin status changed. Is admin: " << m_isAdmin;
 }
 
 void MainWindowCodeEditor::onMuteUnmute(const QString targetClientId)
@@ -885,6 +1024,7 @@ void MainWindowCodeEditor::onMuteUnmute(const QString targetClientId)
         if (socket && socket->state() == QAbstractSocket::ConnectedState) {
             socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
             qDebug() << "Отправлен запрос на размут:" << targetClientId;
+            onMutedStatusUpdate(targetClientId, false);
         }
 
     } else {
@@ -901,9 +1041,51 @@ void MainWindowCodeEditor::onMuteUnmute(const QString targetClientId)
             if (socket && socket->state() == QAbstractSocket::ConnectedState) {
                 socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
                 qDebug() << "Отправлен запрос на мут:" << targetClientId << ", " << duration;
+                qint64 endTime = (duration == 0) ? -1 : QDateTime::currentDateTime().toSecsSinceEpoch() + duration;
+            m_muteEndTimes[targetClientId] = endTime;
+            onMutedStatusUpdate(targetClientId, true); // Обновляем статус сразу
             }
         }
     }
+}
+
+// функция для форматирования времени мьюта
+QString MainWindowCodeEditor::formatMuteTime(const QString& clientId) 
+{
+    if (!m_muteEndTimes.contains(clientId)) return ""; // если мьюта нет, то пустую строку возвращаем
+
+    qint64 muteEndTime = m_muteEndTimes.value(clientId);
+    if (muteEndTime == -1) return tr("Заглушен бессрочно");
+
+    qint64 currentTime = QDateTime::currentDateTime().toSecsSinceEpoch();
+    qint64 timeLeft = muteEndTime - currentTime;
+
+    if (timeLeft <= 0) return tr("");
+
+    int seconds = timeLeft % 60;
+    int minutes = (timeLeft / 60) % 60;
+    int hours = (timeLeft / 3600) % 24;
+    int days = timeLeft / 86400;
+    QString timeString;
+    if (days > 0) {
+        timeString = QString("%1д %2ч %3м %4с").arg(days).arg(hours, 2, 10, QLatin1Char('0')).arg(minutes, 2, 10, QLatin1Char('0')).arg(seconds, 2, 10, QLatin1Char('0'));
+    }
+    else if (hours > 0) {
+        timeString = QString("%1ч %2м %3с").arg(hours, 2, 10, QLatin1Char('0')).arg(minutes, 2, 10, QLatin1Char('0')).arg(seconds, 2, 10, QLatin1Char('0'));
+    }
+    else
+    {
+        timeString = QString("%1м %2с").arg(minutes, 2, 10, QLatin1Char('0')).arg(seconds, 2, 10, QLatin1Char('0'));
+    }
+
+    return tr("Осталось: %1").arg(timeString);
+}
+
+void MainWindowCodeEditor::onAdminChanged(const QString &newAdminId)
+{
+    m_isAdmin = (newAdminId == m_clientId);
+    updateUserListUI();
+    qDebug() << "Admin status changed. Is admin: " << m_isAdmin;
 }
 
 void MainWindowCodeEditor::onTransferAdmin(const QString targetClientId)
@@ -923,16 +1105,7 @@ void MainWindowCodeEditor::showUserInfo(const QString targetClientId)
 {
     QString username = remoteUsers.value(targetClientId)["username"].toString();
     QString status;
-    if (targetClientId == m_clientId) {
-        if (m_mutedClients.contains(m_clientId)) {
-            status = "Вы заглушены";
-        } else {
-            status = "Это Вы";
-        }
-    } else {
-        if (m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId) != 0) status = "Заглушен";
-        else status = "Не заглушен";
-    }
+    QString muteTimeInfo;
     QJsonObject user = remoteUsers.value(targetClientId);
     bool isAdmin = false;
     if (!user.isEmpty()) {
@@ -940,8 +1113,52 @@ void MainWindowCodeEditor::showUserInfo(const QString targetClientId)
     }
 
     QString adminStatus = isAdmin ? "Админ" : "Не админ";
-    QString message = QString("Username: %1\nClient ID: %2\nStatus: %3\nAdmin: %4").arg(username).arg(targetClientId).arg(status).arg(adminStatus);
-    QMessageBox::information(this, "User Info", message);
+    QString message = QString("<b>Username:</b> %1<br><b>Client ID:</b> %2<br><b>Status:</b> %3<br><b>Admin:</b> %4")
+                        .arg(username).arg(targetClientId).arg(status).arg(adminStatus);;
+
+    if (m_muteEndTimes.contains(targetClientId)) {
+        // если клиент замьючен, и есть информация о времени мьюта
+        qint64 muteEndTime = m_muteEndTimes.value(targetClientId);
+        if (muteEndTime == -1) {
+            message += "<br><b>Mute Time:</b> " + tr("Заглушен бессрочно");
+        } else {
+            // status = tr("Заглушен");
+            // время мьюта будет обновляться динамически
+            m_currentMessageBoxClientId = targetClientId; // Сохраняем ID клиента, для которого показываем окно
+        }
+    }
+    else
+    {
+        // если клиент не замьючен
+        if (targetClientId == m_clientId) {
+            status = tr("Это Вы");
+        } else {
+            status = tr("Не заглушен");
+        }
+        m_currentMessageBoxClientId = "";
+    }
+
+    //QMessageBox::information(this, "User Info", message);
+    QMessageBox *msgBox = new QMessageBox(this);
+    msgBox->setWindowTitle("User Info");
+    msgBox->setText(message);
+    //QVBoxLayout *layout = new QVBoxLayout;
+
+    // добавление QLabel'ов в layout
+    // QLabel *mainLabel = new QLabel(message);  // текст с основной информацией
+    // layout->addWidget(mainLabel);
+
+    // // добавляем QLabel для времени мьюта (m_muteTimeLabel)
+    // if (m_muteEndTimes.contains(targetClientId))
+    // {
+    //     layout->addWidget(m_muteTimeLabel);
+    // }
+    // msgBox->setLayout(layout);
+
+    connect(msgBox, &QMessageBox::close, this, &MainWindowCodeEditor::stopMuteTimer); //останавливаем таймер, когда закрывается
+    updateMuteTimeDisplay(targetClientId); // обновляем начальное время мьюта
+    msgBox->exec(); //показ окна
+    delete msgBox;
 }
 
 // чатик

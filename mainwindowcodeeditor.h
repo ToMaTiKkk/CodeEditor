@@ -76,6 +76,10 @@ private slots: // функции, которые будут вызваны в о
     void onMutedStatusUpdate(const QString& clientId, bool isMuted);
     void updateMutedStatus();
     void updateMuteTimeDisplay(const QString& clientId);
+    void updateStatusBarMuteTime();
+    void updateUserListUser(const QString& clientId);
+    void stopMuteTimer();
+    QString formatMuteTime(const QString& clientId);
     void onAdminChanged(const QString& newAdminId);
 
     void onMuteUnmute(const QString targetClientId);
@@ -107,6 +111,7 @@ private:
     QTimer *m_muteTimer; // таймер для обновления времени мута
     QLabel *m_muteTimeLabel; // для отображения времени мута (в списке пользователей)
     QHash<QString, qint64> m_muteEndTimes; // словарь для хранения времени мута каждого клиента
+    QString m_currentMessageBoxClientId;
     QMap<QString, int> m_mutedClients;
     QMap<QString, CursorWidget*> remoteCursors; // словарь с курсора клиентов, ключ - айди, значение - виджет курсора
     QMap<QString, LineHighlightWidget*> remoteLineHighlights; // хранение подсветки строки, где курсор пользователя, uuid - подсветка
