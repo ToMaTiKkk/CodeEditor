@@ -2,6 +2,7 @@
 #include "./ui_mainwindowcodeeditor.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
+#include "roundedtextedit.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -20,6 +21,7 @@
 #include <QPainter>
 #include <QDateTime>
 #include <QKeyEvent>
+#include <QTextEdit>
 
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
@@ -44,9 +46,9 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     chatLayout->setContentsMargins(10, 10, 10, 10); // Отступы
     chatLayout->setSpacing(10); // Расстояние между элементами
 
-    // Поле для отображения сообщений
-    chatDisplay = new QTextEdit(chatWidget);
-    chatDisplay->setReadOnly(true); // Только для чтения
+    // Поле для отображения сообщений (теперь с закругленными углами)
+    chatDisplay = new RoundedTextEdit(chatWidget);  // ← Основное изменение
+    chatDisplay->setReadOnly(true);
     chatDisplay->setObjectName("chatDisplay");
     chatLayout->addWidget(chatDisplay);
 
@@ -135,7 +137,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
     connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
 
-
+    qobject_cast<RoundedTextEdit*>(chatDisplay)->setUsername(m_username);//ДЛЯ ОТРИСОВКИ ЧАТА ПЕРЕДАЛИ НИК ЙОУ
 
     // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
     fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
@@ -650,17 +652,54 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
     } else if (opType == "chat_message") {
         QString username = op["username"].toString();
-        QString clientId = op["client_id"].toString();
         QString chatMessage = op["text_message"].toString();
-
+        // Получаем текущее время
+        QTime currentTime = QTime::currentTime();
+        QString timeString = currentTime.toString("hh:mm");
         QTextCursor cursor = chatDisplay->textCursor();
         cursor.movePosition(QTextCursor::End);
-        QTextBlockFormat blockFormat;
 
+        // Формат фрейма для входящих сообщений (слева)
+        QTextFrameFormat frameFormat;
+        frameFormat.setPadding(5);
+        frameFormat.setMargin(5);
+        frameFormat.setWidth(QTextLength(QTextLength::FixedLength, 250));
+
+        // Вставляем фрейм
+        QTextFrame *frame = cursor.insertFrame(frameFormat);
+        cursor = frame->firstCursorPosition();
+
+        // Выравниваем текст внутри фрейма влево
+        QTextBlockFormat blockFormat;
         blockFormat.setAlignment(Qt::AlignLeft);
         cursor.insertBlock(blockFormat);
-        cursor.insertText(username + ": " + chatMessage);
-    }else if (opType == "cursor_position_update") {
+
+        QTextCharFormat nickFormat;
+        nickFormat.setFontWeight(QFont::Bold);
+        nickFormat.setForeground(Qt::white);
+        cursor.insertText(username + "\n", nickFormat);
+
+        QTextCharFormat textFormat;
+        textFormat.setForeground(Qt::white);
+        cursor.insertText(chatMessage, textFormat);
+
+        QTextCharFormat timeFormat;
+        timeFormat.setFontItalic(true);
+        timeFormat.setForeground(QColor(180, 180, 180));
+        timeFormat.setFontPointSize(8);
+
+        //вправо
+        QTextBlockFormat timeBlockFormat;
+        timeBlockFormat.setAlignment(Qt::AlignRight);
+        cursor.insertBlock(timeBlockFormat);
+        cursor.insertText(timeString, timeFormat);
+
+        // Добавляем перенос после сообщения
+        cursor = chatDisplay->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        cursor.insertText("\n");
+        chatDisplay->setTextCursor(cursor);
+    } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
 
@@ -1283,18 +1322,38 @@ void MainWindowCodeEditor::toggleChat() {
 void MainWindowCodeEditor::sendMessage() {
     QString text = chatInput->text().trimmed();
     if (!text.isEmpty()) {
-        // Форматируем сообщение
-        //QString formattedMessage = m_username + ": " + text;
-
-        // Добавляем сообщение в свой чат сразу с выравниванием справа
-        //chatDisplay->append("<p align='right'>" + formattedMessage + "</p>\n");
-
         QTextCursor cursor = chatDisplay->textCursor();
         cursor.movePosition(QTextCursor::End);
-        QTextBlockFormat blockFormat;
-        blockFormat.setAlignment(Qt::AlignRight);
-        cursor.insertBlock(blockFormat);
-        cursor.insertText(m_username + ": " + text);
+
+        QTextFrameFormat frameFormat;
+        frameFormat.setPadding(8);
+        frameFormat.setMargin(5);
+        //frameFormat.setWidth(QTextLength(QTextLength::PercentageLength, 60)); НЕ УДАЛЯТЬ ИДЕЯ ИНТЕРЕСНАЯ!
+        frameFormat.setWidth(QTextLength(QTextLength::FixedLength, 250));
+        frameFormat.setProperty(QTextFormat::UserProperty, m_username);
+
+        QTextFrame *frame = cursor.insertFrame(frameFormat);
+        cursor = frame->firstCursorPosition();
+
+        QTextCharFormat nickFormat;
+        nickFormat.setFontWeight(QFont::Bold);
+        nickFormat.setForeground(Qt::white);
+        cursor.insertText(m_username + "\n", nickFormat);
+
+        QTextCharFormat textFormat;
+        textFormat.setForeground(Qt::white);
+        cursor.insertText(text, textFormat);
+
+        QTextCharFormat timeFormat;
+        timeFormat.setFontItalic(true);
+        timeFormat.setForeground(QColor(180, 180, 180));
+        timeFormat.setFontPointSize(8);
+        QTextBlockFormat timeBlockFormat;
+        timeBlockFormat.setAlignment(Qt::AlignRight);
+        cursor.insertBlock(timeBlockFormat);
+        cursor.insertText(QTime::currentTime().toString("hh:mm"), timeFormat);
+        chatDisplay->setTextCursor(cursor);
+
 
         // Подготавливаем JSON для отправки
         QJsonObject chatOp;
