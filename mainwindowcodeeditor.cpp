@@ -123,10 +123,13 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(ui->actionCreateSession, &QAction::triggered, this, &MainWindowCodeEditor::onCreateSession);
     connect(ui->actionJoinSession, &QAction::triggered, this, &MainWindowCodeEditor::onJoinSession);
     connect(ui->actionSaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onSaveSessionClicked);
+    connect(ui->actionCopyId, &QAction::triggered, this, &MainWindowCodeEditor::onCopyIdClicked);
     connect(ui->actionLeaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onLeaveSession);
     connect(ui->actionShowListUsers, &QAction::triggered, this, &MainWindowCodeEditor::onShowUserList);
     ui->actionShowListUsers->setVisible(false);
     ui->actionLeaveSession->setVisible(false);
+    ui->actionSaveSession->setVisible(false);
+    ui->actionCopyId->setVisible(false);
 
     // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
     connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
@@ -222,6 +225,8 @@ void MainWindowCodeEditor::onDisconnected()
     clearRemoteInfo();
     ui->actionShowListUsers->setVisible(false);
     ui->actionLeaveSession->setVisible(false);
+    ui->actionSaveSession->setVisible(false);
+    ui->actionCopyId->setVisible(false);
 }
 
 void MainWindowCodeEditor::connectToServer()
@@ -309,6 +314,8 @@ void MainWindowCodeEditor::onCreateSession()
     connectToServer();
     ui->actionShowListUsers->setVisible(true);
     ui->actionLeaveSession->setVisible(true);
+    ui->actionSaveSession->setVisible(true);
+    ui->actionCopyId->setVisible(true);
 }
 void MainWindowCodeEditor::onJoinSession()
 {
@@ -470,6 +477,20 @@ void MainWindowCodeEditor::onNewFileClicked()
     // очищения поля редактирование и очищение пути к текущему файлу
     ui->codeEditor->clear();
     currentFilePath.clear();
+}
+
+void MainWindowCodeEditor::onCopyIdClicked()
+{
+    if (m_sessionId.isEmpty()) {
+        QMessageBox::warning(this, "Ошибка", "Сессия не активна или ID отсутствует.");
+        return;
+    }
+
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(m_sessionId);
+
+    // Можно показать уведомление, что ID скопирован
+    statusBar()->showMessage("ID сессии скопирован в буфер обмена", 3000); // 3 секунды
 }
 
 void MainWindowCodeEditor::onOpenFolderClicked()

@@ -24,7 +24,7 @@
 #include <QKeyEvent>
 #include <QTextDocumentFragment>
 #include <QMessageBox>
-
+#include <QClipboard>
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindowCodeEditor;
@@ -64,6 +64,7 @@ private slots: // функции, которые будут вызваны в о
     void onToolButtonClicked();
     void applyCurrentTheme();
     void onSaveSessionClicked();
+    void onCopyIdClicked();
     void onCreateSession();
     void onJoinSession();
     void onShowUserList();

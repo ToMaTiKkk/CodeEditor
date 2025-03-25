@@ -232,8 +232,9 @@
     <addaction name="actionJoinSession"/>
     <addaction name="separator"/>
     <addaction name="actionShowListUsers"/>
-    <addaction name="actionLeaveSession"/>
+    <addaction name="actionCopyId"/>
     <addaction name="actionSaveSession"/>
+    <addaction name="actionLeaveSession"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuSession"/>
@@ -307,6 +308,11 @@
   <action name="actionSaveSession">
    <property name="text">
     <string>Save session</string>
+   </property>
+  </action>
+  <action name="actionCopyId">
+   <property name="text">
+    <string>Copy ID</string>
    </property>
   </action>
  </widget>
