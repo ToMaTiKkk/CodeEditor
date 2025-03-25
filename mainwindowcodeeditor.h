@@ -63,7 +63,7 @@ private slots: // функции, которые будут вызваны в о
 
     void onToolButtonClicked();
     void applyCurrentTheme();
-
+    void onSaveSessionClicked();
     void onCreateSession();
     void onJoinSession();
     void onShowUserList();

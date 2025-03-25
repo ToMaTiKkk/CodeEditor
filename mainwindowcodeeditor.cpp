@@ -122,6 +122,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // сигнал для "сессий"
     connect(ui->actionCreateSession, &QAction::triggered, this, &MainWindowCodeEditor::onCreateSession);
     connect(ui->actionJoinSession, &QAction::triggered, this, &MainWindowCodeEditor::onJoinSession);
+    connect(ui->actionSaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onSaveSessionClicked);
     connect(ui->actionLeaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onLeaveSession);
     connect(ui->actionShowListUsers, &QAction::triggered, this, &MainWindowCodeEditor::onShowUserList);
     ui->actionShowListUsers->setVisible(false);
@@ -357,6 +358,30 @@ void MainWindowCodeEditor::onLeaveSession()
         socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
     }
     disconnectFromServer();
+}
+
+void MainWindowCodeEditor::onSaveSessionClicked() {
+    if (!m_isAdmin) {
+        QMessageBox::warning(this, "Ошибка", "Только администратор может сохранить сессию");
+        return;
+    }
+
+    bool ok;
+    int days = QInputDialog::getInt(this, tr("Сохранение сессии"),
+                                    tr("На сколько дней сохранить сессию?"),
+                                    7, 1, 365, 1, &ok);
+    if (!ok) return;
+
+    QJsonObject saveSessionMessage;
+    saveSessionMessage["type"] = "save_session";
+    saveSessionMessage["client_id"] = m_clientId;
+    saveSessionMessage["session_id"] = m_sessionId;
+    saveSessionMessage["days"] = days;
+    QJsonDocument doc(saveSessionMessage);
+
+    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+        socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    }
 }
 
 void MainWindowCodeEditor::onOpenFileClicked()
@@ -762,8 +787,13 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         cursor.setPosition(position + count, QTextCursor::KeepAnchor);
         cursor.removeSelectedText();
         qDebug() << "Применена операция удаления";
+    } else if (opType == "session_saved") {
+    int days = op["days"].toInt();
+    QMessageBox::information(this, "Успех",
+                             QString("Сессия сохранена на %1 дней").arg(days));
     }
 }
+
 
 void MainWindowCodeEditor::onCursorPositionChanged()
 {
