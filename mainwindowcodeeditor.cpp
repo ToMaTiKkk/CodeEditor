@@ -243,7 +243,7 @@ void MainWindowCodeEditor::connectToServer()
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 
-    socket->open(QUrl("ws://localhost:8080"));
+    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
 }
 
 void MainWindowCodeEditor::disconnectFromServer()
@@ -651,18 +651,15 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
     } else if (opType == "chat_message") {
         QString username = op["username"].toString();
         QString clientId = op["client_id"].toString();
+        QString chatMessage = op["text_message"].toString();
 
-        if (op.contains("text_message")) {
-            QString chatMessage = op["text_message"].toString();
+        QTextCursor cursor = chatDisplay->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        QTextBlockFormat blockFormat;
 
-            if (clientId == m_clientId) {
-                chatDisplay->append("<p style='text-align: right;'>" + username + ": " + chatMessage + "</p>");
-                //chatDisplay->append("<p style='text-align: left;'></p>");
-            } else {
-                chatDisplay->append("<p style='text-align: left;'>" + username + ": " + chatMessage + "</p>");
-                //chatDisplay->append("<p style='text-align: right;'></p>");
-            }
-        }
+        blockFormat.setAlignment(Qt::AlignLeft);
+        cursor.insertBlock(blockFormat);
+        cursor.insertText(username + ": " + chatMessage);
     }else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
@@ -816,9 +813,6 @@ void MainWindowCodeEditor::updateUserListUI()
         }
         if (isMuted) {
             actionText += tr(" (Muted)");
-            // if (m_muteEndTimes.contains(clientId)) {
-            //     actionText += " " + formatMuteTime(clientId); // к (Muted) доавбляется форматированный вывод оставшегося времени мьюта
-            // }
         }
         QAction *userAction = new QAction(icon, actionText, this); // иконка + текст
         userAction->setData(clientId);
@@ -890,9 +884,6 @@ void MainWindowCodeEditor::updateUserListUser(const QString& clientId)
     }
     if (isMuted) {
         actionText += tr(" (Muted)");
-        // if (m_muteEndTimes.contains(clientId)) {
-        //     actionText += " " + formatMuteTime(clientId); // к (Muted) доавбляется форматированный вывод оставшегося времени мьюта
-        // }
     }
     userAction->setIcon(icon);
     userAction->setText(actionText); // устанавливаем иконку + обновленный текст
@@ -990,12 +981,10 @@ void MainWindowCodeEditor::updateMutedStatus()
 {
     bool isMuted = m_mutedClients.value(m_clientId);
     if (isMuted) {
-        //statusBar()->showMessage("Вы заглушены и не можете писать");
         // отключаем редактирование текста
         qint64 muteEndTime = m_muteEndTimes.value(m_clientId, -1); // Получаем время окончания мьюта. -1 если нет записи
         if (muteEndTime == -1) {
             statusBar()->showMessage(tr("Вы заглушены бессрочно"));
-            //QMessageBox::warning(this, "Ошибка", "Вы бессрочно заглушены и не можете редактировать текст");
         }
         else
         {
@@ -1004,10 +993,6 @@ void MainWindowCodeEditor::updateMutedStatus()
                 m_muteTimer->start(1000);
             }
             updateStatusBarMuteTime(); // вызываем чтобы обновить сразу, а не через секунду
-            //qint64 currentTime = QDateTime::currentDateTime().toSecsSinceEpoch(); // Текущее время
-            //qint64 timeLeft = muteEndTime - currentTime; // Сколько осталось до конца мьюта в секундах
-            //statusBar()->showMessage(tr("Вы заглушены, осталось: %1 сек.").arg(timeLeft));
-            //QMessageBox::warning(this, "Ошибка", tr("Вы заглушены и не можете редактировать текст. Осталось: %1 сек.").arg(timeLeft));
         }
         ui->codeEditor->setReadOnly(true);
     } else {
@@ -1207,20 +1192,7 @@ void MainWindowCodeEditor::showUserInfo(const QString targetClientId)
 
     bool isMuted = m_mutedClients.contains(targetClientId) && m_mutedClients.value(targetClientId, 0) != 0;
     if (isMuted) {
-        if (m_muteEndTimes.contains(targetClientId)) {
-            // если клиент замьючен, и есть информация о времени мьюта
-            qint64 muteEndTime = m_muteEndTimes.value(targetClientId);
-            if (muteEndTime == -1) {
-                status = tr("Заглушен бессрочно");
-            } else {
-                status = formatMuteTime(targetClientId);
-                // status = tr("Заглушен");
-                // время мьюта будет обновляться динамически
-            }
-        } else {
-            // если мьют есть, но нет времени окончания
-            status = tr("Заглушен");
-        }
+        status = tr("Заглушен бессрочно");
         m_currentMessageBoxClientId = targetClientId; // Сохраняем ID клиента, для которого показываем окно
     } else {
         // если клиент не замьючен
@@ -1262,24 +1234,6 @@ void MainWindowCodeEditor::showUserInfo(const QString targetClientId)
                           .arg(username).arg(targetClientId).arg(status).arg(adminStatus);
     m_userInfoMessageBox->setText(message);
     m_currentUserInfoClientId = targetClientId; // сохраняем айди для обновления
-    //QMessageBox *msgBox = new QMessageBox(this);
-    //msgBox->setWindowTitle("User Info");
-    //msgBox->setText(message);
-    //QVBoxLayout *layout = new QVBoxLayout;
-
-    // добавление QLabel'ов в layout
-    // QLabel *mainLabel = new QLabel(message);  // текст с основной информацией
-    // layout->addWidget(mainLabel);
-
-    // // добавляем QLabel для времени мьюта (m_muteTimeLabel)
-    // if (m_muteEndTimes.contains(targetClientId))
-    // {
-    //     layout->addWidget(m_muteTimeLabel);
-    // }
-    // msgBox->setLayout(layout);
-
-    /*connect(msgBox, &QMessageBox::close, this, &MainWindowCodeEditor::stopMuteTimer); //останавливаем таймер, когда закрывается*/
-    //updateMuteTimeDisplay(targetClientId); // обновляем начальное время мьюта
     updateMuteTimeDisplayInUserInfo();
     m_userInfoMessageBox->show();
 }
@@ -1299,18 +1253,8 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
         isAdmin = user["is_admin"].toBool();
     }
     bool isMuted = m_mutedClients.contains(clientId) && m_mutedClients.value(clientId, 0) != 0;
-    if (isMuted) {
-        if (m_muteEndTimes.contains(clientId)) {
-            // если клиент замьючен, и есть информация о времени мьюта
-            qint64 muteEndTime = m_muteEndTimes.value(clientId);
-            if (muteEndTime == -1) {
-                status = tr("Заглушен бессрочно");
-            } else {
-                status = formatMuteTime(clientId);
-            }
-        } else {
-            status = tr("Заглушен");
-        }
+    if (isMuted) {    
+        status = tr("Заглушен бессрочно");
     } else {
         // если клиент не замьючен
         if (clientId == m_clientId) {
@@ -1327,26 +1271,6 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
     m_userInfoMessageBox->setText(message); // Обновляем текст в окне
 }
 
-// void MainWindowCodeEditor::updateAllUsersMuteTimeDisplay()
-// {
-//     // если есть открытые окна информации о пользователе
-//     if (m_userInfoMessageBox && !m_currentUserInfoClientId.isEmpty()) {
-//         updateMuteTimeDisplayInUserInfo();
-//     }
-
-//     // обновляем все открытые диалоговые окна с информацией о пользователях
-//     for (const QString& clientId : m_muteEndTimes.keys()) {
-//         if (m_mutedClients.contains(clientId) && m_mutedClients.value(clientId) != 0) {
-//             // получаем все открытые QMessageBox
-//             QList<QMessageBox*> messageBoxes = findChildren<QMessageBox*>();
-//             for (QMessageBox* msgBox : messageBoxes) {
-//                 // обновляем каждое окно
-//                 updateMuteTimeDisplay(clientId);
-//             }
-//         }
-//     }
-// }
-
 // чатик
 void MainWindowCodeEditor::toggleChat() {
     if (chatWidget->isVisible()) {
@@ -1360,10 +1284,17 @@ void MainWindowCodeEditor::sendMessage() {
     QString text = chatInput->text().trimmed();
     if (!text.isEmpty()) {
         // Форматируем сообщение
-        QString formattedMessage = m_username + ": " + text;
+        //QString formattedMessage = m_username + ": " + text;
 
         // Добавляем сообщение в свой чат сразу с выравниванием справа
-        chatDisplay->append("<p align='right'>" + formattedMessage + "</p>\n");
+        //chatDisplay->append("<p align='right'>" + formattedMessage + "</p>\n");
+
+        QTextCursor cursor = chatDisplay->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        QTextBlockFormat blockFormat;
+        blockFormat.setAlignment(Qt::AlignRight);
+        cursor.insertBlock(blockFormat);
+        cursor.insertText(m_username + ": " + text);
 
         // Подготавливаем JSON для отправки
         QJsonObject chatOp;
@@ -1387,17 +1318,6 @@ void MainWindowCodeEditor::keyPressEvent(QKeyEvent *event) {
         sendMessage();
     }
 }
-/*void MainWindowCodeEditor::handleIncomingMessage(const QJsonObject &json) {
-    QString type = json["type"].toString();
-
-    if (type == "chat_message") {
-        // Обработка сообщений чата
-        QString username = json["username"].toString();
-        QString messageText = json["message"].toString();
-        QString formattedMessage = username + ": " + messageText;
-        chatDisplay->append(formattedMessage);
-    }
-}*/
 
 void MainWindowCodeEditor::on_toolButton_clicked()
 {
