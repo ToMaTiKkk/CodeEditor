@@ -23,6 +23,7 @@
 #include <QSplitter>
 #include <QKeyEvent>
 #include <QTextDocumentFragment>
+#include <QMessageBox>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -79,6 +80,9 @@ private slots: // функции, которые будут вызваны в о
     void updateMuteTimeDisplay(const QString& clientId);
     void updateStatusBarMuteTime();
     void updateUserListUser(const QString& clientId);
+    //void updateAllUsersMuteTimeDisplay();
+    //void updateUserInfoMuteTime();
+    void updateMuteTimeDisplayInUserInfo();
     void stopMuteTimer();
     QString formatMuteTime(const QString& clientId);
     void onAdminChanged(const QString& newAdminId);
@@ -110,6 +114,8 @@ private:
     QAction *m_transferAdminAction;
     QAction *m_infoAction;
     QCheckBox* m_themeCheckBox;
+    QString m_currentUserInfoClientId;
+    QMessageBox *m_userInfoMessageBox;
     QTimer *m_muteTimer; // таймер для обновления времени мута
     QLabel *m_muteTimeLabel; // для отображения времени мута (в списке пользователей)
     QHash<QString, qint64> m_muteEndTimes; // словарь для хранения времени мута каждого клиента
