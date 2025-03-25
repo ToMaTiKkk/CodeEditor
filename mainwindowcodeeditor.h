@@ -21,7 +21,6 @@
 #include <QLineEdit>
 #include <QToolButton>
 #include <QSplitter>
-#include <QElapsedTimer>
 #include <QMessageBox>
 
 QT_BEGIN_NAMESPACE
@@ -79,7 +78,9 @@ private slots: // функции, которые будут вызваны в о
     void updateMuteTimeDisplay(const QString& clientId);
     void updateStatusBarMuteTime();
     void updateUserListUser(const QString& clientId);
+    //void updateAllUsersMuteTimeDisplay();
     //void updateUserInfoMuteTime();
+    void updateMuteTimeDisplayInUserInfo();
     void stopMuteTimer();
     QString formatMuteTime(const QString& clientId);
     void onAdminChanged(const QString& newAdminId);
@@ -110,7 +111,7 @@ private:
     QAction *m_transferAdminAction;
     QAction *m_infoAction;
     QCheckBox* m_themeCheckBox;
-    QElapsedTimer *m_muteRequestTimer; // таймер для отслеживания времени отправки запроса на мут
+    QString m_currentUserInfoClientId;
     QMessageBox *m_userInfoMessageBox;
     QTimer *m_muteTimer; // таймер для обновления времени мута
     QLabel *m_muteTimeLabel; // для отображения времени мута (в списке пользователей)
