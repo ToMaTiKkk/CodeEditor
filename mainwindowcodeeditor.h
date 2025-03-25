@@ -25,6 +25,10 @@
 #include <QTextDocumentFragment>
 #include <QMessageBox>
 #include <QTime>
+#include <QScrollArea>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QLineEdit>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -93,12 +97,13 @@ private slots: // функции, которые будут вызваны в о
     void showUserInfo(const QString targetClientId);
 
     // чатик
-    void toggleChat(); // Переключение видимости чата
+    //void toggleChat(); // Переключение видимости чата
     void sendMessage(); // Отправка сообщения
     //void onTextMessagesReceived(const QString &message);
     //void handleIncomingMessage(const QJsonObject &json);
     void on_toolButton_clicked();
-    void keyPressEvent(QKeyEvent *event) override;
+    //void keyPressEvent(QKeyEvent *event) override;
+    void scrollToBottom(); // Новый слот для прокрутки
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -131,10 +136,17 @@ private:
     QMap<QString, int> lastCursorPositions; // хранение позиций всех курсоров других пользователей
     QMap<QString, QJsonObject> remoteUsers; // client_id -> {username, color}
     QWidget *chatWidget; // Виджет чата
-    QTextEdit *chatDisplay; // Поле для отображения сообщений
+    // QTextEdit *chatDisplay; // Поле для отображения сообщений
     QLineEdit *chatInput; // Поле для ввода сообщений
+    // --- Новые члены чата ---
+    QScrollArea *chatScrollArea;     // <-- ДОБАВИТЬ (Вместо chatDisplay)
+    QWidget *messageListWidget;    // <-- ДОБАВИТЬ (Контейнер внутри ScrollArea)
+    QVBoxLayout *messagesLayout;   // <-- ДОБАВИТЬ (Layout для контейнера)
     QString m_sessionPassword;
     //новое разделение окон
     bool isChatVisible = false;    // Флаг видимости чата
+
+    // Добавляем приватный метод для создания виджета сообщения
+    void addChatMessageWidget(const QString &username, const QString &text, const QTime &time, bool isOwnMessage);
 };
 #endif // MAINWINDOWCODEEDITOR_H

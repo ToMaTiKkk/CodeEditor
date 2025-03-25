@@ -2,7 +2,7 @@
 #include "./ui_mainwindowcodeeditor.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
-#include "roundedtextedit.h"
+//#include "roundedtextedit.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -22,13 +22,26 @@
 #include <QDateTime>
 #include <QKeyEvent>
 #include <QTextEdit>
+#include <QScrollArea>
+#include <QLabel>
+#include <QSpacerItem>
+#include <QTimer>
 
+
+// Константы для чата
+const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
+const int HORIZONTAL_MARGIN = 10;      // Боковые отступы от краев ScrollArea
+const int MESSAGE_SPACING = 5;         // Вертикальный отступ между сообщениями
 
 MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindowCodeEditor)
     , m_isDarkTheme(true)
     , chatWidget(nullptr)
+    , chatScrollArea(nullptr) // <-- Инициализация новых указателей
+    , messageListWidget(nullptr)
+    , messagesLayout(nullptr)
+    , chatInput(nullptr) // <-- Инициализация
     , m_userInfoMessageBox(nullptr)
     , m_muteTimer(new QTimer(this))
 {
@@ -37,46 +50,72 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
 
-    // Создаем виджет чата
+    // --------------------------------------------------------------------
+    // --- НОВАЯ ИНИЦИАЛИЗАЦИЯ ЧАТА ---
+    // --------------------------------------------------------------------
     chatWidget = new QWidget(ui->horizontalWidget_2);
     chatWidget->setObjectName("chatWidget");
 
-    // Устанавливаем layout для chatWidget
-    QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget);
-    chatLayout->setContentsMargins(10, 10, 10, 10); // Отступы
-    chatLayout->setSpacing(10); // Расстояние между элементами
+    QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget); // Основной layout чата
+    chatLayout->setContentsMargins(0, 0, 0, 0);
+    chatLayout->setSpacing(5);
 
-    // Поле для отображения сообщений (теперь с закругленными углами)
-    chatDisplay = new RoundedTextEdit(chatWidget);  // ← Основное изменение
-    chatDisplay->setReadOnly(true);
-    chatDisplay->setObjectName("chatDisplay");
-    chatLayout->addWidget(chatDisplay);
+    // Область прокрутки для сообщений
+    chatScrollArea = new QScrollArea(chatWidget);
+    chatScrollArea->setObjectName("chatScrollArea");
+    chatScrollArea->setWidgetResizable(true);
+    chatScrollArea->setFrameShape(QFrame::NoFrame);
+    // chatScrollArea->setStyleSheet("background-color: transparent;"); // Можно задать прозрачный фон
 
-    // Создаем горизонтальный layout для поля ввода и кнопки
+    // Виджет-контейнер внутри ScrollArea
+    messageListWidget = new QWidget();
+    messageListWidget->setObjectName("messageListWidget");
+    // messageListWidget->setStyleSheet("background-color: transparent;");
+
+    // Вертикальный Layout для сообщений внутри контейнера
+    messagesLayout = new QVBoxLayout(messageListWidget);
+    messagesLayout->setContentsMargins(HORIZONTAL_MARGIN, 5, HORIZONTAL_MARGIN, 5);
+    messagesLayout->setSpacing(MESSAGE_SPACING);
+    messagesLayout->addStretch(1); // Заставляет сообщения "расти" вверх
+
+    // Устанавливаем контейнер в ScrollArea
+    chatScrollArea->setWidget(messageListWidget);
+
+    chatLayout->addWidget(chatScrollArea, 1); // ScrollArea занимает основное место
+
+    // Layout для ввода сообщения
     QHBoxLayout *inputLayout = new QHBoxLayout();
     inputLayout->setSpacing(10);
+    inputLayout->setContentsMargins(5, 0, 5, 5);
 
-    // Поле для ввода сообщений
     chatInput = new QLineEdit(chatWidget);
     chatInput->setObjectName("chatInput");
-    inputLayout->addWidget(chatInput, 1); // Расширяется на доступное пространство
+    chatInput->setPlaceholderText("Enter message...");
+    inputLayout->addWidget(chatInput, 1);
 
-    // Кнопка отправки сообщения
     QPushButton *sendButton = new QPushButton("Send", chatWidget);
     sendButton->setObjectName("sendButton");
-    inputLayout->addWidget(sendButton, 0); // Фиксированный размер кнопки
+    sendButton->setCursor(Qt::PointingHandCursor);
+    inputLayout->addWidget(sendButton, 0);
 
-    // Добавляем горизонтальный layout в вертикальный
+    // Добавляем inputLayout в chatLayout
     chatLayout->addLayout(inputLayout);
 
-    // Подключаем сигнал кнопки к слоту sendMessage
+    // Подключения для чата
     connect(sendButton, &QPushButton::clicked, this, &MainWindowCodeEditor::sendMessage);
+    connect(chatInput, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::sendMessage); // <-- Отправка по Enter
 
-    // При необходимости можно задать растяжку для chatDisplay
-    chatLayout->setStretch(0, 1);
-
+    // Добавляем chatWidget в основной UI
+    // Убедимся, что у родителя есть layout
+    if (!ui->horizontalWidget_2->layout()) {
+        ui->horizontalWidget_2->setLayout(new QHBoxLayout());
+        ui->horizontalWidget_2->layout()->setContentsMargins(0,0,0,0);
+    }
     ui->horizontalWidget_2->layout()->addWidget(chatWidget);
-    chatWidget->hide();
+    chatWidget->hide(); // Скрыть по умолчанию
+    // --------------------------------------------------------------------
+    // --- КОНЕЦ НОВОЙ ИНИЦИАЛИЗАЦИИ ЧАТА ---
+    // --------------------------------------------------------------------
 
     // создаем тумблер для переключения темы
     m_themeCheckBox = new QCheckBox(this);
@@ -136,8 +175,6 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(ui->actionSave, &QAction::triggered, this, &MainWindowCodeEditor::onSaveFileClicked);
     connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
     connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
-
-    qobject_cast<RoundedTextEdit*>(chatDisplay)->setUsername(m_username);//ДЛЯ ОТРИСОВКИ ЧАТА ПЕРЕДАЛИ НИК ЙОУ
 
     // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
     fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
@@ -538,7 +575,7 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
 void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 {
     qDebug() << "Получено сообщение от сервера:" << message;
-    QSignalBlocker blocker(ui->codeEditor->document()); // предотвращение циклического обмена, чтобы примененные изменения снова не отправились на сервер
+    //QSignalBlocker blocker(ui->codeEditor->document()); // предотвращение циклического обмена, чтобы примененные изменения снова не отправились на сервер
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     QJsonObject op = doc.object();
     QString opType = op["type"].toString();
@@ -646,6 +683,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
     } else if (opType == "file_content_update")
     {
+        QSignalBlocker blocker(ui->codeEditor->document());
         QString fileText = op["text"].toString();
         ui->codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
         qDebug() << "Применено обновление содержимого файла";
@@ -653,52 +691,53 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
     } else if (opType == "chat_message") {
         QString username = op["username"].toString();
         QString chatMessage = op["text_message"].toString();
+        addChatMessageWidget(username, chatMessage, QTime::currentTime(), false); // false - не свое сообщение
         // Получаем текущее время
-        QTime currentTime = QTime::currentTime();
-        QString timeString = currentTime.toString("hh:mm");
-        QTextCursor cursor = chatDisplay->textCursor();
-        cursor.movePosition(QTextCursor::End);
+        // QTime currentTime = QTime::currentTime();
+        // QString timeString = currentTime.toString("hh:mm");
+        // QTextCursor cursor = chatDisplay->textCursor();
+        // cursor.movePosition(QTextCursor::End);
 
-        // Формат фрейма для входящих сообщений (слева)
-        QTextFrameFormat frameFormat;
-        frameFormat.setPadding(5);
-        frameFormat.setMargin(5);
-        frameFormat.setWidth(QTextLength(QTextLength::FixedLength, 250));
+        // // Формат фрейма для входящих сообщений (слева)
+        // QTextFrameFormat frameFormat;
+        // frameFormat.setPadding(5);
+        // frameFormat.setMargin(5);
+        // frameFormat.setWidth(QTextLength(QTextLength::FixedLength, 250));
 
-        // Вставляем фрейм
-        QTextFrame *frame = cursor.insertFrame(frameFormat);
-        cursor = frame->firstCursorPosition();
+        // // Вставляем фрейм
+        // QTextFrame *frame = cursor.insertFrame(frameFormat);
+        // cursor = frame->firstCursorPosition();
 
-        // Выравниваем текст внутри фрейма влево
-        QTextBlockFormat blockFormat;
-        blockFormat.setAlignment(Qt::AlignLeft);
-        cursor.insertBlock(blockFormat);
+        // // Выравниваем текст внутри фрейма влево
+        // QTextBlockFormat blockFormat;
+        // blockFormat.setAlignment(Qt::AlignLeft);
+        // cursor.insertBlock(blockFormat);
 
-        QTextCharFormat nickFormat;
-        nickFormat.setFontWeight(QFont::Bold);
-        nickFormat.setForeground(Qt::white);
-        cursor.insertText(username + "\n", nickFormat);
+        // QTextCharFormat nickFormat;
+        // nickFormat.setFontWeight(QFont::Bold);
+        // nickFormat.setForeground(Qt::white);
+        // cursor.insertText(username + "\n", nickFormat);
 
-        QTextCharFormat textFormat;
-        textFormat.setForeground(Qt::white);
-        cursor.insertText(chatMessage, textFormat);
+        // QTextCharFormat textFormat;
+        // textFormat.setForeground(Qt::white);
+        // cursor.insertText(chatMessage, textFormat);
 
-        QTextCharFormat timeFormat;
-        timeFormat.setFontItalic(true);
-        timeFormat.setForeground(QColor(180, 180, 180));
-        timeFormat.setFontPointSize(8);
+        // QTextCharFormat timeFormat;
+        // timeFormat.setFontItalic(true);
+        // timeFormat.setForeground(QColor(180, 180, 180));
+        // timeFormat.setFontPointSize(8);
 
-        //вправо
-        QTextBlockFormat timeBlockFormat;
-        timeBlockFormat.setAlignment(Qt::AlignRight);
-        cursor.insertBlock(timeBlockFormat);
-        cursor.insertText(timeString, timeFormat);
+        // //вправо
+        // QTextBlockFormat timeBlockFormat;
+        // timeBlockFormat.setAlignment(Qt::AlignRight);
+        // cursor.insertBlock(timeBlockFormat);
+        // cursor.insertText(timeString, timeFormat);
 
-        // Добавляем перенос после сообщения
-        cursor = chatDisplay->textCursor();
-        cursor.movePosition(QTextCursor::End);
-        cursor.insertText("\n");
-        chatDisplay->setTextCursor(cursor);
+        // // Добавляем перенос после сообщения
+        // cursor = chatDisplay->textCursor();
+        // cursor.movePosition(QTextCursor::End);
+        // cursor.insertText("\n");
+        // chatDisplay->setTextCursor(cursor);
     } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
@@ -776,6 +815,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
     } else if (opType == "insert")
     {
+        QSignalBlocker blocker(ui->codeEditor->document());
         QString senderId = op["client_id"].toString();
         if (m_clientId == senderId) return;
 
@@ -788,6 +828,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
     } else if (opType == "delete")
     {
+        QSignalBlocker blocker(ui->codeEditor->document());
         QString senderId = op["client_id"].toString();
         if (m_clientId == senderId) return;
 
@@ -1311,56 +1352,27 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
 }
 
 // чатик
-void MainWindowCodeEditor::toggleChat() {
-    if (chatWidget->isVisible()) {
-        chatWidget->hide(); // Скрыть чат
-    } else {
-        chatWidget->show(); // Показать чат
-    }
-}
+// void MainWindowCodeEditor::toggleChat() {
+//     if (chatWidget->isVisible()) {
+//         chatWidget->hide(); // Скрыть чат
+//     } else {
+//         chatWidget->show(); // Показать чат
+//     }
+// }
 
 void MainWindowCodeEditor::sendMessage() {
     QString text = chatInput->text().trimmed();
     if (!text.isEmpty()) {
-        QTextCursor cursor = chatDisplay->textCursor();
-        cursor.movePosition(QTextCursor::End);
+        // --- Добавляем сообщение локально с помощью нового метода ---
+        // Используем "You" для отображения своих сообщений
+        addChatMessageWidget("You", text, QTime::currentTime(), true); // true - свое сообщение
 
-        QTextFrameFormat frameFormat;
-        frameFormat.setPadding(8);
-        frameFormat.setMargin(5);
-        //frameFormat.setWidth(QTextLength(QTextLength::PercentageLength, 60)); НЕ УДАЛЯТЬ ИДЕЯ ИНТЕРЕСНАЯ!
-        frameFormat.setWidth(QTextLength(QTextLength::FixedLength, 250));
-        frameFormat.setProperty(QTextFormat::UserProperty, m_username);
-
-        QTextFrame *frame = cursor.insertFrame(frameFormat);
-        cursor = frame->firstCursorPosition();
-
-        QTextCharFormat nickFormat;
-        nickFormat.setFontWeight(QFont::Bold);
-        nickFormat.setForeground(Qt::white);
-        cursor.insertText(m_username + "\n", nickFormat);
-
-        QTextCharFormat textFormat;
-        textFormat.setForeground(Qt::white);
-        cursor.insertText(text, textFormat);
-
-        QTextCharFormat timeFormat;
-        timeFormat.setFontItalic(true);
-        timeFormat.setForeground(QColor(180, 180, 180));
-        timeFormat.setFontPointSize(8);
-        QTextBlockFormat timeBlockFormat;
-        timeBlockFormat.setAlignment(Qt::AlignRight);
-        cursor.insertBlock(timeBlockFormat);
-        cursor.insertText(QTime::currentTime().toString("hh:mm"), timeFormat);
-        chatDisplay->setTextCursor(cursor);
-
-
-        // Подготавливаем JSON для отправки
+        // --- Подготавливаем JSON для отправки (как и раньше) ---
         QJsonObject chatOp;
         chatOp["type"] = "chat_message";
         chatOp["session_id"] = m_sessionId;
         chatOp["client_id"] = m_clientId;
-        chatOp["username"] = m_username;
+        chatOp["username"] = m_username; // Отправляем реальное имя пользователя
         chatOp["text_message"] = text;
         QJsonDocument doc(chatOp);
         QString jsonMessage = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
@@ -1368,28 +1380,112 @@ void MainWindowCodeEditor::sendMessage() {
         if (socket && socket->state() == QAbstractSocket::ConnectedState) {
             socket->sendTextMessage(jsonMessage);
             qDebug() << "Отправлено сообщение в чате: " << jsonMessage;
+        } else {
+            qDebug() << "Ошибка: сокет не подключен, не могу отправить сообщение.";
+            // Можно добавить системное сообщение об ошибке в чат
+            addChatMessageWidget("System", "Error: Not connected to server.", QTime::currentTime(), false);
         }
-        chatInput->clear();
+        chatInput->clear(); // Очищаем поле ввода
     }
 }
-void MainWindowCodeEditor::keyPressEvent(QKeyEvent *event) {
-    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-        sendMessage();
-    }
-}
+
+// void MainWindowCodeEditor::keyPressEvent(QKeyEvent *event) {
+//     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+//         sendMessage();
+//     }
+// }
 
 void MainWindowCodeEditor::on_toolButton_clicked()
 {
     if (!chatWidget) {
-        chatWidget = new QWidget(ui->horizontalWidget_2); // Привязываем к нужному виджету
-
-        if (!ui->horizontalWidget_2->layout()) {
-            ui->horizontalWidget_2->setLayout(new QHBoxLayout()); // Если нет лейаута, добавляем
-        }
-
-        ui->horizontalWidget_2->layout()->addWidget(chatWidget); // Добавляем чат в нужный слой
+        qDebug() << "Ошибка: chatWidget не был создан!";
+        // В идеале, он всегда должен быть создан в конструкторе
+        return;
     }
 
     chatWidget->setVisible(!chatWidget->isVisible()); // Переключаем видимость
+
+    if (chatWidget->isVisible()) {
+        chatInput->setFocus(); // Устанавливаем фокус на поле ввода
+        scrollToBottom();      // Прокручиваем вниз при открытии
+    }
 }
 
+// Слот для прокрутки (вызывается через QTimer::singleShot)
+void MainWindowCodeEditor::scrollToBottom() {
+    if (chatScrollArea) {
+        // Задержка может быть нужна, чтобы layout успел обновиться
+        QTimer::singleShot(50, [this]() { // Небольшая задержка 50 мс
+            if (chatScrollArea) { // Проверка на случай, если виджет удален за время задержки
+                chatScrollArea->verticalScrollBar()->setValue(chatScrollArea->verticalScrollBar()->maximum());
+            }
+        });
+    }
+}
+
+// --- НОВЫЙ МЕТОД для добавления виджета сообщения ---
+void MainWindowCodeEditor::addChatMessageWidget(const QString &username, const QString &text, const QTime &time, bool isOwnMessage)
+{
+    if (!messagesLayout || !chatScrollArea) return;
+
+    QLabel *messageLabel = new QLabel();
+    messageLabel->setWordWrap(true);
+    messageLabel->setTextFormat(Qt::RichText);
+    messageLabel->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    messageLabel->setTextInteractionFlags(Qt::TextBrowserInteraction); // Позволяет выделять текст
+    messageLabel->setOpenExternalLinks(true); // Открывать ссылки, если они есть
+
+    // Экранируем текст + добавляем имя и время
+    QString escapedText = text.toHtmlEscaped(); // Используем Qt::HtmlEscaped для безопасности
+    QString timeString = time.toString("hh:mm");
+
+    // Формируем HTML (имя, текст, время внизу)
+    QString messageContent = QString("<b>%1</b><br>%2<br><small><font color='#AAAAAA'>%3</font></small>")
+                                 .arg(username, escapedText, timeString);
+    messageLabel->setText(messageContent);
+
+
+    // Стиль бабла (можно улучшить для поддержки тем)
+    QString bgColor = isOwnMessage ? "rgb(80, 0, 80)" : "rgb(60, 60, 60)"; // Фиолетовый или серый
+    QString textColor = "white"; // TODO: Адаптировать под тему
+
+    QString bubbleStyleSheet = QString(
+                                   "QLabel {"
+                                   "    background-color: %1;"
+                                   "    color: %2;"
+                                   "    border-radius: 15px;"
+                                   "    padding: 8px 12px;"
+                                   "}"
+                                   ).arg(bgColor, textColor);
+    messageLabel->setStyleSheet(bubbleStyleSheet);
+
+
+    // Максимальная ширина бабла
+    qreal availableWidth = chatScrollArea->viewport()->width() - 2 * HORIZONTAL_MARGIN;
+    if (availableWidth < 100) availableWidth = 100;
+    qreal maxLabelWidth = availableWidth * (MESSAGE_WIDTH_PERCENT / 100.0);
+    messageLabel->setMaximumWidth(static_cast<int>(maxLabelWidth));
+
+
+    // Компоновка строки
+    QWidget *rowWidget = new QWidget();
+    QHBoxLayout *rowLayout = new QHBoxLayout(rowWidget);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setSpacing(6);
+
+    if (isOwnMessage) {
+        rowLayout->addStretch(1);        // -> Растяжитель слева
+        rowLayout->addWidget(messageLabel); // Бабл справа
+    } else {
+        rowLayout->addWidget(messageLabel); // Бабл слева
+        rowLayout->addStretch(1);        // <- Растяжитель справа
+    }
+
+    // Вставляем строку ПЕРЕД последним растяжителем
+    int insertIndex = messagesLayout->count() - 1;
+    if (insertIndex < 0) insertIndex = 0;
+    messagesLayout->insertWidget(insertIndex, rowWidget);
+
+    // Планируем прокрутку в самый низ
+    scrollToBottom(); // Вызываем метод, который использует QTimer::singleShot
+}
