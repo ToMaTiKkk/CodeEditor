@@ -426,8 +426,6 @@ void MainWindowCodeEditor::onSaveSessionClicked() {
 
 void MainWindowCodeEditor::onOpenFileClicked()
 {
-    if (m_mutedClients.contains(m_clientId)) return;
-
     QString fileName = QFileDialog::getOpenFileName(this, "Open File"); // открытие диалогового окна для выбора файла
     if (!fileName.isEmpty()) {
         QFile file(fileName); // при непустом файле создается объект для работы с файлом
@@ -1008,7 +1006,7 @@ void MainWindowCodeEditor::updateLineHighlight(const QString& senderId, int posi
         0, // х относительно viewport`а
         cursorRect.top(), // y - верхняя граница cursorRect
         /*ui->codeEditor->viewport()->width(),*/
-        1000000,
+        10000,
         cursorRect.height()
         );
     // устанавливаем видимость в зависимости от статуса мьюта
@@ -1367,8 +1365,14 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
         isAdmin = user["is_admin"].toBool();
     }
     bool isMuted = m_mutedClients.contains(clientId) && m_mutedClients.value(clientId, 0) != 0;
-    if (isMuted) {    
-        status = tr("Заглушен бессрочно");
+    if (isMuted) {
+        if (m_muteEndTimes.contains(clientId)) {
+            // если клиент замьючен, и есть информация о времени мьюта
+            qint64 muteEndTime = m_muteEndTimes.value(clientId);
+                status = formatMuteTime(clientId);
+        } else {
+            status = tr("Заглушен бессрочно");
+        }
     } else {
         // если клиент не замьючен
         if (clientId == m_clientId) {
