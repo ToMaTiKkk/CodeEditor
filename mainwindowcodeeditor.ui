@@ -172,7 +172,7 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>180</width>
+         <width>235</width>
          <height>150</height>
         </size>
        </property>
@@ -203,7 +203,7 @@
      <x>0</x>
      <y>0</y>
      <width>903</width>
-     <height>26</height>
+     <height>23</height>
     </rect>
    </property>
    <property name="defaultUp">

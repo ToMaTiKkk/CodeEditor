@@ -30,6 +30,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QLineEdit>
+#include <QFontMetrics>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {

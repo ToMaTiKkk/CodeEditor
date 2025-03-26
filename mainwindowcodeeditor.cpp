@@ -1417,64 +1417,73 @@ void MainWindowCodeEditor::addChatMessageWidget(const QString &username, const Q
 {
     if (!messagesLayout || !chatScrollArea) return;
 
+    auto formatMessageText = [](const QString& text, int maxWidth) -> QString {
+        QFontMetrics fm(QApplication::font());
+        QString result;
+        QString currentLine;
+
+        for (const QChar& c : text) {
+            QString testLine = currentLine + c;
+            if (fm.horizontalAdvance(testLine) <= maxWidth) {
+                currentLine = testLine;
+            } else {
+                if (!currentLine.isEmpty()) {
+                    if (!currentLine.endsWith(' ')) {
+                        currentLine += '-';
+                    }
+                    result += currentLine + '\n';
+                }
+                currentLine = c;
+            }
+        }
+        result += currentLine;
+        return result.replace('\n', "<br>").replace(" ", "&nbsp;");
+    };
+
     QLabel *messageLabel = new QLabel();
+    messageLabel->setProperty("messageType", isOwnMessage ? "own" : "other");
+    messageLabel->setObjectName("chatMessageLabel");
+
     messageLabel->setWordWrap(true);
     messageLabel->setTextFormat(Qt::RichText);
-    messageLabel->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
-    messageLabel->setTextInteractionFlags(Qt::TextBrowserInteraction); // Позволяет выделять текст
-    messageLabel->setOpenExternalLinks(true); // Открывать ссылки, если они есть
+    messageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    messageLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    messageLabel->setOpenExternalLinks(true);
 
-    // Экранируем текст + добавляем имя и время
-    QString escapedText = text.toHtmlEscaped(); // Используем Qt::HtmlEscaped для безопасности
-    QString timeString = time.toString("hh:mm");
+    const int HORIZONTAL_MARGIN = 10;
+    const int MESSAGE_WIDTH_PERCENT = 80;
+    int availableWidth = chatScrollArea->viewport()->width() - 2 * HORIZONTAL_MARGIN;
+    int maxLabelWidth = qMax(50, static_cast<int>(availableWidth * (MESSAGE_WIDTH_PERCENT / 100.0)));
 
-    // Формируем HTML (имя, текст, время внизу)
-    QString messageContent = QString("<b>%1</b><br>%2<br><small><font color='#AAAAAA'>%3</font></small>")
-                                 .arg(username, escapedText, timeString);
-    messageLabel->setText(messageContent);
+    QString formattedText = formatMessageText(text.toHtmlEscaped(), maxLabelWidth - 24);
 
+    // Исправленный HTML - убрали CSS переменную
+    QString messageHtml = QString(
+                              "<div style='word-break: break-word; white-space: pre-wrap;'>"
+                              "<b>%1</b><br>%2<br>"
+                              "<small style='color: #AAAAAA;'><i>%3</i></small>"
+                              "</div>"
+                              ).arg(username, formattedText, time.toString("hh:mm"));
 
-    // Стиль бабла (можно улучшить для поддержки тем)
-    QString bgColor = isOwnMessage ? "rgb(80, 0, 80)" : "rgb(60, 60, 60)"; // Фиолетовый или серый
-    QString textColor = "white"; // TODO: Адаптировать под тему
+    messageLabel->setText(messageHtml);
+    messageLabel->setMaximumWidth(maxLabelWidth);
 
-    QString bubbleStyleSheet = QString(
-                                   "QLabel {"
-                                   "    background-color: %1;"
-                                   "    color: %2;"
-                                   "    border-radius: 15px;"
-                                   "    padding: 8px 12px;"
-                                   "}"
-                                   ).arg(bgColor, textColor);
-    messageLabel->setStyleSheet(bubbleStyleSheet);
-
-
-    // Максимальная ширина бабла
-    qreal availableWidth = chatScrollArea->viewport()->width() - 2 * HORIZONTAL_MARGIN;
-    if (availableWidth < 100) availableWidth = 100;
-    qreal maxLabelWidth = availableWidth * (MESSAGE_WIDTH_PERCENT / 100.0);
-    messageLabel->setMaximumWidth(static_cast<int>(maxLabelWidth));
-
-
-    // Компоновка строки
     QWidget *rowWidget = new QWidget();
+    rowWidget->setObjectName("messageRowWidget");
     QHBoxLayout *rowLayout = new QHBoxLayout(rowWidget);
-    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setContentsMargins(HORIZONTAL_MARGIN, 2, HORIZONTAL_MARGIN, 2);
     rowLayout->setSpacing(6);
 
     if (isOwnMessage) {
-        rowLayout->addStretch(1);        // -> Растяжитель слева
-        rowLayout->addWidget(messageLabel); // Бабл справа
+        rowLayout->addStretch(1);
+        rowLayout->addWidget(messageLabel);
+        rowWidget->setProperty("messageAlignment", "right");
     } else {
-        rowLayout->addWidget(messageLabel); // Бабл слева
-        rowLayout->addStretch(1);        // <- Растяжитель справа
+        rowLayout->addWidget(messageLabel);
+        rowWidget->setProperty("messageAlignment", "left");
+        rowLayout->addStretch(1);
     }
 
-    // Вставляем строку ПЕРЕД последним растяжителем
-    int insertIndex = messagesLayout->count() - 1;
-    if (insertIndex < 0) insertIndex = 0;
-    messagesLayout->insertWidget(insertIndex, rowWidget);
-
-    // Планируем прокрутку в самый низ
-    scrollToBottom(); // Вызываем метод, который использует QTimer::singleShot
+    messagesLayout->insertWidget(qMax(0, messagesLayout->count() - 1), rowWidget);
+    scrollToBottom();
 }

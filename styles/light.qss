@@ -213,7 +213,7 @@ QTextEdit#chatDisplay {
     font-family: "Segoe UI", Arial;
     font-size: 14px;
     padding: 8px;
-    selection-background-color: #90cdf4;
+    selection-background-color: rgb(91, 163, 235);
 }
 
 /* Поле ввода сообщения */
@@ -246,5 +246,34 @@ QPushButton#sendButton:hover {
 
 QPushButton#sendButton:pressed {
     background-color: #004085;
+}
+/* Основные стили сообщений */
+#chatMessageLabel {
+    color: white;
+    border-radius: 15px;
+    padding: 12px;
+    margin: 2px;
+}
+
+/* Стили для своих сообщений */
+#chatMessageLabel[messageType="own"] {
+    background-color: #007bff;
+    /* Дополнительные стили */
+}
+
+/* Стили для чужих сообщений */
+#chatMessageLabel[messageType="other"] {
+    background-color: rgb(128, 128, 128);
+    /* Дополнительные стили */
+}
+
+/* Стили для времени сообщения */
+#chatMessageLabel small {
+    color: rgb(255,255,255);
+}
+
+/* Строка с сообщением */
+#messageRowWidget {
+    background: transparent;
 }
 
