@@ -288,7 +288,7 @@ void MainWindowCodeEditor::connectToServer()
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 
-    socket->open(QUrl("ws://YOUR_WEBSOCKET_HOST:YOUR_WEBSOCKET_PORT"));
+    socket->open(QUrl("ws://localhost:8080"));
 }
 
 void MainWindowCodeEditor::disconnectFromServer()
@@ -351,10 +351,6 @@ void MainWindowCodeEditor::onCreateSession()
     m_sessionPassword = password;
     m_sessionId = "NEW";
     connectToServer();
-    ui->actionShowListUsers->setVisible(true);
-    ui->actionLeaveSession->setVisible(true);
-    ui->actionSaveSession->setVisible(true);
-    ui->actionCopyId->setVisible(true);
 }
 void MainWindowCodeEditor::onJoinSession()
 {
@@ -385,8 +381,6 @@ void MainWindowCodeEditor::onJoinSession()
     m_sessionPassword = password; // Сохраняем пароль
     m_sessionId = sessionId;
     connectToServer();
-    ui->actionShowListUsers->setVisible(true);
-    ui->actionLeaveSession->setVisible(true);
 }
 
 void MainWindowCodeEditor::onLeaveSession()
@@ -449,6 +443,7 @@ void MainWindowCodeEditor::onOpenFileClicked()
             {
                 QSignalBlocker blocker(ui->codeEditor->document());
                 loadingFile = true;
+                if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
                 ui->codeEditor->setPlainText(fileContent); // установка текста локально
                 loadingFile = false;
             }
@@ -458,6 +453,8 @@ void MainWindowCodeEditor::onOpenFileClicked()
             QJsonObject fileUpdate;
             fileUpdate["type"] = "file_content_update";
             fileUpdate["text"] = fileContent;
+            fileUpdate["client_id"] = m_clientId;
+            fileUpdate["username"] = m_username;
             QJsonDocument doc(fileUpdate);
             QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
             if (socket && socket->state() == QAbstractSocket::ConnectedState)
@@ -513,9 +510,21 @@ void MainWindowCodeEditor::onExitClicked()
 
 void MainWindowCodeEditor::onNewFileClicked()
 {
+    if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
     // очищения поля редактирование и очищение пути к текущему файлу
     ui->codeEditor->clear();
     currentFilePath.clear();
+    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+        QJsonObject fileUpdate;
+        fileUpdate["type"] = "file_content_update";
+        fileUpdate["text"] = "";
+        fileUpdate["client_id"] = m_clientId;
+        fileUpdate["username"] = m_username;
+        QJsonDocument doc(fileUpdate);
+        QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        socket->sendTextMessage(message);
+        qDebug() << "Отправлено сообщении о создании нового файла (очистке)";
+    }
 }
 
 void MainWindowCodeEditor::onCopyIdClicked()
@@ -567,6 +576,7 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
             {
                 QSignalBlocker blocker(ui->codeEditor->document());
                 loadingFile = true;
+                if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
                 ui->codeEditor->setPlainText(fileContent); // установка текста локально
                 loadingFile = false;
             }
@@ -576,6 +586,8 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
             QJsonObject fileUpdate;
             fileUpdate["type"] = "file_content_update";
             fileUpdate["text"] = fileContent;
+            fileUpdate["client_id"] = m_clientId;
+            fileUpdate["username"] = m_username;
             QJsonDocument doc(fileUpdate);
             QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
             if (socket && socket->state() == QAbstractSocket::ConnectedState)
@@ -650,6 +662,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             onCreateSession(); // Повторный вызов диалога создания сессии
         }
         return;
+
     } else if (opType == "session_info")
     {
         m_sessionId = op["session_id"].toString();
@@ -684,6 +697,9 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         }
         updateUserListUI();
         highlighter->rehighlight();
+
+        ui->actionSaveSession->setVisible(m_isAdmin);
+        ui->actionCopyId->setVisible(true);
         ui->actionShowListUsers->setVisible(true);
         ui->actionLeaveSession->setVisible(true);
 
@@ -738,6 +754,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString username = op["username"].toString();
         QString chatMessage = op["text_message"].toString();
         addChatMessageWidget(username, chatMessage, QTime::currentTime(), false); // false - не свое сообщение
+
     } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
@@ -829,9 +846,9 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         cursor.removeSelectedText();
         qDebug() << "Применена операция удаления";
     } else if (opType == "session_saved") {
-    int days = op["days"].toInt();
-    QMessageBox::information(this, "Успех",
-                             QString("Сессия сохранена на %1 дней").arg(days));
+        int days = op["days"].toInt();
+        QMessageBox::information(this, "Успех",
+                                 QString("Сессия сохранена на %1 дней").arg(days));
     }
 }
 
@@ -989,7 +1006,7 @@ void MainWindowCodeEditor::updateLineHighlight(const QString& senderId, int posi
         0, // х относительно viewport`а
         cursorRect.top(), // y - верхняя граница cursorRect
         /*ui->codeEditor->viewport()->width(),*/
-        1000000,
+        10000,
         cursorRect.height()
         );
     // устанавливаем видимость в зависимости от статуса мьюта
@@ -1204,8 +1221,8 @@ void MainWindowCodeEditor::onMuteUnmute(const QString targetClientId)
                 socket->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
                 qDebug() << "Отправлен запрос на мут:" << targetClientId << ", " << duration;
                 qint64 endTime = (duration == 0) ? -1 : QDateTime::currentDateTime().toSecsSinceEpoch() + duration;
-            m_muteEndTimes[targetClientId] = endTime;
-            onMutedStatusUpdate(targetClientId, true); // Обновляем статус сразу
+                m_muteEndTimes[targetClientId] = endTime;
+                onMutedStatusUpdate(targetClientId, true); // Обновляем статус сразу
             }
         }
     }
@@ -1246,8 +1263,19 @@ QString MainWindowCodeEditor::formatMuteTime(const QString& clientId)
 void MainWindowCodeEditor::onAdminChanged(const QString &newAdminId)
 {
     m_isAdmin = (newAdminId == m_clientId);
-    updateUserListUI();
+    ui->actionSaveSession->setVisible(m_isAdmin); // обновляем видимость кнопки
+    updateUserListUI(); // добавляет или убирает приписку с админом в списоке пользователей
     qDebug() << "Admin status changed. Is admin: " << m_isAdmin;
+
+    if (m_isAdmin) {
+        statusBar()->showMessage(tr("Вы теперь администратор сессии"), 3000);
+    } else {
+        QString newAdminUsername = tr("Другой пользователь");
+        if (remoteUsers.contains(newAdminId)) {
+            newAdminUsername = remoteUsers[newAdminId].value("username").toString();
+        }
+        statusBar()->showMessage(tr("Администратором сессии стал %1").arg(newAdminUsername), 3000);
+    }
 }
 
 void MainWindowCodeEditor::onTransferAdmin(const QString targetClientId)
@@ -1337,8 +1365,14 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
         isAdmin = user["is_admin"].toBool();
     }
     bool isMuted = m_mutedClients.contains(clientId) && m_mutedClients.value(clientId, 0) != 0;
-    if (isMuted) {    
-        status = tr("Заглушен бессрочно");
+    if (isMuted) {
+        if (m_muteEndTimes.contains(clientId)) {
+            // если клиент замьючен, и есть информация о времени мьюта
+            qint64 muteEndTime = m_muteEndTimes.value(clientId);
+                status = formatMuteTime(clientId);
+        } else {
+            status = tr("Заглушен бессрочно");
+        }
     } else {
         // если клиент не замьючен
         if (clientId == m_clientId) {
