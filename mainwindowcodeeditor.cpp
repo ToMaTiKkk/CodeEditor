@@ -2,7 +2,6 @@
 #include "./ui_mainwindowcodeeditor.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
-//#include "roundedtextedit.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -38,15 +37,15 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , ui(new Ui::MainWindowCodeEditor)
     , m_isDarkTheme(true)
     , chatWidget(nullptr)
-    , chatScrollArea(nullptr) // <-- Инициализация новых указателей
+    , chatScrollArea(nullptr)
     , messageListWidget(nullptr)
     , messagesLayout(nullptr)
-    , chatInput(nullptr) // <-- Инициализация
+    , chatInput(nullptr)
     , m_userInfoMessageBox(nullptr)
     , m_muteTimer(new QTimer(this))
 {
     ui->setupUi(this);
-    this->setWindowTitle("CoEdit");
+    this->setWindowTitle("CodeEdit");
     QFont font("Fira Code", 12);
     QApplication::setFont(font);
 
@@ -219,6 +218,7 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
 bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
 {
+    // проверяем, что событие относится к viewport редактора и является событие измнения размера
     if (obj == ui->codeEditor->viewport() && event->type() == QEvent::Resize) {
         for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
             QString senderId = it.key();
@@ -738,52 +738,6 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString username = op["username"].toString();
         QString chatMessage = op["text_message"].toString();
         addChatMessageWidget(username, chatMessage, QTime::currentTime(), false); // false - не свое сообщение
-        // Получаем текущее время
-        // QTime currentTime = QTime::currentTime();
-        // QString timeString = currentTime.toString("hh:mm");
-        // QTextCursor cursor = chatDisplay->textCursor();
-        // cursor.movePosition(QTextCursor::End);
-
-        // // Формат фрейма для входящих сообщений (слева)
-        // QTextFrameFormat frameFormat;
-        // frameFormat.setPadding(5);
-        // frameFormat.setMargin(5);
-        // frameFormat.setWidth(QTextLength(QTextLength::FixedLength, 250));
-
-        // // Вставляем фрейм
-        // QTextFrame *frame = cursor.insertFrame(frameFormat);
-        // cursor = frame->firstCursorPosition();
-
-        // // Выравниваем текст внутри фрейма влево
-        // QTextBlockFormat blockFormat;
-        // blockFormat.setAlignment(Qt::AlignLeft);
-        // cursor.insertBlock(blockFormat);
-
-        // QTextCharFormat nickFormat;
-        // nickFormat.setFontWeight(QFont::Bold);
-        // nickFormat.setForeground(Qt::white);
-        // cursor.insertText(username + "\n", nickFormat);
-
-        // QTextCharFormat textFormat;
-        // textFormat.setForeground(Qt::white);
-        // cursor.insertText(chatMessage, textFormat);
-
-        // QTextCharFormat timeFormat;
-        // timeFormat.setFontItalic(true);
-        // timeFormat.setForeground(QColor(180, 180, 180));
-        // timeFormat.setFontPointSize(8);
-
-        // //вправо
-        // QTextBlockFormat timeBlockFormat;
-        // timeBlockFormat.setAlignment(Qt::AlignRight);
-        // cursor.insertBlock(timeBlockFormat);
-        // cursor.insertText(timeString, timeFormat);
-
-        // // Добавляем перенос после сообщения
-        // cursor = chatDisplay->textCursor();
-        // cursor.movePosition(QTextCursor::End);
-        // cursor.insertText("\n");
-        // chatDisplay->setTextCursor(cursor);
     } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
@@ -842,17 +796,6 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
                 m_muteEndTimes[mutedClientId] = muteEndTimeValue.toVariant().toLongLong();
             }
         }
-        // if (mutedClientStatus) {
-        //     CursorWidget* cursorWidget = remoteCursors[mutedClientId];
-        //     cursorWidget->setVisible(false);
-        //     LineHighlightWidget* lineHighlighter = remoteLineHighlights[mutedClientId];
-        //     lineHighlighter->setVisible(false);
-        // } else {
-        //     CursorWidget* cursorWidget = remoteCursors[mutedClientId];
-        //     cursorWidget->setVisible(true);
-        //     LineHighlightWidget* lineHighlighter = remoteLineHighlights[mutedClientId];
-        //     lineHighlighter->setVisible(true);
-        // }
         onMutedStatusUpdate(mutedClientId, mutedClientStatus);
 
     } else if (opType == "admin_changed") {
@@ -985,7 +928,7 @@ void MainWindowCodeEditor::updateUserListUser(const QString& clientId)
     QAction* userAction = nullptr;
     for (QAction* action : m_userListMenu->actions()) {
         if (action->data().toString() == clientId) {
-            userAction - action;
+            userAction = action;
             return;
         }
     }
@@ -1045,10 +988,13 @@ void MainWindowCodeEditor::updateLineHighlight(const QString& senderId, int posi
     lineHighlight->setGeometry(
         0, // х относительно viewport`а
         cursorRect.top(), // y - верхняя граница cursorRect
-        ui->codeEditor->viewport()->width(),
+        /*ui->codeEditor->viewport()->width(),*/
+        1000000,
         cursorRect.height()
         );
-    lineHighlight->setVisible(true);
+    // устанавливаем видимость в зависимости от статуса мьюта
+    bool isMuted = m_mutedClients.contains(senderId) && m_mutedClients.value(senderId, 0) != 0;
+    lineHighlight->setVisible(!isMuted);
 }
 
 // обновлении позиции подсветки при прокрутке
@@ -1140,8 +1086,15 @@ void MainWindowCodeEditor::onMutedStatusUpdate(const QString &clientId, bool isM
         m_mutedClients[clientId] = 1;
     } else {
         m_mutedClients.remove(clientId);
+        m_muteEndTimes.remove(clientId);
     }
 
+    if (clientId != m_clientId) {
+        LineHighlightWidget* lineHighlight = remoteLineHighlights.value(clientId, nullptr);
+        if (lineHighlight) {
+            lineHighlight->setVisible(!isMuted); // Показываем, если НЕ замьючен
+        }
+    }
     if (clientId == m_clientId) {
         updateMutedStatus(); // обновляем статус, когда мьют накладывается на самого пользователя
     }
@@ -1402,15 +1355,6 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
     m_userInfoMessageBox->setText(message); // Обновляем текст в окне
 }
 
-// чатик
-// void MainWindowCodeEditor::toggleChat() {
-//     if (chatWidget->isVisible()) {
-//         chatWidget->hide(); // Скрыть чат
-//     } else {
-//         chatWidget->show(); // Показать чат
-//     }
-// }
-
 void MainWindowCodeEditor::sendMessage() {
     QString text = chatInput->text().trimmed();
     if (!text.isEmpty()) {
@@ -1439,12 +1383,6 @@ void MainWindowCodeEditor::sendMessage() {
         chatInput->clear(); // Очищаем поле ввода
     }
 }
-
-// void MainWindowCodeEditor::keyPressEvent(QKeyEvent *event) {
-//     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-//         sendMessage();
-//     }
-// }
 
 void MainWindowCodeEditor::on_toolButton_clicked()
 {
