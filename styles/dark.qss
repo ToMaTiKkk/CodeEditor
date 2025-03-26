@@ -161,3 +161,49 @@ QCheckBox::indicator:checked:disabled {
 QCheckBox::indicator:unchecked:disabled {
      background-color: #555;
 }
+QWidget#messageListWidget {
+    background-color: rgb(34,33,40);
+    border: 1px;
+    border-radius: 1px;
+    color: #212529;
+    font-family: "Segoe UI", Arial;
+    font-size: 14px;
+    padding: 8px;
+    selection-background-color: #90cdf4;
+}
+
+
+/* Основные стили сообщений */
+#chatMessageLabel {
+    color: white;
+    border-radius: 15px;
+    padding: 12px;
+    margin: 2px;
+}
+
+/* Стили для своих сообщений */
+#chatMessageLabel[messageType="own"] {
+    background-color: rgb(80, 0, 80);
+    /* Дополнительные стили */
+}
+
+/* Стили для чужих сообщений */
+#chatMessageLabel[messageType="other"] {
+    background-color: rgb(60, 60, 60);
+    /* Дополнительные стили */
+}
+
+/* Стили для времени сообщения */
+#chatMessageLabel small {
+    color: rgb(255,255,255);
+}
+
+/* Строка с сообщением */
+#messageRowWidget {
+    background: transparent;
+}
+
+/* Переменные для кастомизации */
+:root {
+    --message-time-color: rgb(255,255,255);
+}
