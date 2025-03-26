@@ -89,7 +89,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     chatInput = new QLineEdit(chatWidget);
     chatInput->setObjectName("chatInput");
-    chatInput->setPlaceholderText("Enter message...");
+    chatInput->setPlaceholderText("Введите сообщение...");
     inputLayout->addWidget(chatInput, 1);
 
     QPushButton *sendButton = new QPushButton("Send", chatWidget);
@@ -149,7 +149,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     applyCurrentTheme(); // применение темы, по умолчанию темная
 
     bool ok;
-    m_username = QInputDialog::getText(this, tr("Enter Username"), tr("Username:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
+    m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
     if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
         m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
     }
@@ -302,7 +302,7 @@ void MainWindowCodeEditor::disconnectFromServer()
 bool MainWindowCodeEditor::confirmChangeSession(const QString &message)
 {
     QMessageBox msgBoxConfirm(this);
-    msgBoxConfirm.setWindowTitle("Confirm");
+    msgBoxConfirm.setWindowTitle("Подтверждение");
     msgBoxConfirm.setText(message);
     msgBoxConfirm.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
     msgBoxConfirm.setDefaultButton(QMessageBox::No); // кнопки "Нет" по умолчанию
@@ -426,7 +426,7 @@ void MainWindowCodeEditor::onSaveSessionClicked() {
 
 void MainWindowCodeEditor::onOpenFileClicked()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, "Open File"); // открытие диалогового окна для выбора файла
+    QString fileName = QFileDialog::getOpenFileName(this, "Открытить файл"); // открытие диалогового окна для выбора файла
     if (!fileName.isEmpty()) {
         QFile file(fileName); // при непустом файле создается объект для работы с файлом
         if (file.open(QFile::ReadOnly | QFile::Text)) { // открытие файла для чтения в текстовом режиме
@@ -463,7 +463,7 @@ void MainWindowCodeEditor::onOpenFileClicked()
                 qDebug() << "Отправлено сообщение о загрузку файла на сервер";
             }
         } else {
-            QMessageBox::critical(this, "Error", "Could not open file");
+            QMessageBox::critical(this, "ОШИБКА", "Невозможно открыть файл");
         }
     }
 }
@@ -483,13 +483,13 @@ void MainWindowCodeEditor::onSaveFileClicked()
         out << ui->codeEditor->toPlainText();
         file.close();
     } else {
-        QMessageBox::critical(this, "Error", "Could not save file");
+        QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
     }
 }
 
 void MainWindowCodeEditor::onSaveAsFileClicked()
 {
-    QString fileName = QFileDialog::getSaveFileName(this, "Save As"); // открытие диалогового окна для сохранения файла под другим именем
+    QString fileName = QFileDialog::getSaveFileName(this, "Сохранить как"); // открытие диалогового окна для сохранения файла под другим именем
     if (!fileName.isEmpty()) {
         QFile file(fileName);
         if (file.open(QFile::WriteOnly | QFile::Text)) {
@@ -499,7 +499,7 @@ void MainWindowCodeEditor::onSaveAsFileClicked()
             currentFilePath = fileName;
         }
     } else {
-        QMessageBox::critical(this, "Error", "Could not save file");
+        QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
     }
 }
 
@@ -543,7 +543,7 @@ void MainWindowCodeEditor::onCopyIdClicked()
 
 void MainWindowCodeEditor::onOpenFolderClicked()
 {
-    QString folderPath = QFileDialog::getExistingDirectory(this, "Open Folder"); // диалоговое окно для выбора папки
+    QString folderPath = QFileDialog::getExistingDirectory(this, "Открыть папку"); // диалоговое окно для выбора папки
     if (!folderPath.isEmpty()) {
         QDir dir(folderPath);
         // проверка существует ли папка
@@ -595,9 +595,9 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
                 socket->sendTextMessage(message);
                 qDebug() << "Отправлено сообщение о загрузку файла на сервер";
             }
-            statusBar()->showMessage("Opened file: " + filePath);
+            statusBar()->showMessage("Открыт файл: " + filePath);
         } else {
-            QMessageBox::critical(this, "Error", "Could not open file: " + filePath);
+            QMessageBox::critical(this, "ОШИБКА", "Невозможно открыть файл: " + filePath);
         }
     }
 }
@@ -809,6 +809,9 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             QJsonValue muteEndTimeValue = op["mute_end_time"];
             if (muteEndTimeValue.isNull()) {
                 m_muteEndTimes.remove(mutedClientId);
+                if (m_clientId == mutedClientId) {
+                    QMessageBox::information(this, tr("Размьют"), tr("Вы разблокированы, можете редактировать текст!"));
+                }
             } else {
                 m_muteEndTimes[mutedClientId] = muteEndTimeValue.toVariant().toLongLong();
             }
@@ -900,10 +903,10 @@ void MainWindowCodeEditor::updateUserListUI()
         // создаем QAction
         QString actionText = username;
         if (isAdmin) {
-            actionText += " (Admin)";
+            actionText += " (Админ)";
         }
         if (isMuted) {
-            actionText += tr(" (Muted)");
+            actionText += tr(" (Мьют)");
         }
         QAction *userAction = new QAction(icon, actionText, this); // иконка + текст
         userAction->setData(clientId);
@@ -911,9 +914,9 @@ void MainWindowCodeEditor::updateUserListUI()
         // создаем меню списка пользователей для каждого пользователя
         QMenu* userContextMenu = new QMenu(this);
         if (m_isAdmin) {
-            QAction *muteUnmuteAction = new QAction(isMuted ? tr("Unmute") : tr("Mute"), this);
-            QAction *transferAdminAction = new QAction("Transfer Admin Rights", this);
-            QAction *userInfoAction = new QAction("Information", this);
+            QAction *muteUnmuteAction = new QAction(isMuted ? tr("Размьют") : tr("Мьют"), this);
+            QAction *transferAdminAction = new QAction("Передать права админа", this);
+            QAction *userInfoAction = new QAction("Информация", this);
             userContextMenu->addAction(muteUnmuteAction);
             userContextMenu->addAction(transferAdminAction);
             userContextMenu->addAction(userInfoAction);
@@ -928,7 +931,7 @@ void MainWindowCodeEditor::updateUserListUI()
             connect(transferAdminAction, &QAction::triggered, this, [this, clientId]() { onTransferAdmin(clientId); });
             connect(userInfoAction, &QAction::triggered, this, [this, clientId]() { showUserInfo(clientId); });
         } else {
-            QAction *userInfoAction = new QAction(tr("Information"), this);
+            QAction *userInfoAction = new QAction(tr("Информация"), this);
             userContextMenu->addAction(userInfoAction);
             connect(userInfoAction, &QAction::triggered, this, [this, clientId]() { showUserInfo(clientId); });
         }
@@ -971,10 +974,10 @@ void MainWindowCodeEditor::updateUserListUser(const QString& clientId)
     // создаем QAction
     QString actionText = username;
     if (isAdmin) {
-        actionText += " (Admin)";
+        actionText += " (Админ)";
     }
     if (isMuted) {
-        actionText += tr(" (Muted)");
+        actionText += tr(" (Мьют)");
     }
     userAction->setIcon(icon);
     userAction->setText(actionText); // устанавливаем иконку + обновленный текст
@@ -1099,6 +1102,7 @@ void MainWindowCodeEditor::updateMutedStatus()
 
 void MainWindowCodeEditor::onMutedStatusUpdate(const QString &clientId, bool isMuted)
 {
+    //bool wasMuted = m_mutedClients.contains(clientId) && m_mutedClients.value(clientId, 0) != 0;
     if (isMuted) {
         m_mutedClients[clientId] = 1;
     } else {
@@ -1114,6 +1118,12 @@ void MainWindowCodeEditor::onMutedStatusUpdate(const QString &clientId, bool isM
     }
     if (clientId == m_clientId) {
         updateMutedStatus(); // обновляем статус, когда мьют накладывается на самого пользователя
+        // if (wasMuted != isMuted) {
+        //     // QMessageBox *msgBox = new QMessageBox(this);
+        //     // msgBox->information(this, tr("Размьют"), "Вы разблокированы, можете редактировать текст!");
+        //     // msgBox->show();
+        //     QMessageBox::information(this, tr("Размьют"), tr("Вы разблокированы, можете редактировать текст!"));
+        // }
     }
     updateUserListUI(); // обновляем статус пользователя в списке
 }
@@ -1132,7 +1142,7 @@ void MainWindowCodeEditor::updateMuteTimeDisplay(const QString& clientId)
     // если строка равна "", то значит мьюта нет
     QString muteTimeStr = formatMuteTime(clientId);
 
-    int startIndex = currentText.indexOf("<b>Status:</b>");
+    int startIndex = currentText.indexOf("<b>Статус:</b>");
     if (startIndex != -1) { // если строка найдена, то заменяем
         int endIndex = currentText.indexOf("<br>", startIndex);
         if (endIndex != -1) {
@@ -1150,7 +1160,7 @@ void MainWindowCodeEditor::updateMuteTimeDisplay(const QString& clientId)
             statusText = muteTimeStr; // Осталось: ...
         }
 
-        currentText.replace(startIndex, endIndex - startIndex, "<b>Status:</b> " + statusText);
+        currentText.replace(startIndex, endIndex - startIndex, "<b>Статусs:</b> " + statusText);
         if (msgBox) {
             msgBox->setText(currentText); // устанавливаем обновленный текст или оригинальный, если нет мьюта
             qDebug() << currentText;
@@ -1170,7 +1180,7 @@ void MainWindowCodeEditor::updateStatusBarMuteTime()
         qint64 muteEndTime = m_muteEndTimes.value(m_clientId);
         if (muteEndTime != -1 && QDateTime::currentDateTime().toSecsSinceEpoch() > muteEndTime) {
             onMutedStatusUpdate(m_clientId, false);
-            QMessageBox::information(this, tr("Размьют"), "Вы разблокированы, можете писать в чат");
+            QMessageBox::information(this, tr("Размьют"), "Вы разблокированы, можете редактировать текст");
         }
     }
 
@@ -1208,7 +1218,7 @@ void MainWindowCodeEditor::onMuteUnmute(const QString targetClientId)
 
     } else {
         bool ok;
-        int duration = QInputDialog::getInt(this, tr("Mute User"), tr("Enter mute duration (seconds), 0 - permanently:"), 0, 0, 2147483647, 1, &ok);
+        int duration = QInputDialog::getInt(this, tr("Мьюь пользователя"), tr("Выберите длительность мьюта (секунды), 0 - бессрочный:"), 0, 0, 2147483647, 1, &ok);
         if (ok) {
             QJsonObject muteMessage;
             muteMessage["type"] = "mute_client";
@@ -1341,8 +1351,8 @@ void MainWindowCodeEditor::showUserInfo(const QString targetClientId)
             updateTimer->deleteLater();
         });
     }
-    m_userInfoMessageBox->setWindowTitle("User Info");
-    QString message = QString("<b>Username:</b> %1<br><b>Client ID:</b> %2<br><b>Status:</b> %3<br><b>Admin:</b> %4")
+    m_userInfoMessageBox->setWindowTitle("Инфо о пользователе");
+    QString message = QString("<b>Никнейм:</b> %1<br><b>Client ID:</b> %2<br><b>Статус:</b> %3<br><b>Админ:</b> %4")
                           .arg(username).arg(targetClientId).arg(status).arg(adminStatus);
     m_userInfoMessageBox->setText(message);
     m_currentUserInfoClientId = targetClientId; // сохраняем айди для обновления
@@ -1383,7 +1393,7 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
     }
 
     QString adminStatus = isAdmin ? "Админ" : "Не админ";
-    QString message = QString("<b>Username:</b> %1<br><b>Client ID:</b> %2<br><b>Status:</b> %3<br><b>Admin:</b> %4")
+    QString message = QString("<b>Никнейм:</b> %1<br><b>Client ID:</b> %2<br><b>Статус:</b> %3<br><b>Админ:</b> %4")
                           .arg(username).arg(clientId).arg(status).arg(adminStatus);
 
     m_userInfoMessageBox->setText(message); // Обновляем текст в окне
@@ -1392,11 +1402,9 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
 void MainWindowCodeEditor::sendMessage() {
     QString text = chatInput->text().trimmed();
     if (!text.isEmpty()) {
-        // --- Добавляем сообщение локально с помощью нового метода ---
         // Используем "You" для отображения своих сообщений
-        addChatMessageWidget("You", text, QTime::currentTime(), true); // true - свое сообщение
+        addChatMessageWidget("Вы", text, QTime::currentTime(), true); // true - свое сообщение
 
-        // --- Подготавливаем JSON для отправки (как и раньше) ---
         QJsonObject chatOp;
         chatOp["type"] = "chat_message";
         chatOp["session_id"] = m_sessionId;
