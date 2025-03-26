@@ -172,7 +172,18 @@ QWidget#messageListWidget {
     selection-background-color: #90cdf4;
 }
 
+QLineEdit#chatInput {
+    background-color: rgb(34,33,40);
+    border: 1px solid rgb(92, 84, 155);
+    border-radius: 15px;
+    color: white;
+    padding: 5px 12px;
+    font-size: 14px;
+}
 
+QLineEdit#chatInput:focus {
+    border: 1px solid rgb(92, 84, 180);
+}
 /* Основные стили сообщений */
 #chatMessageLabel {
     color: white;

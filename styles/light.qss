@@ -5,7 +5,7 @@ QMainWindow {
 QMenuBar { /* панель меню */
     background-color: rgb(240, 240, 240);
     color: rgba(0, 0, 0, 0.8); /* Черный текст */
-    border-bottom: 1px solid rgb(240, 20, 200); /* Серая нижняя граница */
+    border-bottom: 1px solid #007bff; /* Серая нижняя граница */
     padding: 4px; /* внутренние отступы вокруг содержимого панели */
 }
 
@@ -19,6 +19,18 @@ QMenuBar::item:selected {
 }
 
 QMenu { /* панель выпадающего окна меню */
+    background-color: rgb(240, 240, 240);
+    border: 1px solid rgb(200, 200, 200);
+    color: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+}
+QMessageBox { /*выпадающие окна*/
+    background-color: rgb(240, 240, 240);
+    border: 1px solid rgb(200, 200, 200);
+    color: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+}
+QInputDialog { /*выпадающие окна*/
     background-color: rgb(240, 240, 240);
     border: 1px solid rgb(200, 200, 200);
     color: rgba(0, 0, 0, 0.8);
@@ -92,24 +104,6 @@ QScrollBar::handle:hover { /* при наведении на ползунок */
     width: 4px;
 }
 
-QPushButton {
-    background-color: rgb(200, 200, 200); /* Светло-серый фон */
-    color: rgba(0, 0, 0, 0.8); /* Черный текст */
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    min-width: 80px;
-    transition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
-}
-
-QPushButton:hover {
-    background-color: rgba(160, 160, 160, 0.85); /* Серый фон при наведении */
-    transform: translateY(-3px); /* кнопка при наведении поднимается на 3 пикселя */
-}
-
-QPushButton:pressed {
-    transform: translateY(3px); /* эффект нажатия, кнопка опускается вниз */
-}
 
 @keyframes pulse { /* эффект пульсации */
     0% { opacity: 0.4; transform: scale(0.2); }
@@ -217,7 +211,7 @@ QTextEdit#chatDisplay {
 }
 
 /* Поле ввода сообщения */
-QLineEdit#chatInput {
+QLineEdit {
     background-color: #ffffff;
     border: 1px solid #dee2e6;
     border-radius: 15px;
@@ -230,21 +224,22 @@ QLineEdit#chatInput:focus {
     border: 1px solid #90cdf4;
 }
 
-/* Кнопка отправки */
-QPushButton#sendButton {
+QPushButton {
     background-color: #007bff;
     color: #ffffff;
     border: none;
     border-radius: 5px;
     padding: 5px 12px;
     min-width: 60px;
+    transition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
 }
 
-QPushButton#sendButton:hover {
+QPushButton:hover {
     background-color: #0056b3;
+    transform: translateY(-3px); /* кнопка при наведении поднимается на 3 пикселя */
 }
 
-QPushButton#sendButton:pressed {
+QPushButton:pressed {
     background-color: #004085;
 }
 /* Основные стили сообщений */
