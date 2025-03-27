@@ -92,15 +92,17 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     chatInput->setPlaceholderText("Введите сообщение...");
     inputLayout->addWidget(chatInput, 1);
 
-    QPushButton *sendButton = new QPushButton("Send", chatWidget);
+    QPushButton *sendButton = new QPushButton(chatWidget);
     sendButton->setObjectName("sendButton");
+    QIcon sendIcon(":/styles/send.png");
+    sendButton->setIcon(sendIcon);
+    sendButton->setIconSize(QSize(24, 24));
+    sendButton->setToolTip(tr("Отправить сообщение"));
     sendButton->setCursor(Qt::PointingHandCursor);
     inputLayout->addWidget(sendButton, 0);
 
-    // Добавляем inputLayout в chatLayout
-    chatLayout->addLayout(inputLayout);
 
-    // Подключения для чата
+    chatLayout->addLayout(inputLayout);
     connect(sendButton, &QPushButton::clicked, this, &MainWindowCodeEditor::sendMessage);
     connect(chatInput, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::sendMessage); // <-- Отправка по Enter
 
@@ -165,6 +167,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
             scrollToBottom();
         }
     });
+
 
     QHBoxLayout* chatButtonLayout = new QHBoxLayout;
     chatButtonLayout->addWidget(m_chatButton);
@@ -241,6 +244,16 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     delete m_userListMenu;
     delete m_muteTimer;
     delete m_muteTimeLabel;
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+        m_trayIcon->deleteLater();
+        m_trayIcon = nullptr;
+    }
+}
+
+void MainWindowCodeEditor::closeEvent(QCloseEvent *event) {
+    disconnectFromServer();
+    event->accept();
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -294,6 +307,9 @@ void MainWindowCodeEditor::onDisconnected()
     ui->actionLeaveSession->setVisible(false);
     ui->actionSaveSession->setVisible(false);
     ui->actionCopyId->setVisible(false);
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
 }
 
 void MainWindowCodeEditor::connectToServer()
@@ -324,6 +340,9 @@ void MainWindowCodeEditor::disconnectFromServer()
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         socket->close();
         clearRemoteInfo();
+    }
+    if (m_trayIcon) {
+        m_trayIcon->hide();
     }
 }
 
@@ -783,6 +802,28 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString chatMessage = op["text_message"].toString();
         addChatMessageWidget(username, chatMessage, QTime::currentTime(), false); // false - не свое сообщение
 
+        if (!chatWidget->isVisible() || this->isMinimized()) {
+
+            if (!m_trayIcon) { //m_trayIcon == nullptr) {
+                m_trayIcon = new QSystemTrayIcon(this);
+                connect(m_trayIcon, &QSystemTrayIcon::messageClicked, this, [this]() { // раскрытие чата при клике на уведомление
+                    if (this->isMinimized()) {
+                        this->showNormal();
+                        this->activateWindow();
+                    }
+                    if (!chatWidget->isVisible()) {
+                        chatWidget->setVisible(true);
+                        chatInput->setFocus();
+                        scrollToBottom();
+                    }
+                });
+            }
+                m_trayIcon->setIcon(QIcon(":/styles/chat_light.png"));
+                m_trayIcon->show();
+                QString title = "У вас новое сообщение от " + username; // Заголовок уведомления
+                QString message = chatMessage;
+                m_trayIcon->showMessage(title, message, QSystemTrayIcon::Information, 3000);
+        }
     } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений

@@ -32,6 +32,7 @@
 #include <QVBoxLayout>
 #include <QLineEdit>
 #include <QFontMetrics>
+#include <QSystemTrayIcon>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -111,6 +112,8 @@ private slots: // функции, которые будут вызваны в о
 
     void on_actionChangeTheme_triggered();
     void updateChatButtonIcon();
+    void closeEvent(QCloseEvent *event);
+
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -151,6 +154,7 @@ private:
     QVBoxLayout *messagesLayout;   // <-- ДОБАВИТЬ (Layout для контейнера)
     QString m_sessionPassword;
     QPushButton* m_chatButton;
+    QSystemTrayIcon *m_trayIcon = nullptr;
     //новое разделение окон
     bool isChatVisible = false;    // Флаг видимости чата
 

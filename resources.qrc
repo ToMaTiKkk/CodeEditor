@@ -4,5 +4,6 @@
         <file>styles/light.qss</file>
         <file>styles/chat_light.png</file>
         <file>styles/chat_dark.png</file>
+        <file>styles/send.png</file>
     </qresource>
 </RCC>
