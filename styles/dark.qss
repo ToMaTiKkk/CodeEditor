@@ -1,7 +1,17 @@
 QMainWindow {
     background-color: rgb(34, 33, 50); /* темно-синий, фиолетовый оттенок фона главного окна */
 }
+#chatButton {
+    background: transparent;
+    border: none;
+    min-width: 25px;
+    min-height: 25px;
+}
 
+#chatButton:hover {
+    border: 1px solid rgb(92, 84, 155);
+    border-radius: 10px;
+}
 QMenuBar { /* панель меню */
         background-color: rgb(34, 33, 50);
         color: rgba(255, 255, 255, 0.9); /* цвет текст почти белый */
@@ -218,3 +228,4 @@ QLineEdit#chatInput:focus {
 :root {
     --message-time-color: rgb(255,255,255);
 }
+
