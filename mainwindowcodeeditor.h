@@ -20,6 +20,7 @@
 #include <QTextEdit>
 #include <QLineEdit>
 #include <QToolButton>
+#include <QPushButton>
 #include <QSplitter>
 #include <QKeyEvent>
 #include <QTextDocumentFragment>
@@ -31,6 +32,7 @@
 #include <QVBoxLayout>
 #include <QLineEdit>
 #include <QFontMetrics>
+#include <QSystemTrayIcon>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -104,9 +106,16 @@ private slots: // функции, которые будут вызваны в о
     void sendMessage(); // Отправка сообщения
     //void onTextMessagesReceived(const QString &message);
     //void handleIncomingMessage(const QJsonObject &json);
-    void on_toolButton_clicked();
+    //void on_toolButton_clicked();
     //void keyPressEvent(QKeyEvent *event) override;
     void scrollToBottom(); // Новый слот для прокрутки
+
+    void on_actionChangeTheme_triggered();
+    void updateChatButtonIcon();
+    void closeEvent(QCloseEvent *event);
+
+
+    void on_actionToDoList_triggered();
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -146,6 +155,8 @@ private:
     QWidget *messageListWidget;    // <-- ДОБАВИТЬ (Контейнер внутри ScrollArea)
     QVBoxLayout *messagesLayout;   // <-- ДОБАВИТЬ (Layout для контейнера)
     QString m_sessionPassword;
+    QPushButton* m_chatButton;
+    QSystemTrayIcon *m_trayIcon = nullptr;
     //новое разделение окон
     bool isChatVisible = false;    // Флаг видимости чата
 

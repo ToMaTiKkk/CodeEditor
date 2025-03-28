@@ -1,5 +1,6 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
+#include "todolistwidget.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include <QFileDialog>
@@ -92,15 +93,17 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     chatInput->setPlaceholderText("Введите сообщение...");
     inputLayout->addWidget(chatInput, 1);
 
-    QPushButton *sendButton = new QPushButton("Send", chatWidget);
+    QPushButton *sendButton = new QPushButton(chatWidget);
     sendButton->setObjectName("sendButton");
+    QIcon sendIcon(":/styles/send.png");
+    sendButton->setIcon(sendIcon);
+    sendButton->setIconSize(QSize(24, 24));
+    sendButton->setToolTip(tr("Отправить сообщение"));
     sendButton->setCursor(Qt::PointingHandCursor);
     inputLayout->addWidget(sendButton, 0);
 
-    // Добавляем inputLayout в chatLayout
-    chatLayout->addLayout(inputLayout);
 
-    // Подключения для чата
+    chatLayout->addLayout(inputLayout);
     connect(sendButton, &QPushButton::clicked, this, &MainWindowCodeEditor::sendMessage);
     connect(chatInput, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::sendMessage); // <-- Отправка по Enter
 
@@ -117,7 +120,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // --------------------------------------------------------------------
 
     // создаем тумблер для переключения темы
-    m_themeCheckBox = new QCheckBox(this);
+    /*m_themeCheckBox = new QCheckBox(this);
     m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
     connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
         m_isDarkTheme = (state == Qt::Unchecked); // Unchecked - темная, Checked - светлая
@@ -135,7 +138,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     themeLayout->addWidget(m_themeCheckBox);
     QWidget *themeWidget = new QWidget(this);
     themeWidget->setLayout(themeLayout);
-    ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол
+    ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол*/
 
     // создаем меню для списка пользователей
     m_userListMenu = new QMenu(this);
@@ -147,6 +150,35 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     //connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateAllUsersMuteTimeDisplay);
 
     applyCurrentTheme(); // применение темы, по умолчанию темная
+
+    m_chatButton = new QPushButton(this);
+    m_chatButton->setObjectName("chatButton");
+
+    QIcon chatIcon(":/styles/chat_light.png");
+    m_chatButton->setIcon(chatIcon);
+    m_chatButton->setIconSize(QSize(24, 24));
+
+    m_chatButton->setToolTip(tr("Открыть/закрыть чат"));
+    connect(m_chatButton, &QPushButton::clicked, this, [this](bool checked) {
+        Q_UNUSED(checked);
+        chatWidget->setVisible(!chatWidget->isVisible());
+
+        if (chatWidget->isVisible()) {
+            chatInput->setFocus();
+            scrollToBottom();
+        }
+    });
+
+
+    QHBoxLayout* chatButtonLayout = new QHBoxLayout;
+    chatButtonLayout->addWidget(m_chatButton);
+    chatButtonLayout->setContentsMargins(0,0,0,0); // Remove margins around the button
+
+    QWidget* chatWidgetContainer = new QWidget(this);
+    chatWidgetContainer->setLayout(chatButtonLayout);
+
+    // Добавляем виджет в правый верхний угол menuBar
+    ui->menubar->setCornerWidget(chatWidgetContainer, Qt::TopRightCorner);
 
     bool ok;
     m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
@@ -213,6 +245,16 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     delete m_userListMenu;
     delete m_muteTimer;
     delete m_muteTimeLabel;
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+        m_trayIcon->deleteLater();
+        m_trayIcon = nullptr;
+    }
+}
+
+void MainWindowCodeEditor::closeEvent(QCloseEvent *event) {
+    disconnectFromServer();
+    event->accept();
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -266,6 +308,9 @@ void MainWindowCodeEditor::onDisconnected()
     ui->actionLeaveSession->setVisible(false);
     ui->actionSaveSession->setVisible(false);
     ui->actionCopyId->setVisible(false);
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
 }
 
 void MainWindowCodeEditor::connectToServer()
@@ -296,6 +341,9 @@ void MainWindowCodeEditor::disconnectFromServer()
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         socket->close();
         clearRemoteInfo();
+    }
+    if (m_trayIcon) {
+        m_trayIcon->hide();
     }
 }
 
@@ -755,6 +803,28 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString chatMessage = op["text_message"].toString();
         addChatMessageWidget(username, chatMessage, QTime::currentTime(), false); // false - не свое сообщение
 
+        if (!chatWidget->isVisible() || this->isMinimized()) {
+
+            if (!m_trayIcon) { //m_trayIcon == nullptr) {
+                m_trayIcon = new QSystemTrayIcon(this);
+                connect(m_trayIcon, &QSystemTrayIcon::messageClicked, this, [this]() { // раскрытие чата при клике на уведомление
+                    if (this->isMinimized()) {
+                        this->showNormal();
+                        this->activateWindow();
+                    }
+                    if (!chatWidget->isVisible()) {
+                        chatWidget->setVisible(true);
+                        chatInput->setFocus();
+                        scrollToBottom();
+                    }
+                });
+            }
+                m_trayIcon->setIcon(QIcon(":/styles/chat_light.png"));
+                m_trayIcon->show();
+                QString title = "У вас новое сообщение от " + username; // Заголовок уведомления
+                QString message = chatMessage;
+                m_trayIcon->showMessage(title, message, QSystemTrayIcon::Information, 3000);
+        }
     } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
@@ -1426,7 +1496,7 @@ void MainWindowCodeEditor::sendMessage() {
     }
 }
 
-void MainWindowCodeEditor::on_toolButton_clicked()
+/*void MainWindowCodeEditor::on_toolButton_clicked()
 {
     if (!chatWidget) {
         qDebug() << "Ошибка: chatWidget не был создан!";
@@ -1440,7 +1510,7 @@ void MainWindowCodeEditor::on_toolButton_clicked()
         chatInput->setFocus(); // Устанавливаем фокус на поле ввода
         scrollToBottom();      // Прокручиваем вниз при открытии
     }
-}
+}*/
 
 // Слот для прокрутки (вызывается через QTimer::singleShot)
 void MainWindowCodeEditor::scrollToBottom() {
@@ -1529,3 +1599,29 @@ void MainWindowCodeEditor::addChatMessageWidget(const QString &username, const Q
     messagesLayout->insertWidget(qMax(0, messagesLayout->count() - 1), rowWidget);
     scrollToBottom();
 }
+
+void MainWindowCodeEditor::on_actionChangeTheme_triggered()
+{
+    m_isDarkTheme = !m_isDarkTheme;
+    applyCurrentTheme();
+    updateChatButtonIcon();
+}
+void MainWindowCodeEditor::updateChatButtonIcon() {
+    if (m_isDarkTheme) {
+        m_chatButton->setIcon(QIcon(":/styles/chat_light.png"));
+    } else {
+        m_chatButton->setIcon(QIcon(":/styles/chat_dark.png"));
+    }
+    m_chatButton->setIconSize(QSize(24, 24));
+}
+
+
+
+void MainWindowCodeEditor::on_actionToDoList_triggered()
+{
+    TodoListWidget *todoWidget = new TodoListWidget(nullptr);
+    todoWidget->setAttribute(Qt::WA_DeleteOnClose);
+    todoWidget->show();
+
+}
+

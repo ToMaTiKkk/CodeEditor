@@ -2,6 +2,39 @@ QMainWindow {
     background-color: rgb(34, 33, 50); /* темно-синий, фиолетовый оттенок фона главного окна */
 }
 
+
+#chatButton {
+    background: transparent;
+    border: none;
+    min-width: 25px;
+    min-height: 25px;
+}
+QPushButton {
+        background-color: rgb(92, 84, 165);
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 5px 12px;
+        min-width: 60px;
+        translition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
+}
+QInputDialog {
+    background-color: rgb(34,33,50);
+    color: rgb(255,255,255);
+}
+QLineEdit {
+    background-color: rgb(34,33,50);
+    color: rgb(255,255,255);
+    border: 1px solid #fffff;
+}
+QWidget {
+    background-color: rgb(34,33,50);
+    color: rgb(255,255,255);
+}
+#chatButton:hover {
+    border: 1px solid rgb(92, 84, 155);
+    border-radius: 10px;
+}
 QMenuBar { /* панель меню */
         background-color: rgb(34, 33, 50);
         color: rgba(255, 255, 255, 0.9); /* цвет текст почти белый */
@@ -105,9 +138,9 @@ QPushButton {
         background-color: rgb(92, 84, 165);
         color: white;
         border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        min-width: 80px;
+        border-radius: 5px;
+        padding: 5px 12px;
+        min-width: 60px;
         translition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
 }
 
@@ -218,3 +251,4 @@ QLineEdit#chatInput:focus {
 :root {
     --message-time-color: rgb(255,255,255);
 }
+

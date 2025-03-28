@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>903</width>
+    <width>911</width>
     <height>474</height>
    </rect>
   </property>
@@ -26,33 +26,8 @@
    <bool>false</bool>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QGridLayout" name="gridLayout">
-    <item row="2" column="0" alignment="Qt::AlignmentFlag::AlignRight">
-     <widget class="QToolButton" name="toolButton">
-      <property name="autoFillBackground">
-       <bool>false</bool>
-      </property>
-      <property name="text">
-       <string notr="true"/>
-      </property>
-      <property name="icon">
-       <iconset theme="QIcon::ThemeIcon::MailUnread"/>
-      </property>
-      <property name="iconSize">
-       <size>
-        <width>24</width>
-        <height>24</height>
-       </size>
-      </property>
-      <property name="shortcut">
-       <string notr="true"/>
-      </property>
-      <property name="autoRaise">
-       <bool>true</bool>
-      </property>
-     </widget>
-    </item>
-    <item row="0" column="0">
+   <layout class="QHBoxLayout" name="horizontalLayout_2">
+    <item>
      <widget class="QSplitter" name="splitter">
       <property name="minimumSize">
        <size>
@@ -202,7 +177,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>903</width>
+     <width>911</width>
      <height>23</height>
     </rect>
    </property>
@@ -223,6 +198,7 @@
     <addaction name="separator"/>
     <addaction name="actionExit"/>
     <addaction name="separator"/>
+    <addaction name="separator"/>
    </widget>
    <widget class="QMenu" name="menuSession">
     <property name="title">
@@ -236,8 +212,16 @@
     <addaction name="actionSaveSession"/>
     <addaction name="actionLeaveSession"/>
    </widget>
+   <widget class="QMenu" name="menufd">
+    <property name="title">
+     <string>Параметры</string>
+    </property>
+    <addaction name="actionToDoList"/>
+    <addaction name="actionChangeTheme"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuSession"/>
+   <addaction name="menufd"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionNew_File">
@@ -313,6 +297,19 @@
   <action name="actionCopyId">
    <property name="text">
     <string>Скопировать ID</string>
+   </property>
+  </action>
+  <action name="actionChangeTheme">
+   <property name="text">
+    <string>Сменить тему</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+L</string>
+   </property>
+  </action>
+  <action name="actionToDoList">
+   <property name="text">
+    <string>Открыть ToDo-List</string>
    </property>
   </action>
  </widget>
