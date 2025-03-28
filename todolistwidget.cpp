@@ -57,7 +57,7 @@ void TodoListWidget::loadTasksFromFile() {
         QTextStream in(&file);
         while (!in.atEnd()) {
             QString line = in.readLine();
-            QStringList parts = line.split(" ", Qt::SkipEmptyParts);
+            QStringList parts = line.split(" ", Qt::SkipEmptyParts); // если андрюха на винде то QString::
             if (parts.size() >= 2) {
                 bool isCompleted = parts[0] == "1";
                 QString taskText = parts.mid(1).join(" ");
