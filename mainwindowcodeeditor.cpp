@@ -26,7 +26,7 @@
 #include <QLabel>
 #include <QSpacerItem>
 #include <QTimer>
-
+#include <QStringList>
 
 // Константы для чата
 const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
