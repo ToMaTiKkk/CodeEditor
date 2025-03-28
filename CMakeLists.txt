@@ -25,6 +25,8 @@ set(PROJECT_SOURCES
         linehighlightwidget.h
         cpphighlighter.cpp
         cpphighlighter.h
+        todolistwidget.cpp
+        todolistwidget.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -52,7 +54,7 @@ else()
 endif()
 
 target_link_libraries(BAM_IDE PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
-target_link_libraries(BAM_IDE PRIVATE Qt::WebSockets)
+target_link_libraries(BAM_IDE PRIVATE Qt5::WebSockets)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
