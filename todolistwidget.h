@@ -41,6 +41,7 @@ private slots:
     void onItemClicked(QListWidgetItem *item); // Слот пока пустой, но оставлен
     void showDateTimePicker(); // Слот для показа нашего диалога
     void editTask(QListWidgetItem *item);
+    void unmarkTaskDone();
 
 private:
     QListWidget *taskList;
@@ -50,6 +51,7 @@ private:
     QPushButton *selectDateTimeButton; // Новая кнопка для вызова диалога
     QPushButton *doneButton;
     QPushButton *deleteButton;
+    QPushButton *unmarkButton;
 
     void setupUI();
     void saveTasksToFile();

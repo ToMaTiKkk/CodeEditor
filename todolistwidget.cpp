@@ -30,6 +30,7 @@ TodoListWidget::TodoListWidget(QWidget *parent)
       addButton(new QPushButton("Добавить", this)),
       selectDateTimeButton(new QPushButton(this)), // Создаем кнопку без текста
       doneButton(new QPushButton("Выполнено", this)),
+      unmarkButton(new QPushButton("Не выполнено", this)),
       deleteButton(new QPushButton("Удалить", this))
 {
     setupUI();
@@ -42,25 +43,41 @@ TodoListWidget::TodoListWidget(QWidget *parent)
     connect(selectDateTimeButton, &QPushButton::clicked, this, &TodoListWidget::showDateTimePicker);
     connect(taskList, &QListWidget::itemClicked, this, &TodoListWidget::onItemClicked);
     connect(taskList, &QListWidget::itemDoubleClicked, this, &TodoListWidget::editTask);
+    connect(unmarkButton, &QPushButton::clicked, this, &TodoListWidget::unmarkTaskDone);
 }
 
 TodoListWidget::~TodoListWidget() {
     saveTasksToFile();
 }
 
+#include "todolistwidget.h" // Убедитесь, что этот заголовок включен
+#include <QFile>
+#include <QTextStream>
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <QColor>
+#include <QDebug> // Для qWarning
+
+
 void TodoListWidget::saveTasksToFile() {
+    const QColor doneBackgroundColor = QColor(80, 150, 50, 200);
+
     QFile file(filePath);
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
         QTextStream out(&file);
         for (int i = 0; i < taskList->count(); ++i) {
             QListWidgetItem *item = taskList->item(i);
-            bool isCompleted = item->foreground().color() == QColor(255, 255, 255);
+            bool isCompleted = (item->background().color() == doneBackgroundColor);
             QString taskText = item->text();
-            out << (isCompleted ? "1" : "0") << " " << taskText << "\n";
+            out << (isCompleted ? "1" : "0") << " " << taskText.trimmed() << "\n";
         }
+
         file.close();
+
     } else {
-        qWarning() << "Не удалось открыть файл для записи: " << file.errorString();
+
+        qWarning() << "Не удалось открыть файл для записи:" << filePath << "Ошибка:" << file.errorString();
     }
 }
 
@@ -147,6 +164,7 @@ void TodoListWidget::setupUI() {
     QHBoxLayout *buttonLayout = new QHBoxLayout;
     buttonLayout->addWidget(doneButton);
     buttonLayout->addWidget(deleteButton);
+    buttonLayout->addWidget(unmarkButton);
     buttonLayout->addStretch();
     mainLayout->addLayout(buttonLayout);
 }
@@ -264,4 +282,25 @@ void DateTimePickerDialog::updateDateTime() {
 
 QDateTime DateTimePickerDialog::getSelectedDateTime() const {
     return currentDateTime;
+}
+void TodoListWidget::unmarkTaskDone() {
+     QList<QListWidgetItem*> items = taskList->selectedItems();
+     if (items.isEmpty()) {
+          QMessageBox::warning(this, "Ошибка", "Выберите задачу (или задачи) для снятия отметки!");
+          return;
+     }
+
+     foreach(QListWidgetItem *item, items) {
+        // Проверяем, была ли задача отмечена как выполненная (по цвету фона)
+        if (item->background().color() == QColor(80, 150, 50, 200)) {
+            // Сбрасываем цвета на значения по умолчанию
+            // Используем цвета из палитры для лучшей поддержки тем
+            item->setForeground(palette().color(QPalette::Text)); // Стандартный цвет текста
+            item->setBackground(QBrush()); // Стандартный (прозрачный) фон
+
+            // Возвращаем флаг возможности редактирования
+            item->setFlags(item->flags() | Qt::ItemIsEditable);
+        }
+    }
+      saveTasksToFile();
 }
