@@ -216,6 +216,7 @@
     <property name="title">
      <string>Параметры</string>
     </property>
+    <addaction name="actionToDoList"/>
     <addaction name="actionChangeTheme"/>
    </widget>
    <addaction name="menuFile"/>
@@ -304,6 +305,11 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+L</string>
+   </property>
+  </action>
+  <action name="actionToDoList">
+   <property name="text">
+    <string>Открыть ToDo-List</string>
    </property>
   </action>
  </widget>

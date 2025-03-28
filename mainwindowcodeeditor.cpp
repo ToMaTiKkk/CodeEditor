@@ -1,5 +1,6 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
+#include "todolistwidget.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include <QFileDialog>
@@ -1612,5 +1613,15 @@ void MainWindowCodeEditor::updateChatButtonIcon() {
         m_chatButton->setIcon(QIcon(":/styles/chat_dark.png"));
     }
     m_chatButton->setIconSize(QSize(24, 24));
+}
+
+
+
+void MainWindowCodeEditor::on_actionToDoList_triggered()
+{
+    TodoListWidget *todoWidget = new TodoListWidget(nullptr);
+    todoWidget->setAttribute(Qt::WA_DeleteOnClose);
+    todoWidget->show();
+
 }
 

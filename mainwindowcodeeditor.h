@@ -115,6 +115,8 @@ private slots: // функции, которые будут вызваны в о
     void closeEvent(QCloseEvent *event);
 
 
+    void on_actionToDoList_triggered();
+
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
