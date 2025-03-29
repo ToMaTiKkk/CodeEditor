@@ -126,6 +126,7 @@ private:
     bool loadingFile = false;
     bool m_isDarkTheme;
     bool m_isAdmin;
+    bool maybeSave();
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
     QAction *m_muteUnmuteAction;

@@ -253,8 +253,12 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
 }
 
 void MainWindowCodeEditor::closeEvent(QCloseEvent *event) {
-    disconnectFromServer();
-    event->accept();
+    if (maybeSave()) {
+        disconnectFromServer();
+        event->accept();
+    } else {
+        event->ignore(); // отмена
+    }
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
@@ -549,6 +553,33 @@ void MainWindowCodeEditor::onSaveAsFileClicked()
     } else {
         QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
     }
+}
+
+bool MainWindowCodeEditor::maybeSave()
+{
+    if (!ui->codeEditor->document()->isModified())
+        return true;
+    QMessageBox::StandardButton ret;
+    ret = QMessageBox::warning(this, tr("Предупреждение"),
+                               tr("Документ был изменен.\n"
+                                  "Хотите сохранить изменения?"),
+                               QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+    if (ret == QMessageBox::Save) {
+        // если есть имя файла, сохраняем, иначе сохраняем как
+        if (!currentFilePath.isEmpty()) {
+            onSaveFileClicked();
+            return true;
+        } else {
+            onSaveAsFileClicked();
+            // проверяем сохранился ли файл
+            return !currentFilePath.isEmpty();
+        }
+    } else if (ret == QMessageBox::Cancel) {
+        return false; // Отмена закрытия
+    }
+
+    return true;
 }
 
 void MainWindowCodeEditor::onExitClicked()
