@@ -4,6 +4,7 @@
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include "cpphighlighter.h"
+#include "linenumberarea.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -119,6 +120,17 @@ private slots: // функции, которые будут вызваны в о
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
+
+    // настройки
+    void setupMainWindow();       // основные настройки окна
+    void setupCodeEditorArea();   // редактора и нумерации
+    void setupChatWidget();       // чата
+    void setupUserFeatures();     // меню пользователей, таймера и тп
+    void setupMenuBarActions();   // подключение сигналов меню
+    void setupFileSystemView();   // дерева файлов
+    void setupNetwork();          // WebSocket, client_id
+    void setupThemeAndNick();     // тема и никнейм
+
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
     QWebSocket *socket = nullptr;
@@ -126,6 +138,9 @@ private:
     bool loadingFile = false;
     bool m_isDarkTheme;
     bool m_isAdmin;
+    LineNumberArea *lineNumberArea;
+    QPlainTextEdit *m_codeEditor;
+    bool maybeSave();
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
     QAction *m_muteUnmuteAction;
