@@ -1,4 +1,5 @@
 #include "cpphighlighter.h"
+#include <utility> // добавил для использования std::as_const() из C++17
 
 CppHighlighter::CppHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent)
@@ -87,7 +88,10 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
 
 void CppHighlighter::highlightBlock(const QString &text)
 {
-    for (const HighlightingRule &rule : qAsConst(highlightingRules))
+    // ---------------------------------------------
+    // поменял строку с "for (const HighlightingRule &rule : qAsConst(highlightingRules))" чтобы убрать предупреждения при сборке, в связи с изменённым синтаксисом в Qt6
+    // ---------------------------------------------
+    for (const HighlightingRule &rule : std::as_const(highlightingRules))
     {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
         while (matchIterator.hasNext())
