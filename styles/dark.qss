@@ -109,8 +109,8 @@ QPlainTextEdit {
 
 QScrollBar:vertical { /* стиль полосы */
         border: none;
-        background: rgba(255, 255, 255, 0.05);
-        width: 8px; /* ширина полосы */
+        background: rgb(34, 33, 50);
+        width: 12px; /* ширина полосы */
         margin: 0; /* нет отступов */
 }
 

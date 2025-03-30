@@ -114,31 +114,11 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
         ui->horizontalWidget_2->layout()->setContentsMargins(0,0,0,0);
     }
     ui->horizontalWidget_2->layout()->addWidget(chatWidget);
-    chatWidget->hide(); // Скрыть по умолчанию
+    chatWidget->hide();
     // --------------------------------------------------------------------
     // --- КОНЕЦ НОВОЙ ИНИЦИАЛИЗАЦИИ ЧАТА ---
     // --------------------------------------------------------------------
 
-    // создаем тумблер для переключения темы
-    /*m_themeCheckBox = new QCheckBox(this);
-    m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
-    connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
-        m_isDarkTheme = (state == Qt::Unchecked); // Unchecked - темная, Checked - светлая
-        applyCurrentTheme();
-        if (m_isDarkTheme) {
-            m_themeCheckBox->setToolTip(tr("Темная тема"));
-        } else {
-            m_themeCheckBox->setToolTip(tr("Светлая тема"));
-        }
-    });
-    // добавляем тумблер в layout
-    QLabel* themeLabel = new QLabel("Тема:", this);
-    QHBoxLayout *themeLayout = new QHBoxLayout;
-    themeLayout->addWidget(themeLabel);
-    themeLayout->addWidget(m_themeCheckBox);
-    QWidget *themeWidget = new QWidget(this);
-    themeWidget->setLayout(themeLayout);
-    ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол*/
 
     // создаем меню для списка пользователей
     m_userListMenu = new QMenu(this);
@@ -220,6 +200,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     ui->fileSystemTreeView->hideColumn(1);
     ui->fileSystemTreeView->hideColumn(2);
     ui->fileSystemTreeView->hideColumn(3);
+    ui->fileSystemTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->fileSystemTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
     connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
 
