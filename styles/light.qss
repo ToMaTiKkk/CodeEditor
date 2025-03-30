@@ -87,33 +87,6 @@ QPlainTextEdit {
     padding: 0 15px;
 }
 
-QScrollBar:vertical { /* стиль полосы */
-    border: none;
-    background: rgba(200, 200, 200, 0.5); /* Светло-серый фон */
-    width: 8px; /* ширина полосы */
-    margin: 0; /* нет отступов */
-}
-
-QScrollBar::handle:vertical { /* стиль ползунка прокрутки */
-    background: rgba(200, 200, 200, 0.5); /* Серый ползунок */
-    min-height: 20px; /* минимальная высота ползунка */
-    border-radius: 6px;
-}
-
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { /* элементы для уменьшения и увеличения прокрутки скрыты */
-    height: 0;
-}
-
-QSplitter::handle { /* элементы, за которые можно потянуть, чтобы изменить размер областей */
-    background: rgba(240, 240, 240, 0.3); /* откат разделителя */
-    width: 3px;
-}
-
-QScrollBar::handle:hover { /* при наведении на ползунок */
-    background: rgb(200, 200, 200); /* Серый ползунок */
-    width: 4px;
-}
-
 
 @keyframes pulse { /* эффект пульсации */
     0% { opacity: 0.4; transform: scale(0.2); }
@@ -130,7 +103,7 @@ CursorWidget {
 
 /* Стили для полосы прокрутки */
 QScrollBar:vertical {
-    background: rgba(240, 240, 240, 0.5); /* Светло-серый фон для свободного места */
+    background: rgb(240, 240, 240); /* Светло-серый фон для свободного места */
     width: 12px;
     margin: 0;
 }
