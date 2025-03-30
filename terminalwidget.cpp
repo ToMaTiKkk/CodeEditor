@@ -6,38 +6,32 @@
 #include <QKeyEvent>
 #include <QUrl>
 #include <QDesktopServices>
-#include <QApplication> // Для QApplication::font()
-#include <QDebug>       // Для отладки
+#include <QApplication>
+#include <QDebug>
 
 TerminalWidget::TerminalWidget(QWidget *parent)
-    : QWidget(parent) // Инициализируем базовый класс
+    : QWidget(parent)
 {
-    // 1. Создаем сам QTermWidget
-    // Указываем 'this' как родителя, чтобы он удалился вместе с нашим TerminalWidget
     term_widget = new QTermWidget(this);
     if (!term_widget) {
         qCritical() << "Failed to create internal QTermWidget!";
-        return; // Выходим, если не удалось создать
+        return;
     }
-    term_widget->setObjectName("internalTermWidget"); // Имя для стилей/отладки
+    term_widget->setObjectName("internalTermWidget");
 
-    // 2. Настраиваем QTermWidget (код из твоего тестового main())
-    QFont termFont = QApplication::font(); // Берем шрифт приложения как базу
-    termFont.setFamily("Monospace");       // Установите РЕАЛЬНЫЙ моноширинный шрифт!
-    termFont.setPointSize(12);             // Ваш размер
+    QFont termFont = QApplication::font();
+    termFont.setFamily("JetBrains Mono Medium");
+    termFont.setPointSize(12);
     term_widget->setTerminalFont(termFont);
 
-    term_widget->setColorScheme("Tango"); // Ваша цветовая схема
+    term_widget->setColorScheme("Tango");
     term_widget->setBlinkingCursor(true);
-    term_widget->setMargin(5);             // Ваши отступы
+    term_widget->setMargin(5);
 
-    // 3. Создаем Layout для нашего TerminalWidget
-    // Указываем 'this' как родителя, он будет управлять layout'ом
     layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0); // Убираем отступы у самого layout'а
-    layout->addWidget(term_widget);         // Добавляем QTermWidget в layout
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(term_widget);
 
-    // Подключение сигналы от вложенного QTermWidget к приватным слотам
     connect(term_widget, &QTermWidget::termKeyPressed, this, &TerminalWidget::handleKeyPress);
     connect(term_widget, &QTermWidget::urlActivated, this, &TerminalWidget::handleLinkActivation);
 
@@ -49,15 +43,12 @@ TerminalWidget::~TerminalWidget()
     qDebug() << "TerminalWidget wrapper destroyed.";
 }
 
-// Публичный метод для установки фокуса
 void TerminalWidget::setInputFocus()
 {
     if (term_widget) {
         term_widget->setFocus();
     }
 }
-
-// Приватные слоты для обработки сигналов
 
 void TerminalWidget::handleKeyPress(QKeyEvent *event)
 {
@@ -73,9 +64,9 @@ void TerminalWidget::handleKeyPress(QKeyEvent *event)
 
 void TerminalWidget::handleLinkActivation(const QUrl &url, bool fromContextMenu)
 {
-    Q_UNUSED(fromContextMenu); // Пока не используем этот параметр
+    Q_UNUSED(fromContextMenu);
     if (url.isValid()) {
         qDebug() << "Opening link:" << url.toString();
-        QDesktopServices::openUrl(url); // Открываем ссылку в браузере
+        QDesktopServices::openUrl(url);
     }
 }

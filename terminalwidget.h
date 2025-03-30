@@ -1,13 +1,12 @@
 #ifndef TERMINALWIDGET_H
 #define TERMINALWIDGET_H
 
-#include <QWidget> // Наш виджет будет на основе QWidget
+#include <QWidget>
 
-// Прямые объявления для уменьшения зависимостей в заголовке
-class QTermWidget; // Сам виджет терминала из библиотеки
-class QVBoxLayout; // Layout для размещения QTermWidget внутри нашего виджета
-class QKeyEvent;   // Для слота обработки клавиш
-class QUrl;        // Для слота обработки ссылок
+class QTermWidget;
+class QVBoxLayout;
+class QKeyEvent;
+class QUrl;
 
 class TerminalWidget : public QWidget
 {
@@ -15,19 +14,17 @@ class TerminalWidget : public QWidget
 
 public:
     explicit TerminalWidget(QWidget *parent = nullptr);
-    ~TerminalWidget(); // Деструктор
+    ~TerminalWidget();
 
-    // Добавим метод для установки фокуса на поле ввода терминала (если нужно)
     void setInputFocus();
 
 private slots:
-    // Слоты для обработки сигналов от вложенного QTermWidget
     void handleKeyPress(QKeyEvent *event);
     void handleLinkActivation(const QUrl &url, bool fromContextMenu);
 
 private:
-    QTermWidget *term_widget; // Указатель на реальный виджет терминала
-    QVBoxLayout *layout;      // Layout для размещения term_widget
+    QTermWidget *term_widget;
+    QVBoxLayout *layout;
 };
 
-#endif // TERMINALWIDGET_H
+#endif
