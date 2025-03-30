@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QPlainTextEdit>
+#include <QPalette>
 
 class LineNumberArea : public QWidget
 {

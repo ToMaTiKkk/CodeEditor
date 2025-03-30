@@ -63,8 +63,19 @@ void LineNumberArea::paintEvent(QPaintEvent *event)
 {
     // будет рисовать НА нашем виджете
     QPainter painter(this);
-    painter.fillRect(event->rect(), Qt::lightGray); // фон области номеров строк
-
+    //painter.fillRect(event->rect(), Qt::lightGray); // фон области номеров строк
+    QColor bgColor = this->palette().color(QPalette::Window);// для двух тем берет фон основного окна
+    painter.fillRect(event->rect(), bgColor);
+    if (bgColor == QColor(34,33,50)) {
+        painter.setPen(QColor(92, 84, 155));
+        float lineX = width() - 0.3;
+        painter.drawLine(lineX, 0, lineX, height());
+    }
+    else {
+        painter.setPen(QColor(0, 123, 255));
+        float lineX = width() - 0.3;
+        painter.drawLine(lineX, 0, lineX, height());
+    }
     // получение первого видимого блока-строки
     QTextCursor cursor = codeEditor->cursorForPosition(QPoint(0, 0));
     QTextBlock block = cursor.block();
@@ -84,8 +95,14 @@ void LineNumberArea::paintEvent(QPaintEvent *event)
             // выделение текущей строки
             if (blockNumber == currentBlockNumber) {
                 // устанавливаем цвет текста для текущей строки
-                painter.setPen(palette().highlightedText().color());
+                //painter.setPen(palette().highlightedText().color()); плохо видно, но вроде имеет место быть
                 // !!!!!! можно добавить заливку фона чутка другую, чтобы ещё более выделено было, на усмотрение!!!!!
+                //QColor bgColor = palette().color(QPalette::Window); // для тем
+                if (bgColor == QColor(34, 33, 50)) {
+                    painter.setPen(Qt::magenta);
+                } else {
+                    painter.setPen(Qt::blue);
+                }
             } else {
                 painter.setPen(palette().windowText().color());
             }

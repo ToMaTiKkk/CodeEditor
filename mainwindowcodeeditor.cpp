@@ -244,7 +244,7 @@ void MainWindowCodeEditor::setupFileSystemView()
     ui->fileSystemTreeView->hideColumn(2);
     ui->fileSystemTreeView->hideColumn(3);
 
-    ui->fileSystemTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->fileSystemTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); //не нужон ваш скролл бар
     ui->fileSystemTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
@@ -281,7 +281,7 @@ void MainWindowCodeEditor::setupThemeAndNick()
 
     QHBoxLayout* chatButtonLayout = new QHBoxLayout;
     chatButtonLayout->addWidget(m_chatButton);
-    chatButtonLayout->setContentsMargins(0,0,0,0); // Remove margins around the button
+    chatButtonLayout->setContentsMargins(0,0,0,0);
 
     QWidget* chatWidgetContainer = new QWidget(this);
     chatWidgetContainer->setLayout(chatButtonLayout);
@@ -393,12 +393,6 @@ void MainWindowCodeEditor::connectToServer()
         // Сигнал "connected" – когда соединение установлено
         connect(socket, &QWebSocket::connected, this, &MainWindowCodeEditor::onConnected);
         connect(socket, &QWebSocket::disconnected, this, &MainWindowCodeEditor::onDisconnected);
-        // // Сигнал "errorOccurred" – если возникают ошибки при соединении
-        // connect(socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError error) {
-        //     qDebug() << "Ошибка WebSocket:" << socket->errorString();
-        //     statusBar()->showMessage("Ошибка: " + socket->errorString());
-        // });
-        // Сигнал, когда приходит сообщение от сервера
         connect(socket, &QWebSocket::textMessageReceived, this, &MainWindowCodeEditor::onTextMessageReceived);
     }
 

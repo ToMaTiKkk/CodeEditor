@@ -1,5 +1,5 @@
 QMainWindow {
-    background-color: rgb(240, 240, 240); /* Светло-серый фон главного окна */
+    background-color: rgb(240, 240, 240);
 }
 #chatButton {
     background: transparent;
@@ -7,67 +7,88 @@ QMainWindow {
     min-width: 25px;
     min-height: 25px;
 }
+QWidget {
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.8);
+    selection-background-color: #007bff;
+}
+QWidget[selected="true"] {
+    background-color: #007bff;
+}
 
 #chatButton:hover {
     border: 1px solid #007bff;
     border-radius: 10px;
 }
-QMenuBar { /* панель меню */
+QMenuBar {
     background-color: rgb(240, 240, 240);
-    color: rgba(0, 0, 0, 0.8); /* Черный текст */
+    color: rgba(0, 0, 0, 0.8);
     border-bottom: 1px solid #007bff;
-    padding: 4px; /* внутренние отступы вокруг содержимого панели */
+    padding: 4px;
 }
 
-QMenuBar::item { /* элементы меню, пункты */
-    padding: 8px 15px; /* отступы 8 пикселей сверху и снизу, 15 слева и справа */
-    border-radius: 4px; /* скругление */
+QMenuBar::item {
+    padding: 8px 15px;
+    border-radius: 4px;
 }
-
+QMenuBar::item:hover {
+    background-color: rgba(0,123,255,100);
+    color: #ffffff;
+}
 QMenuBar::item:selected {
-    background-color: rgb(200, 200, 200);
+    background-color: rgb(0,123,255);
+    color: #ffffff;
 }
 
-QMenu { /* панель выпадающего окна меню */
+QMenu {
     background-color: rgb(240, 240, 240);
     border: 1px solid rgb(200, 200, 200);
     color: rgba(0, 0, 0, 0.8);
     padding: 8px;
 }
-QMessageBox { /*выпадающие окна*/
+QMessageBox {
     background-color: rgb(240, 240, 240);
     border: 1px solid rgb(200, 200, 200);
     color: rgba(0, 0, 0, 0.8);
     padding: 8px;
 }
-QInputDialog { /*выпадающие окна*/
+QInputDialog {
     background-color: rgb(240, 240, 240);
     border: 1px solid rgb(200, 200, 200);
     color: rgba(0, 0, 0, 0.8);
     padding: 8px;
 }
 
-QMenu::item { /* элементы внутри выпадающего окна */
+QMenu::item {
     padding: 8px 25px 8px 15px;
-    margin: 2px 0; /* внешние отступы по 2 пикселя сверху и снизу между элементами */
+    margin: 2px 0;
     border-radius: 4px;
 }
 
 QMenu::item:selected {
-    background-color: rgb(200, 200, 200); /* Светло-серый фон при наведении */
+    background-color: #007bff;
+    color: #ffffff;
+}
+QListWidget::item:selected {
+    background-color: #007bff;
+    color: #ffffff;
+}
+QListWidget::item:hover {
+    background-color: rgba(0,123,255,200);
+    color: #ffffff;
 }
 
 QStatusBar {
     background-color: rgb(240, 240, 240);
-    color: rgba(0, 0, 0, 0.7); /* Темно-серый текст */
-    border-top: 1px solid rgb(200, 200, 200); /* Серая верхняя граница */
+    color: rgba(0, 0, 0, 0.7);
+    border-top: 1px solid rgb(200, 200, 200);
 }
 
 QTreeView {
-    background-color: rgba(0, 0, 0, 0.8); /* Почти белый фон */
+    background-color: rgba(0, 0, 0, 0.8);
     border: none;
-    color: rgba(0, 0, 0, 0.8); /* Черный текст */
-    outline: 0; /* отсутствие рамки при фокусе */
+    color: rgba(0, 0, 0, 0.8);
+    outline: 0;
     font-family: 'Fira Code', monospace;
     font-size: 12px;
 }
@@ -79,8 +100,8 @@ QTreeView::item {
 
 
 QPlainTextEdit {
-    background-color: rgb(240, 240, 240); /* Светло-серый фон */
-    color: rgba(0, 0, 0, 0.8); /* Черный текст */
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.8);
     border: none;
     font-family: 'Fira Code', monospace;
     font-size: 14px;
@@ -88,44 +109,43 @@ QPlainTextEdit {
 }
 
 
-@keyframes pulse { /* эффект пульсации */
+@keyframes pulse {
     0% { opacity: 0.4; transform: scale(0.2); }
     50% { opacity: 1; transform: scale(1); }
     100% { opacity: 0.4; transform: scale(0.2); }
 }
 
 CursorWidget {
-    border-left: 2px solid rgba(0, 0, 0, 0.8); /* Черный курсор */
-    animation: pulse 1.5s infinite; /* бесконечная анимация мигания курсора */
-    margin-top: 2px; /* отступ сверху */
-    height: 18px !important; /* приоритет стиля */
+    border-left: 2px solid rgba(0, 0, 0, 0.8);
+    animation: pulse 1.5s infinite;
+    margin-top: 2px;
+    height: 18px !important;
 }
 
 /* Стили для полосы прокрутки */
 QScrollBar:vertical {
-    background: rgb(240, 240, 240); /* Светло-серый фон для свободного места */
+    background: rgb(240, 240, 240);
     width: 12px;
     margin: 0;
 }
 
 QScrollBar::handle:vertical {
-    background: rgba(150, 150, 150, 0.7); /* Серый цвет ползунка */
+    background: rgba(150, 150, 150, 0.7);
     min-height: 20px;
     border-radius: 6px;
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0; /* Скрываем кнопки увеличения/уменьшения */
+    height: 0;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: rgba(150, 150, 150, 0.9); /* Темнее при наведении */
+    background: rgba(150, 150, 150, 0.9);
 }
 
-/* Стили для дерева (QTreeView) */
 QTreeView {
-    background-color: white; /* Белый фон */
-    color: rgba(0, 0, 0, 0.8); /* Черный текст */
+    background-color: white;
+    color: rgba(0, 0, 0, 0.8);
     border: none;
     outline: 0;
     font-family: 'Fira Code', monospace;
@@ -135,16 +155,16 @@ QTreeView {
 QTreeView::item {
     height: 28px;
     padding: 4px 0;
-    icon: url(:/icons/folder_rgba(0, 0, 0, 0.8).png); /* Путь к вашей иконке */
+    icon: url(:/icons/folder_rgba(0, 0, 0, 0.8).png);
 }
 
 QTreeView::item:hover {
-    background-color: rgba(200, 200, 200, 0.7); /* Светло-серый фон при наведении */
+    background-color: rgba(0, 123, 255, 100);
 }
 
 QTreeView::item:selected {
-    background-color: rgb(200, 200, 200); /* Светло-серый фон для выбранного элемента */
-    color: rgba(0, 0, 0, 0.8); /* Черный текст */
+    background-color: rgb(0, 123, 255);
+    color: rgba(0, 0, 0, 0.8);
 }
 
 QLabel {
@@ -155,12 +175,12 @@ QCheckBox::indicator {
     width: 25px;
     height: 7px;
     border-radius: 3px;
-    background-color: #ddd; /* Светло-серый фон */
+    background-color: #ddd;
     border: 2px solid #bbb;
 }
 
 QCheckBox::indicator:checked {
-    background-color: #4CAF50; /* Зелёный фон */
+    background-color: #4CAF50;
     border-color: #45a049;
 }
 QCheckBox::indicator:unchecked {
@@ -181,7 +201,6 @@ QWidget#chatWidget {
     border-radius: 5px;
 }
 
-/* Поле отображения сообщений */
 QTextEdit#chatDisplay {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
@@ -193,7 +212,6 @@ QTextEdit#chatDisplay {
     selection-background-color: rgb(91, 163, 235);
 }
 
-/* Поле ввода сообщения */
 QLineEdit {
     background-color: #ffffff;
     border: 1px solid #dee2e6;
@@ -214,18 +232,17 @@ QPushButton {
     border-radius: 5px;
     padding: 5px 12px;
     min-width: 60px;
-    transition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
+    transition: all 0.5s ease;
 }
 
 QPushButton:hover {
-    background-color: #0056b3;
-    transform: translateY(-3px); /* кнопка при наведении поднимается на 3 пикселя */
+    background-color: rgba(0,123,255,200);
+    transform: translateY(-3px);
 }
 
 QPushButton:pressed {
     background-color: #004085;
 }
-/* Основные стили сообщений */
 #chatMessageLabel {
     color: white;
     border-radius: 15px;
@@ -233,24 +250,37 @@ QPushButton:pressed {
     margin: 2px;
 }
 
-/* Стили для своих сообщений */
 #chatMessageLabel[messageType="own"] {
     background-color: #007bff;
-    /* Дополнительные стили */
 }
-
-/* Стили для чужих сообщений */
+QSplitter::handle { /*я не знаю почему, но так на белой не отображается разделитель*/
+        background: rgba(34, 33, 50);
+        width: 3px;
+}
 #chatMessageLabel[messageType="other"] {
     background-color: rgb(128, 128, 128);
-    /* Дополнительные стили */
 }
-
-/* Стили для времени сообщения */
 #chatMessageLabel small {
     color: rgb(255,255,255);
 }
 
-/* Строка с сообщением */
 #messageRowWidget {
     background: transparent;
+}
+QCalendarWidget {
+    background-color: rgb(240, 240, 240);
+}
+QCalendarWidget QTableView {
+    background-color: white;
+    border: none;
+    gridline-color: #e0e0e0;
+    selection-background-color: #007bff;
+    selection-color: white;
+}
+QCalendarWidget QTableView {
+    background-color: white;
+    font-weight: bold;
+}
+QCalendarWidget::HorizontalHeaderFormat {
+    background-color:white;
 }

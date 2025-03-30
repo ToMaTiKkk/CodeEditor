@@ -20,7 +20,6 @@
 #include <QIcon>
 #include <QSize>
 
-// --- Реализация TodoListWidget ---
 
 TodoListWidget::TodoListWidget(QWidget *parent)
     : QWidget(parent),
@@ -28,7 +27,7 @@ TodoListWidget::TodoListWidget(QWidget *parent)
       taskInput(new QLineEdit(this)),
       dateTimeInput(new QDateTimeEdit(this)),
       addButton(new QPushButton("Добавить", this)),
-      selectDateTimeButton(new QPushButton(this)), // Создаем кнопку без текста
+      selectDateTimeButton(new QPushButton(this)),
       doneButton(new QPushButton("Выполнено", this)),
       unmarkButton(new QPushButton("Не выполнено", this)),
       deleteButton(new QPushButton("Удалить", this))
@@ -36,7 +35,6 @@ TodoListWidget::TodoListWidget(QWidget *parent)
     setupUI();
     loadTasksFromFile();
 
-    // Соединения сигналов и слотов
     connect(addButton, &QPushButton::clicked, this, &TodoListWidget::addTask);
     connect(doneButton, &QPushButton::clicked, this, &TodoListWidget::markTaskDone);
     connect(deleteButton, &QPushButton::clicked, this, &TodoListWidget::deleteTask);
@@ -49,14 +47,6 @@ TodoListWidget::TodoListWidget(QWidget *parent)
 TodoListWidget::~TodoListWidget() {
     saveTasksToFile();
 }
-
-#include "todolistwidget.h" // Убедитесь, что этот заголовок включен
-#include <QFile>
-#include <QTextStream>
-#include <QListWidget>
-#include <QListWidgetItem>
-#include <QColor>
-#include <QDebug> // Для qWarning
 
 
 void TodoListWidget::saveTasksToFile() {
@@ -112,7 +102,6 @@ void TodoListWidget::loadTasksFromFile() {
 }
 
 
-// Настройка UI
 void TodoListWidget::setupUI() {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     QHBoxLayout *inputLayout = new QHBoxLayout;
@@ -121,46 +110,26 @@ void TodoListWidget::setupUI() {
     dateTimeInput->setDateTime(QDateTime::currentDateTime());
     dateTimeInput->setDisplayFormat("dd.MM.yyyy HH:mm");
 
-    // Делаем поле даты/времени read-only и убираем стрелки
     dateTimeInput->setReadOnly(true);
-    dateTimeInput->setStyleSheet(R"(
-        QDateTimeEdit::up-button { width: 0px; border: none; }
-        QDateTimeEdit::down-button { width: 0px; border: none; }
-        QDateTimeEdit[readOnly="true"] {
-            background-color: #f0f0f0;
-            color: #555;
-        }
-    )");
     dateTimeInput->setButtonSymbols(QAbstractSpinBox::NoButtons);
-
-    // --- Настройка кнопки с иконкой из РЕСУРСОВ ---
     selectDateTimeButton->setToolTip("Выбрать дату и время");
 
 
-    QIcon dateTimeIcon(":/calendar-clock.png");
+    QIcon dateTimeIcon(":/styles/calendar-clock.png");
 
-    if (!dateTimeIcon.isNull()) { // Проверка, что ресурс найден и загружен
+    if (!dateTimeIcon.isNull()) {
         selectDateTimeButton->setIcon(dateTimeIcon);
-        selectDateTimeButton->setText(""); // Убираем текст, если иконка есть
-        // Устанавливаем размер кнопки по содержимому (иконке)
+        selectDateTimeButton->setText("");
         selectDateTimeButton->setFixedSize(selectDateTimeButton->sizeHint());
-    } else {
-        qWarning() << "Не удалось загрузить иконку из ресурсов ':/calendar-clock.png'. Используется текст.";
-        selectDateTimeButton->setText("..."); // Запасной вариант текстом
-        selectDateTimeButton->setFixedSize(selectDateTimeButton->sizeHint()); // Размер по тексту
     }
-    // --- Конец настройки кнопки с иконкой ---
 
-    // Добавляем виджеты в inputLayout
     inputLayout->addWidget(taskInput);
-    inputLayout->addWidget(selectDateTimeButton); // Добавляем кнопку (с иконкой или текстом)
+    inputLayout->addWidget(selectDateTimeButton);
     inputLayout->addWidget(dateTimeInput);
     inputLayout->addWidget(addButton);
 
     mainLayout->addLayout(inputLayout);
     mainLayout->addWidget(taskList);
-
-    // Кнопки управления списком
     QHBoxLayout *buttonLayout = new QHBoxLayout;
     buttonLayout->addWidget(doneButton);
     buttonLayout->addWidget(deleteButton);
@@ -170,7 +139,7 @@ void TodoListWidget::setupUI() {
 }
 
 void TodoListWidget::onItemClicked(QListWidgetItem *item) {
-    // Пусто
+    return;
 }
 
 void TodoListWidget::addTask() {
@@ -200,7 +169,6 @@ void TodoListWidget::deleteTask() {
                                   QString("Вы уверены, что хотите удалить %1 задач(и)?").arg(items.count()),
                                   QMessageBox::Yes|QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        // Используем qDeleteAll для безопасного удаления выбранных элементов
         qDeleteAll(taskList->selectedItems());
     }
 }
@@ -213,7 +181,6 @@ void TodoListWidget::markTaskDone() {
      }
 
      foreach(QListWidgetItem *item, items) {
-        // Проверяем по цвету фона, чтобы не выполнять повторно
         if (item->background().color() != QColor(80, 150, 50, 200)) {
             item->setForeground(QColor(255, 255, 255));
             item->setBackground(QColor(80, 150, 50, 200));
@@ -225,12 +192,9 @@ void TodoListWidget::markTaskDone() {
 void TodoListWidget::editTask(QListWidgetItem *item) {
     if (item && (item->flags() & Qt::ItemIsEditable)) {
         taskList->editItem(item);
-        // Примечание: Редактируется вся строка. Если нужно редактировать только текст задачи,
-        // потребуется извлечь дату, позволить редактировать только текст, а затем собрать строку обратно.
     }
 }
 
-// Слот для показа кастомного диалога выбора даты и времени
 void TodoListWidget::showDateTimePicker() {
     DateTimePickerDialog dialog(dateTimeInput->dateTime(), this);
     if (dialog.exec() == QDialog::Accepted) {
@@ -238,8 +202,6 @@ void TodoListWidget::showDateTimePicker() {
     }
 }
 
-
-// --- Реализация DateTimePickerDialog ---
 
 DateTimePickerDialog::DateTimePickerDialog(const QDateTime &initialDateTime, QWidget *parent)
     : QDialog(parent), currentDateTime(initialDateTime)
@@ -249,6 +211,13 @@ DateTimePickerDialog::DateTimePickerDialog(const QDateTime &initialDateTime, QWi
 
     calendarWidget = new QCalendarWidget(this);
     calendarWidget->setSelectedDate(initialDateTime.date());
+    calendarWidget->setGridVisible(true);
+    calendarWidget->setStyleSheet(
+        "QCalendarWidget QAbstractItemView:disabled { color: grey; }"
+        ); //сделал серыми дни других недель, потому что если всё одно и то же = отвратительно
+    calendarWidget->setHorizontalHeaderFormat(QCalendarWidget::NoHorizontalHeader);
+    calendarWidget->setVerticalHeaderFormat(QCalendarWidget::NoVerticalHeader);
+
 
     timeEdit = new QTimeEdit(this);
     timeEdit->setTime(initialDateTime.time());
@@ -272,7 +241,7 @@ DateTimePickerDialog::DateTimePickerDialog(const QDateTime &initialDateTime, QWi
 
     mainLayout->addWidget(buttonBox);
 
-    updateDateTime(); // Инициализируем currentDateTime
+    updateDateTime();
 }
 
 void DateTimePickerDialog::updateDateTime() {
@@ -291,14 +260,9 @@ void TodoListWidget::unmarkTaskDone() {
      }
 
      foreach(QListWidgetItem *item, items) {
-        // Проверяем, была ли задача отмечена как выполненная (по цвету фона)
         if (item->background().color() == QColor(80, 150, 50, 200)) {
-            // Сбрасываем цвета на значения по умолчанию
-            // Используем цвета из палитры для лучшей поддержки тем
-            item->setForeground(palette().color(QPalette::Text)); // Стандартный цвет текста
-            item->setBackground(QBrush()); // Стандартный (прозрачный) фон
-
-            // Возвращаем флаг возможности редактирования
+            item->setForeground(palette().color(QPalette::Text));
+            item->setBackground(QBrush());
             item->setFlags(item->flags() | Qt::ItemIsEditable);
         }
     }
