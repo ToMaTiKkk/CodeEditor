@@ -140,6 +140,7 @@ private:
     bool m_isAdmin;
     LineNumberArea *lineNumberArea;
     QPlainTextEdit *m_codeEditor;
+    bool maybeSave();
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
     QAction *m_muteUnmuteAction;
