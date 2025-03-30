@@ -292,54 +292,6 @@ void MainWindowCodeEditor::setupThemeAndNick()
         m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
     }
     qDebug() << "Set username to" << m_username;
-    m_codeEditor->viewport()->installEventFilter(this); // фильтр чтобы отслеживать изменения размеров viewport
-
-    // подключение сигнала измнения значения вертикального скроллбара
-    connect(ui->codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
-
-    // сигнал для "сессий"
-    connect(ui->actionCreateSession, &QAction::triggered, this, &MainWindowCodeEditor::onCreateSession);
-    connect(ui->actionJoinSession, &QAction::triggered, this, &MainWindowCodeEditor::onJoinSession);
-    connect(ui->actionSaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onSaveSessionClicked);
-    connect(ui->actionCopyId, &QAction::triggered, this, &MainWindowCodeEditor::onCopyIdClicked);
-    connect(ui->actionLeaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onLeaveSession);
-    connect(ui->actionShowListUsers, &QAction::triggered, this, &MainWindowCodeEditor::onShowUserList);
-    ui->actionShowListUsers->setVisible(false);
-    ui->actionLeaveSession->setVisible(false);
-    ui->actionSaveSession->setVisible(false);
-    ui->actionCopyId->setVisible(false);
-
-    // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
-    connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
-    connect(ui->actionOpen_File, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFileClicked);
-    connect(ui->actionOpen_Folder, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFolderClicked);
-    connect(ui->actionSave, &QAction::triggered, this, &MainWindowCodeEditor::onSaveFileClicked);
-    connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
-    connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
-
-    // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
-    fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
-    fileSystemModel->setRootPath(QDir::homePath()); // задаем корневой путь как домашнюю папку пользователя
-    ui->fileSystemTreeView->setModel(fileSystemModel); // привязываем модель к дереву файловой системы
-    ui->fileSystemTreeView->setRootIndex(fileSystemModel->index(QDir::homePath())); // устанавливаем корневой индекс (начало отображения) для дерева
-    // скрываем лишние столбцы, чтобы отображадась только первая колонка (имена файлов), время, размер и тд скрываются
-    ui->fileSystemTreeView->hideColumn(1);
-    ui->fileSystemTreeView->hideColumn(2);
-    ui->fileSystemTreeView->hideColumn(3);
-    ui->fileSystemTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    ui->fileSystemTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
-    connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
-
-    m_clientId = QUuid::createUuid().toString();
-    qDebug() << "Уникальный идентификатор клиента:" << m_clientId;
-
-    // Сигнал изменения документа клиентом и
-    connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
-
-    connect(ui->codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
-
-    highlighter = new CppHighlighter(ui->codeEditor->document());
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
