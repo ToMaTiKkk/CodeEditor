@@ -9,14 +9,21 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
+### ------------------------------------------------
+### ЭТИ СТРОКИ ЗАКОММЕНТИРОВАЛ
+### ------------------------------------------------
 #find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Network Widgets WebSockets)
 #find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Network Widgets WebSockets)
+### ------------------------------------------------
 
-#######################################
+
+### ------------------------------------------------
+### ВОТ ЭТОТ КОД Я ДОБАВИЛ ДЛЯ РАБОТЫ ТЕРМИНАЛА
+### ------------------------------------------------
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets WebSockets Network)
-#find_package(QTermWidget REQUIRED)
 find_package(qtermwidget6 REQUIRED)
-#######################################
+### ------------------------------------------------
 
 set(PROJECT_SOURCES
         main.cpp
@@ -67,13 +74,12 @@ endif()
 target_link_libraries(BAM_IDE PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 target_link_libraries(BAM_IDE PRIVATE Qt::WebSockets)
 
-#######################################
-#target_link_libraries(BAM_IDE PRIVATE QTermWidget::QTermWidget)
-#target_link_libraries(BAM_IDE PRIVATE qtermwidget6::QTermWidget)
-#target_link_libraries(BAM_IDE PRIVATE qtermwidget6)
+### ------------------------------------------------
+### ТУТ ВСЁ ОКЕЙ, ДЛЯ ТЕРМИНАЛА
+### ------------------------------------------------
 target_link_libraries(BAM_IDE PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::WebSockets)
 target_link_libraries(BAM_IDE PRIVATE qtermwidget6)
-#######################################
+### ------------------------------------------------
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
