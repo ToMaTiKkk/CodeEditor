@@ -1,5 +1,6 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
+#include "todolistwidget.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include <QFileDialog>
@@ -25,7 +26,7 @@
 #include <QLabel>
 #include <QSpacerItem>
 #include <QTimer>
-
+#include <QStringList>
 
 // Константы для чата
 const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
@@ -45,17 +46,86 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , m_muteTimer(new QTimer(this))
 {
     ui->setupUi(this);
+
+    setupMainWindow(); // окно и шрифт
+    setupCodeEditorArea(); // редактор и нумерация
+    setupChatWidget(); // чат
+    setupUserFeatures(); // меню пользователей, мьют, таймер и тп
+    setupMenuBarActions(); // подключение сигналов
+    setupFileSystemView(); // дерево файлов
+    setupNetwork(); // websocket, client id
+    setupThemeAndNick(); // тема и никнейм
+
+    qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
+    qDebug() << "Splitter widget count:" << ui->splitter->count();
+    qDebug() << "Splitter sizes:" << ui->splitter->sizes();
+    qDebug() << "--------------------------------------------";
+}
+
+void MainWindowCodeEditor::setupMainWindow()
+{
     this->setWindowTitle("CodeEdit");
     QFont font("Fira Code", 12);
-    QApplication::setFont(font);
+    QApplication::setFont(font); // шрифт ко всему приложению
+}
 
-    // --------------------------------------------------------------------
-    // --- НОВАЯ ИНИЦИАЛИЗАЦИЯ ЧАТА ---
-    // --------------------------------------------------------------------
+void MainWindowCodeEditor::setupCodeEditorArea()
+{
+    // создаем наш собственный виджет окна редактирование QPlainTextEditor
+    m_codeEditor = new QPlainTextEdit();
+    m_codeEditor->setObjectName("realCodeEditor"); // отладочное имя
+    m_codeEditor->setFont(QFont("Fira Code", 12));
+    m_codeEditor->setTabStopDistance(25.0);
+    m_codeEditor->setFocusPolicy(Qt::StrongFocus); // чтобы мог получать фокус для ввода
+
+    lineNumberArea = new LineNumberArea(m_codeEditor); // передаем наш собственный новый редактор, чтобы у класса было понимание, рядом с чем рисовать номера
+
+    // создаем контейнер для редактора и нумерации, объединяем и сливает их в одну единую виджет
+    QWidget *codeEditorContainer = new QWidget();
+    codeEditorContainer->setObjectName("codeEditorContainer");
+    codeEditorContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding); // виджет может растягиваться
+    codeEditorContainer->setMinimumWidth(300);
+
+    QHBoxLayout *layout = new QHBoxLayout(codeEditorContainer); // горизонтальный
+    layout->setContentsMargins(0, 0, 0, 0); // отступы внутри контейнера убираем
+    layout->setSpacing(0); // убираем зазор между виджетами
+    layout->addWidget(lineNumberArea);
+    layout->addWidget(m_codeEditor);
+
+    // находим индекс из ui-дизайнера непосредственно codeEditor и заменяем его на созданный контейнер
+    int index = ui->splitter->indexOf(ui->codeEditor);
+    if (index != -1) { // если нашли
+        ui->splitter->replaceWidget(index, codeEditorContainer);
+        codeEditorContainer->setVisible(true); // потому что после замены виджет скрывается
+
+        // удаляем прошлый редактор из дизайнера, потмоу что он больше не нужен
+        delete ui->codeEditor;
+        ui->codeEditor = nullptr; // чтобы случайнно не использовать данный указатель
+        qDebug() << "Редактор ui->codeEditor успешно заменен на codeEditorContainer";
+    } else {
+        ui->splitter->addWidget(codeEditorContainer);
+        codeEditorContainer->setVisible(true);
+    }
+
+    // подключенеие сигналов к нумерации и окну редактирования
+    connect(m_codeEditor->document(), &QTextDocument::blockCountChanged, lineNumberArea, &LineNumberArea::updateLineNumberAreaWidth);
+    connect(m_codeEditor, &QPlainTextEdit::updateRequest, lineNumberArea, &LineNumberArea::updateLineNumberArea); // когда пользователь печатает или прокручивает текст, то перерисовывает, только измненную часть нумерации строк, туже самую, что и была
+    connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, lineNumberArea, QOverload<>::of(&LineNumberArea::update)); // перерисовка полностью, чтобы при скролле  синхронно с текстом сдвигалось
+
+    lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
+
+    // инициализация подсветки синтаксиса
+    highlighter = new CppHighlighter(m_codeEditor->document());
+    // фильтр событий для viewport
+    m_codeEditor->viewport()->installEventFilter(this);
+}
+
+void MainWindowCodeEditor::setupChatWidget()
+{
     chatWidget = new QWidget(ui->horizontalWidget_2);
     chatWidget->setObjectName("chatWidget");
 
-    QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget); // Основной layout чата
+    QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget); // основной layout чата
     chatLayout->setContentsMargins(0, 0, 0, 0);
     chatLayout->setSpacing(5);
 
@@ -92,51 +162,31 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     chatInput->setPlaceholderText("Введите сообщение...");
     inputLayout->addWidget(chatInput, 1);
 
-    QPushButton *sendButton = new QPushButton("Send", chatWidget);
+    QPushButton *sendButton = new QPushButton(chatWidget);
     sendButton->setObjectName("sendButton");
+    QIcon sendIcon(":/styles/send.png");
+    sendButton->setIcon(sendIcon);
+    sendButton->setIconSize(QSize(24, 24));
+    sendButton->setToolTip(tr("Отправить сообщение"));
     sendButton->setCursor(Qt::PointingHandCursor);
     inputLayout->addWidget(sendButton, 0);
 
-    // Добавляем inputLayout в chatLayout
-    chatLayout->addLayout(inputLayout);
 
-    // Подключения для чата
+    chatLayout->addLayout(inputLayout);
     connect(sendButton, &QPushButton::clicked, this, &MainWindowCodeEditor::sendMessage);
-    connect(chatInput, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::sendMessage); // <-- Отправка по Enter
+    connect(chatInput, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::sendMessage); // Отправка по Enter
 
     // Добавляем chatWidget в основной UI
-    // Убедимся, что у родителя есть layout
     if (!ui->horizontalWidget_2->layout()) {
         ui->horizontalWidget_2->setLayout(new QHBoxLayout());
         ui->horizontalWidget_2->layout()->setContentsMargins(0,0,0,0);
     }
     ui->horizontalWidget_2->layout()->addWidget(chatWidget);
     chatWidget->hide(); // Скрыть по умолчанию
-    // --------------------------------------------------------------------
-    // --- КОНЕЦ НОВОЙ ИНИЦИАЛИЗАЦИИ ЧАТА ---
-    // --------------------------------------------------------------------
+}
 
-    // создаем тумблер для переключения темы
-    m_themeCheckBox = new QCheckBox(this);
-    m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
-    connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
-        m_isDarkTheme = (state == Qt::Unchecked); // Unchecked - темная, Checked - светлая
-        applyCurrentTheme();
-        if (m_isDarkTheme) {
-            m_themeCheckBox->setToolTip(tr("Темная тема"));
-        } else {
-            m_themeCheckBox->setToolTip(tr("Светлая тема"));
-        }
-    });
-    // добавляем тумблер в layout
-    QLabel* themeLabel = new QLabel("Тема:", this);
-    QHBoxLayout *themeLayout = new QHBoxLayout;
-    themeLayout->addWidget(themeLabel);
-    themeLayout->addWidget(m_themeCheckBox);
-    QWidget *themeWidget = new QWidget(this);
-    themeWidget->setLayout(themeLayout);
-    ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол
-
+void MainWindowCodeEditor::setupUserFeatures()
+{
     // создаем меню для списка пользователей
     m_userListMenu = new QMenu(this);
     ui->actionShowListUsers->setMenu(m_userListMenu);
@@ -145,19 +195,17 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateStatusBarMuteTime); // вызывает каждую секунду, когда таймер запущен, чтоы обновлять время мьюта в статус-баре
     connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo);
     //connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateAllUsersMuteTimeDisplay);
+}
 
-    applyCurrentTheme(); // применение темы, по умолчанию темная
-
-    bool ok;
-    m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
-    if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
-        m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
-    }
-    qDebug() << "Set username to" << m_username;
-    ui->codeEditor->viewport()->installEventFilter(this); // фильтр чтобы отслеживать изменения размеров viewport
-
-    // подключение сигнала измнения значения вертикального скроллбара
-    connect(ui->codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
+void MainWindowCodeEditor::setupMenuBarActions()
+{
+    // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
+    connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
+    connect(ui->actionOpen_File, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFileClicked);
+    connect(ui->actionOpen_Folder, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFolderClicked);
+    connect(ui->actionSave, &QAction::triggered, this, &MainWindowCodeEditor::onSaveFileClicked);
+    connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
+    connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
 
     // сигнал для "сессий"
     connect(ui->actionCreateSession, &QAction::triggered, this, &MainWindowCodeEditor::onCreateSession);
@@ -171,35 +219,80 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     ui->actionSaveSession->setVisible(false);
     ui->actionCopyId->setVisible(false);
 
-    // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
-    connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
-    connect(ui->actionOpen_File, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFileClicked);
-    connect(ui->actionOpen_Folder, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFolderClicked);
-    connect(ui->actionSave, &QAction::triggered, this, &MainWindowCodeEditor::onSaveFileClicked);
-    connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
-    connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
+    // connect для Parameters меню
+    connect(ui->actionToDoList, &QAction::triggered, this, &MainWindowCodeEditor::on_actionToDoList_triggered);
+    connect(ui->actionChangeTheme, &QAction::triggered, this, &MainWindowCodeEditor::on_actionChangeTheme_triggered);
 
+    // подключение сигнала измнения значения вертикального скроллбара
+    connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
+
+    // Сигнал изменения документа клиентом и
+    connect(m_codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
+    connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
+}
+
+void MainWindowCodeEditor::setupFileSystemView()
+{
     // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
     fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
     fileSystemModel->setRootPath(QDir::homePath()); // задаем корневой путь как домашнюю папку пользователя
     ui->fileSystemTreeView->setModel(fileSystemModel); // привязываем модель к дереву файловой системы
     ui->fileSystemTreeView->setRootIndex(fileSystemModel->index(QDir::homePath())); // устанавливаем корневой индекс (начало отображения) для дерева
+
     // скрываем лишние столбцы, чтобы отображадась только первая колонка (имена файлов), время, размер и тд скрываются
     ui->fileSystemTreeView->hideColumn(1);
     ui->fileSystemTreeView->hideColumn(2);
     ui->fileSystemTreeView->hideColumn(3);
+
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
     connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
+}
 
+void MainWindowCodeEditor::setupNetwork()
+{
     m_clientId = QUuid::createUuid().toString();
     qDebug() << "Уникальный идентификатор клиента:" << m_clientId;
+}
 
-    // Сигнал изменения документа клиентом и
-    connect(ui->codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
+void MainWindowCodeEditor::setupThemeAndNick()
+{
+    applyCurrentTheme(); // применение темы, по умолчанию темная
 
-    connect(ui->codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
+    m_chatButton = new QPushButton(this);
+    m_chatButton->setObjectName("chatButton");
 
-    highlighter = new CppHighlighter(ui->codeEditor->document());
+    QIcon chatIcon(":/styles/chat_light.png");
+    m_chatButton->setIcon(chatIcon);
+    m_chatButton->setIconSize(QSize(24, 24));
+
+    m_chatButton->setToolTip(tr("Открыть/закрыть чат"));
+    connect(m_chatButton, &QPushButton::clicked, this, [this](bool checked) {
+        Q_UNUSED(checked);
+        chatWidget->setVisible(!chatWidget->isVisible());
+
+        if (chatWidget->isVisible()) {
+            chatInput->setFocus();
+            scrollToBottom();
+        }
+    });
+
+    QHBoxLayout* chatButtonLayout = new QHBoxLayout;
+    chatButtonLayout->addWidget(m_chatButton);
+    chatButtonLayout->setContentsMargins(0,0,0,0); // Remove margins around the button
+
+    QWidget* chatWidgetContainer = new QWidget(this);
+    chatWidgetContainer->setLayout(chatButtonLayout);
+
+    // Добавляем виджет в правый верхний угол menuBar
+    ui->menubar->setCornerWidget(chatWidgetContainer, Qt::TopRightCorner);
+
+    bool ok;
+    m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
+    if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
+        m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
+    }
+    qDebug() << "Set username to" << m_username;
+    m_codeEditor->viewport()->installEventFilter(this); // фильтр чтобы отслеживать изменения размеров viewport
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
@@ -213,13 +306,29 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     delete m_userListMenu;
     delete m_muteTimer;
     delete m_muteTimeLabel;
+    delete lineNumberArea;
+    delete m_codeEditor;
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+        m_trayIcon->deleteLater();
+        m_trayIcon = nullptr;
+    }
+}
+
+void MainWindowCodeEditor::closeEvent(QCloseEvent *event) {
+    if (maybeSave()) {
+        disconnectFromServer();
+        event->accept();
+    } else {
+        event->ignore(); // отмена
+    }
 }
 
 // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
 bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
 {
     // проверяем, что событие относится к viewport редактора и является событие измнения размера
-    if (obj == ui->codeEditor->viewport() && event->type() == QEvent::Resize) {
+    if (obj == m_codeEditor->viewport() && event->type() == QEvent::Resize) {
         for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
             QString senderId = it.key();
             int position = lastCursorPositions.value(senderId, -1);
@@ -266,6 +375,9 @@ void MainWindowCodeEditor::onDisconnected()
     ui->actionLeaveSession->setVisible(false);
     ui->actionSaveSession->setVisible(false);
     ui->actionCopyId->setVisible(false);
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
 }
 
 void MainWindowCodeEditor::connectToServer()
@@ -297,6 +409,9 @@ void MainWindowCodeEditor::disconnectFromServer()
         socket->close();
         clearRemoteInfo();
     }
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
 }
 
 bool MainWindowCodeEditor::confirmChangeSession(const QString &message)
@@ -313,7 +428,7 @@ bool MainWindowCodeEditor::confirmChangeSession(const QString &message)
 void MainWindowCodeEditor::clearRemoteInfo()
 {
     // очистка данных, связанных с сессией
-    ui->codeEditor->setPlainText("");
+    m_codeEditor->setPlainText("");
     m_sessionId.clear();
     qDeleteAll(remoteCursors);
     remoteCursors.clear();
@@ -429,22 +544,20 @@ void MainWindowCodeEditor::onOpenFileClicked()
     QString fileName = QFileDialog::getOpenFileName(this, "Открытить файл"); // открытие диалогового окна для выбора файла
     if (!fileName.isEmpty()) {
         QFile file(fileName); // при непустом файле создается объект для работы с файлом
+        QString fileContent;
         if (file.open(QFile::ReadOnly | QFile::Text)) { // открытие файла для чтения в текстовом режиме
             // считывание всего текста из файла и устанавливание в редактор CodeEditor
             QTextStream in(&file);
-            ui->codeEditor->setPlainText(in.readAll());
-            // закрытие файла и записи пути в переменную
-            file.close();
-            currentFilePath = fileName;
-            QString fileContent = in.readAll();
-            // закрытие файла и записи пути в переменную
+            fileContent = in.readAll();
             file.close();
             currentFilePath = fileName;
             {
-                QSignalBlocker blocker(ui->codeEditor->document());
+                QSignalBlocker blocker(m_codeEditor->document());
                 loadingFile = true;
                 if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
-                ui->codeEditor->setPlainText(fileContent); // установка текста локально
+                m_codeEditor->setPlainText(fileContent); // установка текста локально
+                lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
+                lineNumberArea->update(); // принудительно перерисовать область номеров
                 loadingFile = false;
             }
             highlighter->rehighlight();
@@ -480,7 +593,7 @@ void MainWindowCodeEditor::onSaveFileClicked()
     if (file.open(QFile::WriteOnly | QFile::Text)) {
         // запись содержимог CodeEditor в файл
         QTextStream out(&file);
-        out << ui->codeEditor->toPlainText();
+        out << m_codeEditor->toPlainText();
         file.close();
     } else {
         QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
@@ -494,13 +607,40 @@ void MainWindowCodeEditor::onSaveAsFileClicked()
         QFile file(fileName);
         if (file.open(QFile::WriteOnly | QFile::Text)) {
             QTextStream out(&file);
-            out << ui->codeEditor->toPlainText();
+            out << m_codeEditor->toPlainText();
             file.close();
             currentFilePath = fileName;
         }
     } else {
         QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
     }
+}
+
+bool MainWindowCodeEditor::maybeSave()
+{
+    if (!ui->codeEditor->document()->isModified())
+        return true;
+    QMessageBox::StandardButton ret;
+    ret = QMessageBox::warning(this, tr("Предупреждение"),
+                               tr("Документ был изменен.\n"
+                                  "Хотите сохранить изменения?"),
+                               QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+    if (ret == QMessageBox::Save) {
+        // если есть имя файла, сохраняем, иначе сохраняем как
+        if (!currentFilePath.isEmpty()) {
+            onSaveFileClicked();
+            return true;
+        } else {
+            onSaveAsFileClicked();
+            // проверяем сохранился ли файл
+            return !currentFilePath.isEmpty();
+        }
+    } else if (ret == QMessageBox::Cancel) {
+        return false; // Отмена закрытия
+    }
+
+    return true;
 }
 
 void MainWindowCodeEditor::onExitClicked()
@@ -512,7 +652,7 @@ void MainWindowCodeEditor::onNewFileClicked()
 {
     if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
     // очищения поля редактирование и очищение пути к текущему файлу
-    ui->codeEditor->clear();
+    m_codeEditor->clear();
     currentFilePath.clear();
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         QJsonObject fileUpdate;
@@ -574,10 +714,12 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
             file.close();
             currentFilePath = filePath;
             {
-                QSignalBlocker blocker(ui->codeEditor->document());
+                QSignalBlocker blocker(m_codeEditor->document());
                 loadingFile = true;
                 if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
-                ui->codeEditor->setPlainText(fileContent); // установка текста локально
+                m_codeEditor->setPlainText(fileContent); // установка текста локально
+                lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
+                lineNumberArea->update(); // принудительно перерисовать область номеров
                 loadingFile = false;
             }
             highlighter->rehighlight();
@@ -612,7 +754,7 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
         op["client_id"] = m_clientId;
         op["type"] = "insert";
         op["position"] = position;
-        QString insertedText = ui->codeEditor->toPlainText().mid(position, charsAdded); // извлечение вставленного текста
+        QString insertedText = m_codeEditor->toPlainText().mid(position, charsAdded); // извлечение вставленного текста
         op["text"] = insertedText;
     } else if (charsRemoved > 0)
     {
@@ -633,7 +775,7 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
 void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 {
     qDebug() << "Получено сообщение от сервера:" << message;
-    //QSignalBlocker blocker(ui->codeEditor->document()); // предотвращение циклического обмена, чтобы примененные изменения снова не отправились на сервер
+    //QSignalBlocker blocker(m_codeEditor->document()); // предотвращение циклического обмена, чтобы примененные изменения снова не отправились на сервер
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     QJsonObject op = doc.object();
     QString opType = op["type"].toString();
@@ -670,7 +812,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         qDebug() << "ID session" << m_sessionId;
         m_isAdmin = (op["creator_client_id"].toString() == m_clientId);
         QString fileText = op["text"].toString();
-        ui->codeEditor->setPlainText(fileText);
+        m_codeEditor->setPlainText(fileText);
         QJsonObject cursors = op["cursors"].toObject();
         for (const QString& otherClientId : cursors.keys()) {
             QJsonObject cursorInfo = cursors[otherClientId].toObject();
@@ -681,13 +823,13 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
             // создаем/обновляем виджеты курсоров и подсветок
             if (!remoteCursors.contains(otherClientId))
             {
-                CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), color);
+                CursorWidget* cursorWidget = new CursorWidget(m_codeEditor->viewport(), color);
                 remoteCursors[otherClientId] = cursorWidget;
                 cursorWidget->show();
                 cursorWidget->setCustomToolTipStyle(color);
                 cursorWidget->setUsername(username);
 
-                LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), color.lighter(150));
+                LineHighlightWidget* lineHighlight = new LineHighlightWidget(m_codeEditor->viewport(), color.lighter(150));
                 remoteLineHighlights[otherClientId] = lineHighlight;
                 lineHighlight->show();
             }
@@ -745,9 +887,9 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
     } else if (opType == "file_content_update")
     {
-        QSignalBlocker blocker(ui->codeEditor->document());
+        QSignalBlocker blocker(m_codeEditor->document());
         QString fileText = op["text"].toString();
-        ui->codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
+        m_codeEditor->setPlainText(fileText); // замена всего содержимого в редакторе
         qDebug() << "Применено обновление содержимого файла";
 
     } else if (opType == "chat_message") {
@@ -755,6 +897,28 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         QString chatMessage = op["text_message"].toString();
         addChatMessageWidget(username, chatMessage, QTime::currentTime(), false); // false - не свое сообщение
 
+        if (!chatWidget->isVisible() || this->isMinimized()) {
+
+            if (!m_trayIcon) { //m_trayIcon == nullptr) {
+                m_trayIcon = new QSystemTrayIcon(this);
+                connect(m_trayIcon, &QSystemTrayIcon::messageClicked, this, [this]() { // раскрытие чата при клике на уведомление
+                    if (this->isMinimized()) {
+                        this->showNormal();
+                        this->activateWindow();
+                    }
+                    if (!chatWidget->isVisible()) {
+                        chatWidget->setVisible(true);
+                        chatInput->setFocus();
+                        scrollToBottom();
+                    }
+                });
+            }
+                m_trayIcon->setIcon(QIcon(":/styles/chat_light.png"));
+                m_trayIcon->show();
+                QString title = "У вас новое сообщение от " + username; // Заголовок уведомления
+                QString message = chatMessage;
+                m_trayIcon->showMessage(title, message, QSystemTrayIcon::Information, 3000);
+        }
     } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
         if (senderId == m_clientId) return; // игнорирование собственных сообщений
@@ -767,12 +931,12 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
         if (!remoteCursors.contains(senderId)) // проверка наличия удаленного курсора для данного клиента, если его нет, то он рисуется с нуля
         {
-            CursorWidget* cursorWidget = new CursorWidget(ui->codeEditor->viewport(), color); // создается курсор имнено на области отображения текста для правильного позиционирвоания
+            CursorWidget* cursorWidget = new CursorWidget(m_codeEditor->viewport(), color); // создается курсор имнено на области отображения текста для правильного позиционирвоания
             remoteCursors[senderId] = cursorWidget;
             cursorWidget->setCustomToolTipStyle(color);
             cursorWidget->show();
 
-            LineHighlightWidget* lineHighlight = new LineHighlightWidget(ui->codeEditor->viewport(), color.lighter(150));
+            LineHighlightWidget* lineHighlight = new LineHighlightWidget(m_codeEditor->viewport(), color.lighter(150));
             remoteLineHighlights[senderId] = lineHighlight;
             lineHighlight->show();
         }
@@ -824,26 +988,26 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
     } else if (opType == "insert")
     {
-        QSignalBlocker blocker(ui->codeEditor->document());
+        QSignalBlocker blocker(m_codeEditor->document());
         QString senderId = op["client_id"].toString();
         if (m_clientId == senderId) return;
 
         QString text = op["text"].toString();
         int position = op["position"].toInt();
-        QTextCursor cursor(ui->codeEditor->document());
+        QTextCursor cursor(m_codeEditor->document());
         cursor.setPosition(position);
         cursor.insertText(text);
         qDebug() << "Применена операция вставки";
 
     } else if (opType == "delete")
     {
-        QSignalBlocker blocker(ui->codeEditor->document());
+        QSignalBlocker blocker(m_codeEditor->document());
         QString senderId = op["client_id"].toString();
         if (m_clientId == senderId) return;
 
         int count = op["count"].toInt();
         int position = op["position"].toInt();
-        QTextCursor cursor(ui->codeEditor->document());
+        QTextCursor cursor(m_codeEditor->document());
         cursor.setPosition(position);
         cursor.setPosition(position + count, QTextCursor::KeepAnchor);
         cursor.removeSelectedText();
@@ -858,7 +1022,7 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
 
 void MainWindowCodeEditor::onCursorPositionChanged()
 {
-    int cursorPosition = ui->codeEditor->textCursor().position(); // номер символа, где курсор
+    int cursorPosition = m_codeEditor->textCursor().position(); // номер символа, где курсор
     QJsonObject cursorUpdate;
     cursorUpdate["type"] = "cursor_position_update";
     cursorUpdate["position"] = cursorPosition;
@@ -988,9 +1152,9 @@ void MainWindowCodeEditor::updateRemoteWidgetGeometry(QWidget* widget, int posit
 {
     if (!widget) return;
 
-    QTextCursor tempCursor(ui->codeEditor->document());
+    QTextCursor tempCursor(m_codeEditor->document());
     tempCursor.setPosition(position);
-    QRect cursorRect = ui->codeEditor->cursorRect(tempCursor);
+    QRect cursorRect = m_codeEditor->cursorRect(tempCursor);
     widget->move(cursorRect.topLeft());
     widget->setFixedHeight(cursorRect.height());
 }
@@ -1002,13 +1166,13 @@ void MainWindowCodeEditor::updateLineHighlight(const QString& senderId, int posi
     LineHighlightWidget* lineHighlight = remoteLineHighlights[senderId];
     if (!lineHighlight) return;
 
-    QTextCursor tempCursor(ui->codeEditor->document());
+    QTextCursor tempCursor(m_codeEditor->document());
     tempCursor.setPosition(position);
-    QRect cursorRect = ui->codeEditor->cursorRect(tempCursor);
+    QRect cursorRect = m_codeEditor->cursorRect(tempCursor);
     lineHighlight->setGeometry(
         0, // х относительно viewport`а
         cursorRect.top(), // y - верхняя граница cursorRect
-        /*ui->codeEditor->viewport()->width(),*/
+        /*m_codeEditor->viewport()->width(),*/
         10000,
         cursorRect.height()
         );
@@ -1091,11 +1255,11 @@ void MainWindowCodeEditor::updateMutedStatus()
             }
             updateStatusBarMuteTime(); // вызываем чтобы обновить сразу, а не через секунду
         }
-        ui->codeEditor->setReadOnly(true);
+        m_codeEditor->setReadOnly(true);
     } else {
         statusBar()->clearMessage();
         // включаем редактирование текста
-        ui->codeEditor->setReadOnly(false);
+        m_codeEditor->setReadOnly(false);
         m_muteTimer->stop();
     }
 }
@@ -1426,22 +1590,6 @@ void MainWindowCodeEditor::sendMessage() {
     }
 }
 
-void MainWindowCodeEditor::on_toolButton_clicked()
-{
-    if (!chatWidget) {
-        qDebug() << "Ошибка: chatWidget не был создан!";
-        // В идеале, он всегда должен быть создан в конструкторе
-        return;
-    }
-
-    chatWidget->setVisible(!chatWidget->isVisible()); // Переключаем видимость
-
-    if (chatWidget->isVisible()) {
-        chatInput->setFocus(); // Устанавливаем фокус на поле ввода
-        scrollToBottom();      // Прокручиваем вниз при открытии
-    }
-}
-
 // Слот для прокрутки (вызывается через QTimer::singleShot)
 void MainWindowCodeEditor::scrollToBottom() {
     if (chatScrollArea) {
@@ -1529,3 +1677,29 @@ void MainWindowCodeEditor::addChatMessageWidget(const QString &username, const Q
     messagesLayout->insertWidget(qMax(0, messagesLayout->count() - 1), rowWidget);
     scrollToBottom();
 }
+
+void MainWindowCodeEditor::on_actionChangeTheme_triggered()
+{
+    m_isDarkTheme = !m_isDarkTheme;
+    applyCurrentTheme();
+    updateChatButtonIcon();
+}
+void MainWindowCodeEditor::updateChatButtonIcon() {
+    if (m_isDarkTheme) {
+        m_chatButton->setIcon(QIcon(":/styles/chat_light.png"));
+    } else {
+        m_chatButton->setIcon(QIcon(":/styles/chat_dark.png"));
+    }
+    m_chatButton->setIconSize(QSize(24, 24));
+}
+
+
+
+void MainWindowCodeEditor::on_actionToDoList_triggered()
+{
+    TodoListWidget *todoWidget = new TodoListWidget(nullptr);
+    todoWidget->setAttribute(Qt::WA_DeleteOnClose);
+    todoWidget->show();
+
+}
+

@@ -1,11 +1,21 @@
 QMainWindow {
     background-color: rgb(240, 240, 240); /* Светло-серый фон главного окна */
 }
+#chatButton {
+    background: transparent;
+    border: none;
+    min-width: 25px;
+    min-height: 25px;
+}
 
+#chatButton:hover {
+    border: 1px solid #007bff;
+    border-radius: 10px;
+}
 QMenuBar { /* панель меню */
     background-color: rgb(240, 240, 240);
     color: rgba(0, 0, 0, 0.8); /* Черный текст */
-    border-bottom: 1px solid #007bff; /* Серая нижняя граница */
+    border-bottom: 1px solid #007bff;
     padding: 4px; /* внутренние отступы вокруг содержимого панели */
 }
 
@@ -271,4 +281,3 @@ QPushButton:pressed {
 #messageRowWidget {
     background: transparent;
 }
-
