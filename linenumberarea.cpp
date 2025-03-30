@@ -1,31 +1,55 @@
 #include "linenumberarea.h"
 #include <QPainter>
 #include <QTextBlock>
-#include <QTextCursor>
+#include <QPaintEvent>
+#include <QScrollBar>
 
-LineNumberArea::LineNumberArea(QPlainTextEdit *editor) : QWidget(editor), codeEditor(editor)
+LineNumberArea::LineNumberArea(QPlainTextEdit *editor) : QWidget(editor), codeEditor(editor), m_currentDigits(1) // при пердачи редактора как родителя - значит нумерация будет внутри редактора
 {
-    updateLineNumberAreaWidth(0);
+    updateLineNumberAreaWidth(); // рассчитать и установить начальную ширину, даже если 0 строк
+
+    connect(codeEditor, &QPlainTextEdit::cursorPositionChanged, this, QOverload<>::of(&LineNumberArea::update)); // подключение к изменению курсора редактора для подствеотки строки
+    connect(codeEditor->document(), &QTextDocument::contentsChange, this, QOverload<>::of(&LineNumberArea::update)); // чтобы подсветка обновлялась при вставки или удалении строк
+    connect(codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, QOverload<>::of(&LineNumberArea::update)); // обновлении при измнении видимой области
 }
 
-int LineNumberArea::lineNumberAreaWidth() const
-{
+// вычисление необходимого количества цифр
+int calculateDigits(int maxNumber) {
     int digits = 1;
-    int max = qMax(1, codeEditor->blockCount()); // количество строк
+    int max = qMax(1, maxNumber);
     while (max >= 10) {
         max /= 10;
-        ++digits;
+        digits++;
     }
-    int space = 3 + codeEditor->fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
-    return space;
+    return digits;
 }
 
-void LineNumberArea::updateLineNumberAreaWidth(int newBlockCount)
+// вычисление ширины на основании количества цифр
+int LineNumberArea::calculateWidth(int digits) const
 {
-    Q_UNUSED(newBlockCount);
-    setFixedWidth(lineNumberAreaWidth()); // установка  фиксированной ширины
+    int padding = 10; // слева и справа отступы по 5 пикселей
+    QString maxWidthString(digits, QLatin1Char('9')); // считаем ширину строки digits когда все девятки (самые широкие цифры)
+    int textWidth = fontMetrics().horizontalAdvance(maxWidthString);
+    return padding + textWidth;
 }
 
+// обновление ширины
+void LineNumberArea::updateLineNumberAreaWidth()
+{
+    int newDigits = calculateDigits(codeEditor->blockCount()); // считаем реально количество цифр
+    const int min_digits_for_width = 3; // устнавливаем минимульное количество разрядов для расчета ширины
+    if (newDigits < min_digits_for_width) {
+        newDigits = min_digits_for_width;
+    }
+
+    // обновляем ширину, если кол во цифр изменилось
+    if (newDigits != m_currentDigits) {
+        m_currentDigits = newDigits;
+        setFixedWidth(calculateWidth(m_currentDigits));
+    }
+}
+
+// частиное обновление области номеров
 void LineNumberArea::updateLineNumberArea(const QRect &rect, int dy)
 {
     if (dy)
@@ -34,8 +58,10 @@ void LineNumberArea::updateLineNumberArea(const QRect &rect, int dy)
         update(0, rect.y(), width(), rect.height()); // частиное обновление
 }
 
+// метод самой отрисовки
 void LineNumberArea::paintEvent(QPaintEvent *event)
 {
+    // будет рисовать НА нашем виджете
     QPainter painter(this);
     painter.fillRect(event->rect(), Qt::lightGray); // фон области номеров строк
 
@@ -46,18 +72,29 @@ void LineNumberArea::paintEvent(QPaintEvent *event)
     QRectF rect = codeEditor->cursorRect(cursor);
     int top = rect.top();
     int bottom = top + rect.height();
+    int currentBlockNumber = codeEditor->textCursor().blockNumber(); // получаем номер текущего блока, где курсор
 
-    // рисуем номера видимых блоков
+    // рисуем номера видимых блоков, проходимся по кождому блоку и если их верхняя граница внутри или выше границы области перерисовки
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
             QString number = QString::number(blockNumber + 1);
-            painter.setPen(Qt::black);
-            painter.drawText(0, top, width() - 3, codeEditor->fontMetrics().height(), Qt::AlignRight, number);
+            painter.setFont(codeEditor->font());
+            //painter.setPen(Qt::black);
+
+            // выделение текущей строки
+            if (blockNumber == currentBlockNumber) {
+                // устанавливаем цвет текста для текущей строки
+                painter.setPen(palette().highlightedText().color());
+                // !!!!!! можно добавить заливку фона чутка другую, чтобы ещё более выделено было, на усмотрение!!!!!
+            } else {
+                painter.setPen(palette().windowText().color());
+            }
+            painter.drawText(0, top, width() - 5, codeEditor->fontMetrics().height(), Qt::AlignRight | Qt::AlignVCenter, number); // рисуем правее, также вертикально выравнивание по центру
         }
 
         block = block.next();
         if (block.isValid()) {
-            cursor.setPosition(block.position());
+            cursor.setPosition(block.position()); // перемещаем курсор на новый блок
             rect = codeEditor->cursorRect(cursor);
             top = bottom;
             bottom = top + rect.height();

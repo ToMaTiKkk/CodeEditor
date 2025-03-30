@@ -92,7 +92,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(m_codeEditor, &QPlainTextEdit::updateRequest, lineNumberArea, &LineNumberArea::updateLineNumberArea); // когда пользователь печатает или прокручивает текст, то перерисовывает, только измненную часть нумерации строк, туже самую, что и была
     connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, lineNumberArea, QOverload<>::of(&LineNumberArea::update)); // перерисовка полностью, чтобы при скролле  синхронно с текстом сдвигалось
 
-    lineNumberArea->updateLineNumberAreaWidth(0); // начальная ширина
+    lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
 
     // --- КОНЕЦ ИЗМЕНЕНИЙ ДЛЯ НУМЕРАЦИИ СТРОК ---
 
@@ -164,27 +164,6 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // --------------------------------------------------------------------
     // --- КОНЕЦ НОВОЙ ИНИЦИАЛИЗАЦИИ ЧАТА ---
     // --------------------------------------------------------------------
-
-    // создаем тумблер для переключения темы
-    /*m_themeCheckBox = new QCheckBox(this);
-    m_themeCheckBox->setChecked(!m_isDarkTheme); // checked - вкл
-    connect(m_themeCheckBox, &QCheckBox::stateChanged, this, [this](int state) {
-        m_isDarkTheme = (state == Qt::Unchecked); // Unchecked - темная, Checked - светлая
-        applyCurrentTheme();
-        if (m_isDarkTheme) {
-            m_themeCheckBox->setToolTip(tr("Темная тема"));
-        } else {
-            m_themeCheckBox->setToolTip(tr("Светлая тема"));
-        }
-    });
-    // добавляем тумблер в layout
-    QLabel* themeLabel = new QLabel("Тема:", this);
-    QHBoxLayout *themeLayout = new QHBoxLayout;
-    themeLayout->addWidget(themeLabel);
-    themeLayout->addWidget(m_themeCheckBox);
-    QWidget *themeWidget = new QWidget(this);
-    themeWidget->setLayout(themeLayout);
-    ui->menubar->setCornerWidget(themeWidget, Qt::TopRightCorner); // добавляем в правый верхний угол*/
 
     // создаем меню для списка пользователей
     m_userListMenu = new QMenu(this);
@@ -273,18 +252,16 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     qDebug() << "Уникальный идентификатор клиента:" << m_clientId;
 
     // Сигнал изменения документа клиентом и
-    // connect(m_codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
+    connect(m_codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
+    connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
 
-    // connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
-
-    // Инициализация подсветки синтаксиса для НАШЕГО редактора
+    // инициализация подсветки синтаксиса
     highlighter = new CppHighlighter(m_codeEditor->document());
-    // Фильтр событий для viewport НАШЕГО редактора
+    // фильтр событий для viewport
     m_codeEditor->viewport()->installEventFilter(this);
 
 
     qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
-    // ... (добавь нужные проверки видимости/размеров для m_codeEditor, lineNumberArea, codeEditorContainer) ...
     qDebug() << "Splitter widget count:" << ui->splitter->count();
     qDebug() << "Splitter sizes:" << ui->splitter->sizes();
     qDebug() << "--------------------------------------------";
@@ -547,7 +524,7 @@ void MainWindowCodeEditor::onOpenFileClicked()
                 loadingFile = true;
                 if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
                 m_codeEditor->setPlainText(fileContent); // установка текста локально
-                lineNumberArea->updateLineNumberAreaWidth(0); // пересчитать ширину
+                lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
                 lineNumberArea->update(); // принудительно перерисовать область номеров
                 loadingFile = false;
             }
@@ -682,7 +659,7 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
                 loadingFile = true;
                 if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
                 m_codeEditor->setPlainText(fileContent); // установка текста локально
-                lineNumberArea->updateLineNumberAreaWidth(0); // пересчитать ширину
+                lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
                 lineNumberArea->update(); // принудительно перерисовать область номеров
                 loadingFile = false;
             }
