@@ -4,6 +4,7 @@
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include "cpphighlighter.h"
+#include "linenumberarea.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -126,6 +127,8 @@ private:
     bool loadingFile = false;
     bool m_isDarkTheme;
     bool m_isAdmin;
+    LineNumberArea *lineNumberArea;
+    QPlainTextEdit *m_codeEditor;
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
     QAction *m_muteUnmuteAction;

@@ -27,6 +27,8 @@ set(PROJECT_SOURCES
         cpphighlighter.h
         todolistwidget.cpp
         todolistwidget.h
+        linenumberarea.cpp
+        linenumberarea.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

@@ -281,4 +281,3 @@ QPushButton:pressed {
 #messageRowWidget {
     background: transparent;
 }
-
