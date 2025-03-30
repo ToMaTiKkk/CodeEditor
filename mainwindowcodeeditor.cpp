@@ -46,15 +46,35 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , m_muteTimer(new QTimer(this))
 {
     ui->setupUi(this);
+
+    setupMainWindow(); // окно и шрифт
+    setupCodeEditorArea(); // редактор и нумерация
+    setupChatWidget(); // чат
+    setupUserFeatures(); // меню пользователей, мьют, таймер и тп
+    setupMenuBarActions(); // подключение сигналов
+    setupFileSystemView(); // дерево файлов
+    setupNetwork(); // websocket, client id
+    setupThemeAndNick(); // тема и никнейм
+
+    qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
+    qDebug() << "Splitter widget count:" << ui->splitter->count();
+    qDebug() << "Splitter sizes:" << ui->splitter->sizes();
+    qDebug() << "--------------------------------------------";
+}
+
+void MainWindowCodeEditor::setupMainWindow()
+{
     this->setWindowTitle("CodeEdit");
     QFont font("Fira Code", 12);
     QApplication::setFont(font); // шрифт ко всему приложению
+}
 
-    // --- НАЧАЛО ИЗМЕНЕНИЙ ДЛЯ НУМЕРАЦИИ СТРОК ---
+void MainWindowCodeEditor::setupCodeEditorArea()
+{
     // создаем наш собственный виджет окна редактирование QPlainTextEditor
     m_codeEditor = new QPlainTextEdit();
     m_codeEditor->setObjectName("realCodeEditor"); // отладочное имя
-    m_codeEditor->setFont(font);
+    m_codeEditor->setFont(QFont("Fira Code", 12));
     m_codeEditor->setTabStopDistance(25.0);
     m_codeEditor->setFocusPolicy(Qt::StrongFocus); // чтобы мог получать фокус для ввода
 
@@ -94,15 +114,18 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
 
-    // --- КОНЕЦ ИЗМЕНЕНИЙ ДЛЯ НУМЕРАЦИИ СТРОК ---
+    // инициализация подсветки синтаксиса
+    highlighter = new CppHighlighter(m_codeEditor->document());
+    // фильтр событий для viewport
+    m_codeEditor->viewport()->installEventFilter(this);
+}
 
-    // --------------------------------------------------------------------
-    // --- НОВАЯ ИНИЦИАЛИЗАЦИЯ ЧАТА ---
-    // --------------------------------------------------------------------
+void MainWindowCodeEditor::setupChatWidget()
+{
     chatWidget = new QWidget(ui->horizontalWidget_2);
     chatWidget->setObjectName("chatWidget");
 
-    QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget); // Основной layout чата
+    QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget); // основной layout чата
     chatLayout->setContentsMargins(0, 0, 0, 0);
     chatLayout->setSpacing(5);
 
@@ -151,20 +174,19 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     chatLayout->addLayout(inputLayout);
     connect(sendButton, &QPushButton::clicked, this, &MainWindowCodeEditor::sendMessage);
-    connect(chatInput, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::sendMessage); // <-- Отправка по Enter
+    connect(chatInput, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::sendMessage); // Отправка по Enter
 
     // Добавляем chatWidget в основной UI
-    // Убедимся, что у родителя есть layout
     if (!ui->horizontalWidget_2->layout()) {
         ui->horizontalWidget_2->setLayout(new QHBoxLayout());
         ui->horizontalWidget_2->layout()->setContentsMargins(0,0,0,0);
     }
     ui->horizontalWidget_2->layout()->addWidget(chatWidget);
     chatWidget->hide(); // Скрыть по умолчанию
-    // --------------------------------------------------------------------
-    // --- КОНЕЦ НОВОЙ ИНИЦИАЛИЗАЦИИ ЧАТА ---
-    // --------------------------------------------------------------------
+}
 
+void MainWindowCodeEditor::setupUserFeatures()
+{
     // создаем меню для списка пользователей
     m_userListMenu = new QMenu(this);
     ui->actionShowListUsers->setMenu(m_userListMenu);
@@ -173,7 +195,67 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateStatusBarMuteTime); // вызывает каждую секунду, когда таймер запущен, чтоы обновлять время мьюта в статус-баре
     connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo);
     //connect(m_muteTimer, &QTimer::timeout, this, &MainWindowCodeEditor::updateAllUsersMuteTimeDisplay);
+}
 
+void MainWindowCodeEditor::setupMenuBarActions()
+{
+    // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
+    connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
+    connect(ui->actionOpen_File, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFileClicked);
+    connect(ui->actionOpen_Folder, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFolderClicked);
+    connect(ui->actionSave, &QAction::triggered, this, &MainWindowCodeEditor::onSaveFileClicked);
+    connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
+    connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
+
+    // сигнал для "сессий"
+    connect(ui->actionCreateSession, &QAction::triggered, this, &MainWindowCodeEditor::onCreateSession);
+    connect(ui->actionJoinSession, &QAction::triggered, this, &MainWindowCodeEditor::onJoinSession);
+    connect(ui->actionSaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onSaveSessionClicked);
+    connect(ui->actionCopyId, &QAction::triggered, this, &MainWindowCodeEditor::onCopyIdClicked);
+    connect(ui->actionLeaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onLeaveSession);
+    connect(ui->actionShowListUsers, &QAction::triggered, this, &MainWindowCodeEditor::onShowUserList);
+    ui->actionShowListUsers->setVisible(false);
+    ui->actionLeaveSession->setVisible(false);
+    ui->actionSaveSession->setVisible(false);
+    ui->actionCopyId->setVisible(false);
+
+    // connect для Parameters меню
+    connect(ui->actionToDoList, &QAction::triggered, this, &MainWindowCodeEditor::on_actionToDoList_triggered);
+    connect(ui->actionChangeTheme, &QAction::triggered, this, &MainWindowCodeEditor::on_actionChangeTheme_triggered);
+
+    // подключение сигнала измнения значения вертикального скроллбара
+    connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
+
+    // Сигнал изменения документа клиентом и
+    connect(m_codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
+    connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
+}
+
+void MainWindowCodeEditor::setupFileSystemView()
+{
+    // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
+    fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
+    fileSystemModel->setRootPath(QDir::homePath()); // задаем корневой путь как домашнюю папку пользователя
+    ui->fileSystemTreeView->setModel(fileSystemModel); // привязываем модель к дереву файловой системы
+    ui->fileSystemTreeView->setRootIndex(fileSystemModel->index(QDir::homePath())); // устанавливаем корневой индекс (начало отображения) для дерева
+
+    // скрываем лишние столбцы, чтобы отображадась только первая колонка (имена файлов), время, размер и тд скрываются
+    ui->fileSystemTreeView->hideColumn(1);
+    ui->fileSystemTreeView->hideColumn(2);
+    ui->fileSystemTreeView->hideColumn(3);
+
+    // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
+    connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
+}
+
+void MainWindowCodeEditor::setupNetwork()
+{
+    m_clientId = QUuid::createUuid().toString();
+    qDebug() << "Уникальный идентификатор клиента:" << m_clientId;
+}
+
+void MainWindowCodeEditor::setupThemeAndNick()
+{
     applyCurrentTheme(); // применение темы, по умолчанию темная
 
     m_chatButton = new QPushButton(this);
@@ -194,7 +276,6 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
         }
     });
 
-
     QHBoxLayout* chatButtonLayout = new QHBoxLayout;
     chatButtonLayout->addWidget(m_chatButton);
     chatButtonLayout->setContentsMargins(0,0,0,0); // Remove margins around the button
@@ -212,59 +293,6 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     }
     qDebug() << "Set username to" << m_username;
     m_codeEditor->viewport()->installEventFilter(this); // фильтр чтобы отслеживать изменения размеров viewport
-
-    // подключение сигнала измнения значения вертикального скроллбара
-    connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
-
-    // сигнал для "сессий"
-    connect(ui->actionCreateSession, &QAction::triggered, this, &MainWindowCodeEditor::onCreateSession);
-    connect(ui->actionJoinSession, &QAction::triggered, this, &MainWindowCodeEditor::onJoinSession);
-    connect(ui->actionSaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onSaveSessionClicked);
-    connect(ui->actionCopyId, &QAction::triggered, this, &MainWindowCodeEditor::onCopyIdClicked);
-    connect(ui->actionLeaveSession, &QAction::triggered, this, &MainWindowCodeEditor::onLeaveSession);
-    connect(ui->actionShowListUsers, &QAction::triggered, this, &MainWindowCodeEditor::onShowUserList);
-    ui->actionShowListUsers->setVisible(false);
-    ui->actionLeaveSession->setVisible(false);
-    ui->actionSaveSession->setVisible(false);
-    ui->actionCopyId->setVisible(false);
-
-    // подклчение сигналов от нажатий по пунктам меню к соответствующим функциям
-    connect(ui->actionNew_File, &QAction::triggered, this, &MainWindowCodeEditor::onNewFileClicked);
-    connect(ui->actionOpen_File, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFileClicked);
-    connect(ui->actionOpen_Folder, &QAction::triggered, this, &MainWindowCodeEditor::onOpenFolderClicked);
-    connect(ui->actionSave, &QAction::triggered, this, &MainWindowCodeEditor::onSaveFileClicked);
-    connect(ui->actionSave_As, &QAction::triggered, this, &MainWindowCodeEditor::onSaveAsFileClicked);
-    connect(ui->actionExit, &QAction::triggered, this, &MainWindowCodeEditor::onExitClicked);
-
-    // Инициализация QFileSystemModel (древовидный вид файловой системы слева)
-    fileSystemModel = new QFileSystemModel(this); // инициализация модели файловой системы
-    fileSystemModel->setRootPath(QDir::homePath()); // задаем корневой путь как домашнюю папку пользователя
-    ui->fileSystemTreeView->setModel(fileSystemModel); // привязываем модель к дереву файловой системы
-    ui->fileSystemTreeView->setRootIndex(fileSystemModel->index(QDir::homePath())); // устанавливаем корневой индекс (начало отображения) для дерева
-    // скрываем лишние столбцы, чтобы отображадась только первая колонка (имена файлов), время, размер и тд скрываются
-    ui->fileSystemTreeView->hideColumn(1);
-    ui->fileSystemTreeView->hideColumn(2);
-    ui->fileSystemTreeView->hideColumn(3);
-    // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
-    connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
-
-    m_clientId = QUuid::createUuid().toString();
-    qDebug() << "Уникальный идентификатор клиента:" << m_clientId;
-
-    // Сигнал изменения документа клиентом и
-    connect(m_codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
-    connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
-
-    // инициализация подсветки синтаксиса
-    highlighter = new CppHighlighter(m_codeEditor->document());
-    // фильтр событий для viewport
-    m_codeEditor->viewport()->installEventFilter(this);
-
-
-    qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
-    qDebug() << "Splitter widget count:" << ui->splitter->count();
-    qDebug() << "Splitter sizes:" << ui->splitter->sizes();
-    qDebug() << "--------------------------------------------";
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
@@ -1530,22 +1558,6 @@ void MainWindowCodeEditor::sendMessage() {
         chatInput->clear(); // Очищаем поле ввода
     }
 }
-
-/*void MainWindowCodeEditor::on_toolButton_clicked()
-{
-    if (!chatWidget) {
-        qDebug() << "Ошибка: chatWidget не был создан!";
-        // В идеале, он всегда должен быть создан в конструкторе
-        return;
-    }
-
-    chatWidget->setVisible(!chatWidget->isVisible()); // Переключаем видимость
-
-    if (chatWidget->isVisible()) {
-        chatInput->setFocus(); // Устанавливаем фокус на поле ввода
-        scrollToBottom();      // Прокручиваем вниз при открытии
-    }
-}*/
 
 // Слот для прокрутки (вызывается через QTimer::singleShot)
 void MainWindowCodeEditor::scrollToBottom() {
