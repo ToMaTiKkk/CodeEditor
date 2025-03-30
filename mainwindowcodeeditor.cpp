@@ -244,6 +244,9 @@ void MainWindowCodeEditor::setupFileSystemView()
     ui->fileSystemTreeView->hideColumn(2);
     ui->fileSystemTreeView->hideColumn(3);
 
+    ui->fileSystemTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->fileSystemTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
     // подключаем сигнал двойного клика по элементу дерева к функции, которая будет открывать файл
     connect(ui->fileSystemTreeView, &QTreeView::doubleClicked, this, &MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked);
 }
