@@ -5,6 +5,6 @@
         <file>styles/chat_light.png</file>
         <file>styles/chat_dark.png</file>
         <file>styles/send.png</file>
-	<file>calendar-clock.png</file>
+        <file>styles/calendar-clock.png</file>
     </qresource>
 </RCC>
