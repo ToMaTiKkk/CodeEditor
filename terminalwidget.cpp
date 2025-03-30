@@ -1,7 +1,5 @@
 #include "terminalwidget.h"
-
-// Включаем необходимые заголовки Qt и QTermWidget
-#include <qtermwidget.h> // Главный заголовок библиотеки
+#include <qtermwidget.h>
 #include <QVBoxLayout>
 #include <QFont>
 #include <QKeySequence>
@@ -39,23 +37,19 @@ TerminalWidget::TerminalWidget(QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0); // Убираем отступы у самого layout'а
     layout->addWidget(term_widget);         // Добавляем QTermWidget в layout
 
-    // 4. Подключаем сигналы от вложенного QTermWidget к нашим приватным слотам
+    // Подключение сигналы от вложенного QTermWidget к приватным слотам
     connect(term_widget, &QTermWidget::termKeyPressed, this, &TerminalWidget::handleKeyPress);
     connect(term_widget, &QTermWidget::urlActivated, this, &TerminalWidget::handleLinkActivation);
-
-    // Примечание: Сигнал finished() от QTermWidget здесь не подключаем,
-    // так как закрытием окна управляет MainWindowCodeEditor.
 
     qDebug() << "TerminalWidget wrapper created and configured.";
 }
 
 TerminalWidget::~TerminalWidget()
 {
-    // term_widget и layout будут удалены автоматически, так как их родитель - this
     qDebug() << "TerminalWidget wrapper destroyed.";
 }
 
-// Публичный метод для установки фокуса (если понадобится)
+// Публичный метод для установки фокуса
 void TerminalWidget::setInputFocus()
 {
     if (term_widget) {
@@ -63,18 +57,17 @@ void TerminalWidget::setInputFocus()
     }
 }
 
-// --- Приватные слоты для обработки сигналов QTermWidget ---
+// Приватные слоты для обработки сигналов
 
-void TerminalWidget::handleKeyPress(const QKeyEvent *event)
+void TerminalWidget::handleKeyPress(QKeyEvent *event)
 {
-    if (!term_widget) return; // Проверка
+    if (!term_widget) return;
 
-    // Обработка копирования
     if (event->matches(QKeySequence::Copy)) {
         term_widget->copyClipboard();
-        event->accept(); // Мы обработали это событие
+        event->accept();
     } else {
-        event->ignore(); // Другие клавиши передаем дальше
+        event->ignore();
     }
 }
 

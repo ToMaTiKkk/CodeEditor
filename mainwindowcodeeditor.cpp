@@ -1,5 +1,6 @@
 #include "mainwindowcodeeditor.h"
 #include "./ui_mainwindowcodeeditor.h"
+#include "terminalwidget.h"
 #include "todolistwidget.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
@@ -27,6 +28,7 @@
 #include <QSpacerItem>
 #include <QTimer>
 #include <QStringList>
+#include <QAction>
 
 // Константы для чата
 const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
@@ -44,6 +46,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , chatInput(nullptr)
     , m_userInfoMessageBox(nullptr)
     , m_muteTimer(new QTimer(this))
+    , m_terminalWidget(nullptr)
+    , m_isTerminalVisible(false)
 {
     ui->setupUi(this);
 
@@ -55,6 +59,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     setupFileSystemView(); // дерево файлов
     setupNetwork(); // websocket, client id
     setupThemeAndNick(); // тема и никнейм
+    setupTerminalArea(); // настройка терминала
 
     qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
     qDebug() << "Splitter widget count:" << ui->splitter->count();
@@ -229,6 +234,16 @@ void MainWindowCodeEditor::setupMenuBarActions()
     // Сигнал изменения документа клиентом и
     connect(m_codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
     connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
+
+    // подключение меню терминала
+    if (ui->menuView && ui->actionTerminal) {
+        ui->actionTerminal->setCheckable(true);
+        ui->actionTerminal->setChecked(m_isTerminalVisible);
+        connect(ui->actionTerminal, &QAction::triggered, this, &MainWindowCodeEditor::on_actionTerminal_triggered);
+        qDebug() << "Terminal menu action connected.";
+    } else {
+        qWarning() << "Could not find 'menuView' or 'actionTerminal' in UI file.";
+    }
 }
 
 void MainWindowCodeEditor::setupFileSystemView()
@@ -1722,4 +1737,47 @@ void MainWindowCodeEditor::on_actionToDoList_triggered()
     todoWidget->setAttribute(Qt::WA_DeleteOnClose);
     todoWidget->show();
 
+}
+
+// РЕАЛИЗАЦИЯ НАСТРОЙКИ ТЕРМИНАЛА (метода)
+void MainWindowCodeEditor::setupTerminalArea()
+{
+    qDebug() << "Setting up Terminal Area (using wrapper)...";
+    QSplitter *mainVerticalSplitter = new QSplitter(Qt::Vertical, this);
+    mainVerticalSplitter->setObjectName("mainVerticalSplitter");
+
+    if (!ui->splitter) { return; }
+    mainVerticalSplitter->addWidget(ui->splitter);
+
+    m_terminalWidget = new TerminalWidget(mainVerticalSplitter);
+    if (!m_terminalWidget) { qFatal("Failed to create TerminalWidget wrapper!"); return; }
+    m_terminalWidget->setObjectName("terminalWidgetWrapper");
+
+    int minTerminalHeight = 80;
+    m_terminalWidget->setMinimumHeight(minTerminalHeight);
+
+    mainVerticalSplitter->addWidget(m_terminalWidget);
+
+    mainVerticalSplitter->setChildrenCollapsible(false);
+    delete this->centralWidget();
+    this->setCentralWidget(mainVerticalSplitter);
+
+    m_terminalWidget->setVisible(m_isTerminalVisible);
+
+    qDebug() << "Terminal Area setup complete.";
+}
+
+// СЛОТ ДЛЯ МЕНЮ ТЕРМИНАЛА
+void MainWindowCodeEditor::on_actionTerminal_triggered()
+{
+    if (!ui || !ui->actionTerminal || !m_terminalWidget) return;
+
+    m_isTerminalVisible = ui->actionTerminal->isChecked();
+    m_terminalWidget->setVisible(m_isTerminalVisible);
+
+    if (m_isTerminalVisible) {
+        m_terminalWidget->setInputFocus();
+    } else if (m_codeEditor) {
+        m_codeEditor->setFocus();
+    }
 }

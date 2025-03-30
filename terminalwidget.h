@@ -22,7 +22,7 @@ public:
 
 private slots:
     // Слоты для обработки сигналов от вложенного QTermWidget
-    void handleKeyPress(const QKeyEvent *event);
+    void handleKeyPress(QKeyEvent *event);
     void handleLinkActivation(const QUrl &url, bool fromContextMenu);
 
 private:

@@ -1,6 +1,7 @@
 #ifndef MAINWINDOWCODEEDITOR_H
 #define MAINWINDOWCODEEDITOR_H
 
+#include "terminalwidget.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include "cpphighlighter.h"
@@ -34,6 +35,7 @@
 #include <QLineEdit>
 #include <QFontMetrics>
 #include <QSystemTrayIcon>
+#include <QAction>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -118,6 +120,8 @@ private slots: // функции, которые будут вызваны в о
 
     void on_actionToDoList_triggered();
 
+    void on_actionTerminal_triggered(); // слот для терминала
+
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
 
@@ -130,6 +134,7 @@ private:
     void setupFileSystemView();   // дерева файлов
     void setupNetwork();          // WebSocket, client_id
     void setupThemeAndNick();     // тема и никнейм
+    void setupTerminalArea();     // терминал
 
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
@@ -177,5 +182,9 @@ private:
 
     // Добавляем приватный метод для создания виджета сообщения
     void addChatMessageWidget(const QString &username, const QString &text, const QTime &time, bool isOwnMessage);
+
+    // инициализация терминала
+    TerminalWidget *m_terminalWidget = nullptr;
+    bool m_isTerminalVisible = false;
 };
 #endif // MAINWINDOWCODEEDITOR_H

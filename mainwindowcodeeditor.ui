@@ -219,9 +219,16 @@
     <addaction name="actionToDoList"/>
     <addaction name="actionChangeTheme"/>
    </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>Вид</string>
+    </property>
+    <addaction name="actionTerminal"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuSession"/>
    <addaction name="menufd"/>
+   <addaction name="menuView"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionNew_File">
@@ -310,6 +317,17 @@
   <action name="actionToDoList">
    <property name="text">
     <string>Открыть ToDo-List</string>
+   </property>
+  </action>
+  <action name="actionTerminal">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Терминал</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+`</string>
    </property>
   </action>
  </widget>
