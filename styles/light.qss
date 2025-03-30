@@ -195,10 +195,10 @@ QCheckBox::indicator:checked:disabled {
 QCheckBox::indicator:unchecked:disabled {
      background-color: #ddd;
 }
-QWidget#chatWidget {
-    background-color: #ffffff;
+QWidget#chatScrollArea {
+    background-color: rgb(255,255,255);
     border: 1px solid #d3d3d3;
-    border-radius: 5px;
+    border-radius: 2px;
 }
 
 QTextEdit#chatDisplay {
