@@ -220,8 +220,8 @@ void MainWindowCodeEditor::setupMenuBarActions()
     ui->actionCopyId->setVisible(false);
 
     // connect для Parameters меню
-    connect(ui->actionToDoList, &QAction::triggered, this, &MainWindowCodeEditor::on_actionToDoList_triggered);
-    connect(ui->actionChangeTheme, &QAction::triggered, this, &MainWindowCodeEditor::on_actionChangeTheme_triggered);
+    //connect(ui->actionToDoList, &QAction::triggered, this, &MainWindowCodeEditor::on_actionToDoList_triggered);
+    //connect(ui->actionChangeTheme, &QAction::triggered, this, &MainWindowCodeEditor::on_actionChangeTheme_triggered);
 
     // подключение сигнала измнения значения вертикального скроллбара
     connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
@@ -441,6 +441,10 @@ void MainWindowCodeEditor::clearRemoteInfo()
 
 void MainWindowCodeEditor::onCreateSession()
 {
+    if (!maybeSave()) {
+        return; // нажали отмену
+    }
+
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         if (!confirmChangeSession(tr("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано."))) {
             return;
@@ -469,6 +473,10 @@ void MainWindowCodeEditor::onCreateSession()
 }
 void MainWindowCodeEditor::onJoinSession()
 {
+    if (!maybeSave()) {
+        return; // нажали отмену
+    }
+
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         if (!confirmChangeSession(tr("Вы уверены, что хотите создать новую сессию? Текущее соединение будет прервано."))) {
             return;
@@ -541,6 +549,10 @@ void MainWindowCodeEditor::onSaveSessionClicked() {
 
 void MainWindowCodeEditor::onOpenFileClicked()
 {
+    if (!maybeSave()) {
+        return; // нажали отмену
+    }
+
     QString fileName = QFileDialog::getOpenFileName(this, "Открытить файл"); // открытие диалогового окна для выбора файла
     if (!fileName.isEmpty()) {
         QFile file(fileName); // при непустом файле создается объект для работы с файлом
@@ -595,6 +607,8 @@ void MainWindowCodeEditor::onSaveFileClicked()
         QTextStream out(&file);
         out << m_codeEditor->toPlainText();
         file.close();
+        m_codeEditor->document()->setModified(false);
+        statusBar()->showMessage(tr("Файл сохранен: %1").arg(currentFilePath), 2000);
     } else {
         QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
     }
@@ -610,6 +624,8 @@ void MainWindowCodeEditor::onSaveAsFileClicked()
             out << m_codeEditor->toPlainText();
             file.close();
             currentFilePath = fileName;
+            m_codeEditor->document()->setModified(false);
+            statusBar()->showMessage(tr("Файл сохранен: %1").arg(currentFilePath), 2000);
         }
     } else {
         QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
@@ -618,23 +634,23 @@ void MainWindowCodeEditor::onSaveAsFileClicked()
 
 bool MainWindowCodeEditor::maybeSave()
 {
-    if (!ui->codeEditor->document()->isModified())
+    if (!m_codeEditor->document()->isModified())
         return true;
     QMessageBox::StandardButton ret;
     ret = QMessageBox::warning(this, tr("Предупреждение"),
                                tr("Документ был изменен.\n"
                                   "Хотите сохранить изменения?"),
-                               QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+                               QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
 
     if (ret == QMessageBox::Save) {
         // если есть имя файла, сохраняем, иначе сохраняем как
         if (!currentFilePath.isEmpty()) {
             onSaveFileClicked();
-            return true;
+            return !m_codeEditor->document()->isModified(); // true, если сохранение сбросила флаг модификации
         } else {
             onSaveAsFileClicked();
             // проверяем сохранился ли файл
-            return !currentFilePath.isEmpty();
+            return !currentFilePath.isEmpty() && !m_codeEditor->document()->isModified();
         }
     } else if (ret == QMessageBox::Cancel) {
         return false; // Отмена закрытия
@@ -645,15 +661,22 @@ bool MainWindowCodeEditor::maybeSave()
 
 void MainWindowCodeEditor::onExitClicked()
 {
+    if (!maybeSave()) {
+        return; // нажали отмену
+    }
     QApplication::quit();
 }
 
 void MainWindowCodeEditor::onNewFileClicked()
 {
+    if (!maybeSave()) {
+        return; // нажали отмену
+    }
     if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
     // очищения поля редактирование и очищение пути к текущему файлу
     m_codeEditor->clear();
     currentFilePath.clear();
+    m_codeEditor->document()->setModified(false);
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         QJsonObject fileUpdate;
         fileUpdate["type"] = "file_content_update";
@@ -706,6 +729,9 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
 {
     QFileInfo fileInfo = fileSystemModel->fileInfo(index); // опредление, что было выбрано: файл или папка
     if (fileInfo.isFile()) {
+        if (!maybeSave()) {
+            return; // нажали отмену
+        }
         QString filePath = fileInfo.absoluteFilePath(); // если это файл, вы получаем полный путь
         QFile file(filePath);
         if (file.open(QFile::ReadOnly | QFile::Text)) {
@@ -913,11 +939,11 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
                     }
                 });
             }
-                m_trayIcon->setIcon(QIcon(":/styles/chat_light.png"));
-                m_trayIcon->show();
-                QString title = "У вас новое сообщение от " + username; // Заголовок уведомления
-                QString message = chatMessage;
-                m_trayIcon->showMessage(title, message, QSystemTrayIcon::Information, 3000);
+            m_trayIcon->setIcon(QIcon(":/styles/chat_light.png"));
+            m_trayIcon->show();
+            QString title = "У вас новое сообщение от " + username; // Заголовок уведомления
+            QString message = chatMessage;
+            m_trayIcon->showMessage(title, message, QSystemTrayIcon::Information, 3000);
         }
     } else if (opType == "cursor_position_update") {
         QString senderId = op["client_id"].toString();
@@ -1106,7 +1132,7 @@ void MainWindowCodeEditor::updateUserListUI()
 }
 
 // функция обновления информации об одном конкретном пользователе в списке, вместо полного обновления списка, что снизить нагрузку
-void MainWindowCodeEditor::updateUserListUser(const QString& clientId) 
+void MainWindowCodeEditor::updateUserListUser(const QString& clientId)
 {
     // находим нужный QAction (кнопку в списке меню пользователей), конкретного пользователя
     QAction* userAction = nullptr;
@@ -1403,7 +1429,7 @@ void MainWindowCodeEditor::onMuteUnmute(const QString targetClientId)
 }
 
 // функция для форматирования времени мьюта
-QString MainWindowCodeEditor::formatMuteTime(const QString& clientId) 
+QString MainWindowCodeEditor::formatMuteTime(const QString& clientId)
 {
     if (!m_muteEndTimes.contains(clientId)) return ""; // если мьюта нет, то пустую строку возвращаем
 
@@ -1543,7 +1569,7 @@ void MainWindowCodeEditor::updateMuteTimeDisplayInUserInfo()
         if (m_muteEndTimes.contains(clientId)) {
             // если клиент замьючен, и есть информация о времени мьюта
             qint64 muteEndTime = m_muteEndTimes.value(clientId);
-                status = formatMuteTime(clientId);
+            status = formatMuteTime(clientId);
         } else {
             status = tr("Заглушен бессрочно");
         }
@@ -1602,7 +1628,7 @@ void MainWindowCodeEditor::scrollToBottom() {
     }
 }
 
-// --- НОВЫЙ МЕТОД для добавления виджета сообщения ---
+// для добавления виджета сообщения
 void MainWindowCodeEditor::addChatMessageWidget(const QString &username, const QString &text, const QTime &time, bool isOwnMessage)
 {
     if (!messagesLayout || !chatScrollArea) return;
@@ -1684,6 +1710,7 @@ void MainWindowCodeEditor::on_actionChangeTheme_triggered()
     applyCurrentTheme();
     updateChatButtonIcon();
 }
+
 void MainWindowCodeEditor::updateChatButtonIcon() {
     if (m_isDarkTheme) {
         m_chatButton->setIcon(QIcon(":/styles/chat_light.png"));
@@ -1693,8 +1720,6 @@ void MainWindowCodeEditor::updateChatButtonIcon() {
     m_chatButton->setIconSize(QSize(24, 24));
 }
 
-
-
 void MainWindowCodeEditor::on_actionToDoList_triggered()
 {
     TodoListWidget *todoWidget = new TodoListWidget(nullptr);
@@ -1702,4 +1727,3 @@ void MainWindowCodeEditor::on_actionToDoList_triggered()
     todoWidget->show();
 
 }
-
