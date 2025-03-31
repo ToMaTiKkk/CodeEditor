@@ -5,7 +5,7 @@ SessionParamsWindow::SessionParamsWindow(QWidget *parent)
 {
     setWindowTitle("Параметры сессии");
     setModal(true);
-    setMinimumSize(400, 280);
+    setMinimumSize(390, 140);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     QFormLayout *formLayout = new QFormLayout();
@@ -20,13 +20,7 @@ SessionParamsWindow::SessionParamsWindow(QWidget *parent)
     QWidget *saveOptionsWidget = new QWidget(this);
     QHBoxLayout *saveOptionsLayout = new QHBoxLayout(saveOptionsWidget);
     saveOptionsLayout->setContentsMargins(0, 0, 0, 0);
-    saveOptionsLayout->setSpacing(10);
-
-    // виджет контейнер для спинбокса и текста перед ним
-    QWidget *userWidget = new QWidget(this);
-    QHBoxLayout *userLayout = new QHBoxLayout(userWidget);
-    userLayout->setContentsMargins(0, 0, 0, 0);
-    userLayout->setSpacing(10);
+    saveOptionsLayout->setSpacing(20);
 
     // чекбокс для сохранения сессии
     saveCheckbox = new QCheckBox(saveOptionsWidget);
@@ -37,9 +31,8 @@ SessionParamsWindow::SessionParamsWindow(QWidget *parent)
     daysLabel = new QLabel("на", saveOptionsWidget);
     daysLabel->hide();
 
-    //лейблы на оба виджета
-    userAmountLabel=new QLabel("Количество пользователей:", userWidget);
-    saveSessionLabel = new QLabel("Сохранить сессию", userWidget);
+    //лейбл сохранения сессии
+    saveSessionLabel = new QLabel("Сохранить сессию", saveOptionsWidget);
 
 
     // спинбокс для дней (скрыт по умолчанию
@@ -49,19 +42,11 @@ SessionParamsWindow::SessionParamsWindow(QWidget *parent)
     daysSpinBox->setSuffix(" дней");
     daysSpinBox->hide();
 
-    //спинбокс для количества пользователей
-    userAmountSpinBox = new QSpinBox();
-    userAmountSpinBox->setRange(1, 5);
-    userAmountSpinBox->setValue(2);
-
     saveOptionsLayout->addWidget(saveSessionLabel);
     saveOptionsLayout->addWidget(daysLabel);
     saveOptionsLayout->addWidget(daysSpinBox);
+    saveOptionsLayout->addStretch(1);
     saveOptionsLayout->addWidget(saveCheckbox);
-    saveOptionsLayout->addStretch();
-
-    userLayout->addWidget(userAmountLabel);
-    userLayout->addWidget(userAmountSpinBox);
 
     // соединение сигнала чекбокса
     connect(saveCheckbox, &QCheckBox::stateChanged,
@@ -69,11 +54,10 @@ SessionParamsWindow::SessionParamsWindow(QWidget *parent)
 
     formLayout->addRow("Пароль сессии:", passwordEdit);
     formLayout->addRow(saveOptionsWidget);
-    formLayout->addRow(userWidget);
 
     QPushButton *okButton = new QPushButton("Создать", this);
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
-
+    bool ok;
     mainLayout->addLayout(formLayout);
     mainLayout->addWidget(okButton, 0, Qt::AlignRight);
     setLayout(mainLayout);
@@ -99,9 +83,4 @@ bool SessionParamsWindow::shouldSaveSession() const
 int SessionParamsWindow::getSaveDays() const
 {
     return shouldSaveSession() ? daysSpinBox->value() : 0;
-}
-
-int SessionParamsWindow::getUsers() const
-{
-    return userAmountSpinBox->value();
 }
