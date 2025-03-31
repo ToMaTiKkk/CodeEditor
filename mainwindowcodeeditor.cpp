@@ -4,6 +4,7 @@
 #include "todolistwidget.h"
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
+#include "sessionparamswindow.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -371,6 +372,11 @@ void MainWindowCodeEditor::onConnected()
     if (m_sessionId == "NEW") {
         message["type"] = "create_session";
         message["password"] = m_sessionPassword; // Добавляем пароль
+        if (!pendingSessionSave.isEmpty()) {
+            QJsonDocument saveDoc = QJsonDocument::fromJson(pendingSessionSave);
+            socket->sendTextMessage(QString::fromUtf8(saveDoc.toJson(QJsonDocument::Compact)));
+            pendingSessionSave.clear();
+        }
     } else {
         message["type"] = "join_session";
         message["session_id"] = m_sessionId;
@@ -462,17 +468,12 @@ void MainWindowCodeEditor::onCreateSession()
         }
         disconnectFromServer();
     }
-
-    // Запрос пароля для новой сессии
-    bool ok;
-    QString password = QInputDialog::getText(this, tr("Создание сессии"),
-                                             tr("Введите пароль для сессии (мин. 4 символа):"),
-                                             QLineEdit::Password, "", &ok);
-
-    if (!ok || password.isEmpty()) {
+    SessionParamsWindow paramsWindow(this);
+    if (paramsWindow.exec() != QDialog::Accepted) {
         return;
     }
-
+    QString password = paramsWindow.getPassword();
+    int saveDays = paramsWindow.getSaveDays();
     if (password.length() < 4) {
         QMessageBox::warning(this, tr("Ошибка"), tr("Пароль должен содержать минимум 4 символа"));
         return;
@@ -480,8 +481,10 @@ void MainWindowCodeEditor::onCreateSession()
 
     m_sessionPassword = password;
     m_sessionId = "NEW";
+     m_pendingSaveDays = saveDays;
     connectToServer();
 }
+
 void MainWindowCodeEditor::onJoinSession()
 {
     if (!maybeSave()) {
@@ -543,7 +546,7 @@ void MainWindowCodeEditor::onSaveSessionClicked() {
     bool ok;
     int days = QInputDialog::getInt(this, tr("Сохранение сессии"),
                                     tr("На сколько дней сохранить сессию?"),
-                                    7, 1, 365, 1, &ok);
+                                    1, 1, 7, 1, &ok);
     if (!ok) return;
 
     QJsonObject saveSessionMessage;
@@ -881,6 +884,22 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         ui->actionCopyId->setVisible(true);
         ui->actionShowListUsers->setVisible(true);
         ui->actionLeaveSession->setVisible(true);
+        if (m_pendingSaveDays > 0) {
+            QJsonObject saveSessionMessage;
+            saveSessionMessage["type"] = "save_session";
+            saveSessionMessage["client_id"] = m_clientId;
+            saveSessionMessage["session_id"] = m_sessionId; // Используем ПОЛУЧЕННЫЙ ID
+            saveSessionMessage["days"] = m_pendingSaveDays;
+            QJsonDocument saveDoc(saveSessionMessage);
+
+            if (socket && socket->state() == QAbstractSocket::ConnectedState) {
+                socket->sendTextMessage(QString::fromUtf8(saveDoc.toJson(QJsonDocument::Compact)));
+                qDebug() << "Отправлен запрос на сохранение сессии" << m_sessionId << "на" << m_pendingSaveDays << "дней (после создания)";
+            } else {
+                qDebug() << "Ошибка: Не удалось отправить запрос на сохранение сессии после создания (сокет не подключен?)";
+            }
+            m_pendingSaveDays = 0; // сброс флага
+        }
 
     } else if (opType == "user_list_update")
     {

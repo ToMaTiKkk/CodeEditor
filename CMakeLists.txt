@@ -68,6 +68,9 @@ else()
             ${PROJECT_SOURCES}
             resources.qrc
             terminalwidget.h terminalwidget.cpp)
+            sessionparamswindow.h sessionparamswindow.cpp
+
+          )
     endif()
 endif()
 
