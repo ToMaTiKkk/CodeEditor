@@ -1,33 +1,65 @@
 QMainWindow {
-    background-color: rgb(34, 33, 50); /* темно-синий, фиолетовый оттенок фона главного окна */
+    background-color: rgb(34, 33, 50);
 }
-
+#chatButton {
+    background: transparent;
+    border: none;
+    min-width: 25px;
+    min-height: 25px;
+}
+QPushButton {
+        background-color: rgb(92, 84, 165);
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 5px 12px;
+        min-width: 60px;
+        translition: all 0.5s ease;
+}
+QInputDialog {
+    background-color: rgb(34,33,50);
+    color: rgb(255,255,255);
+}
+QLineEdit {
+    background-color: rgb(34,33,50);
+    color: rgb(255,255,255);
+    border: 1px solid rgb(92, 84, 180);
+    border-radius: 8px;
+}
+QWidget {
+    background-color: rgb(34,33,50);
+    color: rgb(255,255,255);
+}
+#chatButton:hover {
+    border: 1px solid rgb(92, 84, 155);
+    border-radius: 10px;
+}
 QMenuBar { /* панель меню */
         background-color: rgb(34, 33, 50);
-        color: rgba(255, 255, 255, 0.9); /* цвет текст почти белый */
-        border-bottom: 1px solid rgb(92, 84, 155); /* нижняя граница панели тонкой линией, фиолетовый оттенок */
-        padding: 4px; /* внутренние отступы вокруг содержимого панели */
+        color: rgba(255, 255, 255, 0.9);
+        border-bottom: 1px solid rgb(92, 84, 155);
+        padding: 4px;
 }
 
-QMenuBar::item { 		/* элементы меню, пункты */
-        padding: 8px 15px;  /* отступы 8 пикселей сверху и снизу, 15 слева и справа */
-        border-radius: 4px; /* скругление */
+QMenuBar::item {
+        padding: 8px 15px;
+        border-radius: 4px;
 }
 
 QMenuBar::item:selected {
-        background-color: rgb(92, 84, 165); /* стиль при наведение курсора или выбранный пункт */
+        background-color: rgb(92, 84, 165);
 }
 
-QMenu { /* панель выпадающего окна меню */
+QMenu {
         background-color: rgb(34, 33, 50);
         border: 1px solid rgb(92, 84, 165);
         color: rgba(255, 255, 255, 0.9);
         padding: 8px;
 }
 
-QMenu::item { /* элементы внутри выпадающего окна */
+QMenu::item {
         padding: 8px 25px 8px 15px;
-        margin: 2px 0; /* внешние отступы по 2 пикселя сверху и снизу между элементами */
+        margin: 2px 0;
         border-radius: 4px;
 }
 
@@ -38,14 +70,14 @@ QMenu::item:selected {
 QStatusBar {
         background-color: rgb(34, 33, 50);
         color: rgba(255, 255, 255, 0.5);
-        border-top: 1px solid rgb(92, 84, 165); /* верхняя граница в 1 пиксель фиолетовым цветом */
+        border-top: 1px solid rgb(92, 84, 165);
 }
 
 QTreeView {
         background-color: rgba(255, 255, 255, 0.05);
         border: none;
         color: rgba(255, 255, 255, 0.9);
-        outline: 0; /* отстутствие рамки при фокусе */
+        outline: 0;
         font-family: 'Fira Code', monospace;
         font-size: 12px;
 }
@@ -55,7 +87,7 @@ QTreeView::item {
         padding: 4px 0;
 }
 
-QTreeView::item:hover { /* при наведении */
+QTreeView::item:hover {
         background-color: rgba(127, 127, 218, 0.7);
 }
 
@@ -74,29 +106,29 @@ QPlainTextEdit {
         padding: 0 15px;
 }
 
-QScrollBar:vertical { /* стиль полосы */
+QScrollBar:vertical {
         border: none;
-        background: rgba(255, 255, 255, 0.05);
-        width: 8px; /* ширина полосы */
-        margin: 0; /* нет отступов */
+        background: rgb(34, 33, 50);
+        width: 12px;
+        margin: 0;
 }
 
-QScrollBar::handle:vertical { /* стиль ползунка прокрутки */
+QScrollBar::handle:vertical {
         background: rgba(92, 84, 165, 0.7);
-        min-height: 20px; /* минимальная высота пользунка, чтобы всегда было видно */
+        min-height: 20px;
         border-radius: 6px;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { /* элементы для уменьшения и увеличения прокрутки скрыты */
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
         height: 0;
 }
 
-QSplitter::handle { /* элементы, за который можно потянуть, чтобы изменить размер областей */
-        background: rgba(127, 117, 218, 0.1);
-        width: 1px;
+QSplitter::handle {
+        background: rgba(34, 33, 50);
+        width: 3px;
 }
 
-QScrollBar::handle:hover { /* когда курсор наводится на элементы разделителя областей, то он становится ярче и шире, как подсказка пользователю */
+QScrollBar::handle:hover {
         background: rgb(127, 117, 218);
         width: 4px;
 }
@@ -105,22 +137,22 @@ QPushButton {
         background-color: rgb(92, 84, 165);
         color: white;
         border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        min-width: 80px;
-        translition: all 0.5s ease; /* плавное изменение свойств за 0,5 сек (анимация) */
+        border-radius: 5px;
+        padding: 5px 12px;
+        min-width: 60px;
+        translition: all 0.5s ease;
 }
 
 QPushButton:hover {
         background-color: rgba(127, 117, 218, 0.85);
-        transform: translateY(-3px); /* кнопка при наведении поднимается на 3 пикселя и фон более светлый становится */
+        transform: translateY(-3px);
 }
 
 QPushButton:pressed {
-        transform: translateY(3px); /* эффект нажатия, кнопка опускается вниз */
+        transform: translateY(3px);
 }
 
-@keyframes pulse { /* эффект пульсации, меняется плавно прозрачность и размер */
+@keyframes pulse {
         0% { opacity: 0.4; transform: scale(0.2); }
         50% { opacity: 1; transform: scale(1); }
         100% { opacity: 0.4; transform: scale(0.2); }
@@ -128,7 +160,87 @@ QPushButton:pressed {
 
 CursorWidget {
         border-left: 2px solid rgba(245, 236, 64, 0.8);
-        animation: pulse 1.5s infinite;  /* бесконечная анимация мигания курсора */
-        margin-top: 2px; /* отступ верхний */
-        height: 18px !important; /* повышение приоритетность стиля над прочими, любые попытки изменить высоту курсора будут, будут игнорироваться, если нет метки приоритета */
+        animation: pulse 1.5s infinite;
+        margin-top: 2px;
+        height: 18px !important;
+}
+
+QLabel {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+QCheckBox::indicator {
+    width: 25px;
+    height: 7px;
+    border-radius: 3px;
+    background-color: #555;
+    border: 2px solid #777;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #2ecc71;
+    border-color: #27ae60;
+}
+QCheckBox::indicator:unchecked {
+     background-color: #555;
+}
+
+QCheckBox::indicator:checked:disabled {
+    background-color: #555;
+    border-color: #777;
+}
+
+QCheckBox::indicator:unchecked:disabled {
+     background-color: #555;
+}
+QWidget#messageListWidget {
+    background-color: rgb(34,33,40);
+    border: 1px;
+    border-radius: 1px;
+    color: #212529;
+    font-family: "Segoe UI", Arial;
+    font-size: 14px;
+    padding: 8px;
+    selection-background-color: #90cdf4;
+}
+
+QLineEdit#chatInput {
+    background-color: rgb(34,33,40);
+    border: 1px solid rgb(92, 84, 155);
+    border-radius: 15px;
+    color: white;
+    padding: 5px 12px;
+    font-size: 14px;
+}
+
+QLineEdit#chatInput:focus {
+    border: 1px solid rgb(92, 84, 180);
+}
+#chatMessageLabel {
+    color: white;
+    border-radius: 15px;
+    padding: 12px;
+    margin: 2px;
+}
+
+#chatMessageLabel[messageType="own"] {
+    background-color: rgb(80, 0, 80);
+    /* Дополнительные стили */
+}
+#chatMessageLabel[messageType="other"] {
+    background-color: rgb(60, 60, 60);
+}
+
+#chatMessageLabel small {
+    color: rgb(255,255,255);
+}
+#messageRowWidget {
+    background: transparent;
+}
+:root {
+    --message-time-color: rgb(255,255,255);
+}
+QCalendarWidget QTableView {
+    background-color: black;
+    font-weight: bold;
 }

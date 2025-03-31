@@ -1,0 +1,286 @@
+QMainWindow {
+    background-color: rgb(240, 240, 240);
+}
+#chatButton {
+    background: transparent;
+    border: none;
+    min-width: 25px;
+    min-height: 25px;
+}
+QWidget {
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.8);
+    selection-background-color: #007bff;
+}
+QWidget[selected="true"] {
+    background-color: #007bff;
+}
+
+#chatButton:hover {
+    border: 1px solid #007bff;
+    border-radius: 10px;
+}
+QMenuBar {
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.8);
+    border-bottom: 1px solid #007bff;
+    padding: 4px;
+}
+
+QMenuBar::item {
+    padding: 8px 15px;
+    border-radius: 4px;
+}
+QMenuBar::item:hover {
+    background-color: rgba(0,123,255,100);
+    color: #ffffff;
+}
+QMenuBar::item:selected {
+    background-color: rgb(0,123,255);
+    color: #ffffff;
+}
+
+QMenu {
+    background-color: rgb(240, 240, 240);
+    border: 1px solid rgb(200, 200, 200);
+    color: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+}
+QMessageBox {
+    background-color: rgb(240, 240, 240);
+    border: 1px solid rgb(200, 200, 200);
+    color: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+}
+QInputDialog {
+    background-color: rgb(240, 240, 240);
+    border: 1px solid rgb(200, 200, 200);
+    color: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+}
+
+QMenu::item {
+    padding: 8px 25px 8px 15px;
+    margin: 2px 0;
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background-color: #007bff;
+    color: #ffffff;
+}
+QListWidget::item:selected {
+    background-color: #007bff;
+    color: #ffffff;
+}
+QListWidget::item:hover {
+    background-color: rgba(0,123,255,200);
+    color: #ffffff;
+}
+
+QStatusBar {
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.7);
+    border-top: 1px solid rgb(200, 200, 200);
+}
+
+QTreeView {
+    background-color: rgba(0, 0, 0, 0.8);
+    border: none;
+    color: rgba(0, 0, 0, 0.8);
+    outline: 0;
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+}
+
+QTreeView::item {
+    height: 28px;
+    padding: 4px 0;
+}
+
+
+QPlainTextEdit {
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.8);
+    border: none;
+    font-family: 'Fira Code', monospace;
+    font-size: 14px;
+    padding: 0 15px;
+}
+
+
+@keyframes pulse {
+    0% { opacity: 0.4; transform: scale(0.2); }
+    50% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0.4; transform: scale(0.2); }
+}
+
+CursorWidget {
+    border-left: 2px solid rgba(0, 0, 0, 0.8);
+    animation: pulse 1.5s infinite;
+    margin-top: 2px;
+    height: 18px !important;
+}
+
+/* Стили для полосы прокрутки */
+QScrollBar:vertical {
+    background: rgb(240, 240, 240);
+    width: 12px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(150, 150, 150, 0.7);
+    min-height: 20px;
+    border-radius: 6px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: rgba(150, 150, 150, 0.9);
+}
+
+QTreeView {
+    background-color: white;
+    color: rgba(0, 0, 0, 0.8);
+    border: none;
+    outline: 0;
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+}
+
+QTreeView::item {
+    height: 28px;
+    padding: 4px 0;
+    icon: url(:/icons/folder_rgba(0, 0, 0, 0.8).png);
+}
+
+QTreeView::item:hover {
+    background-color: rgba(0, 123, 255, 100);
+}
+
+QTreeView::item:selected {
+    background-color: rgb(0, 123, 255);
+    color: rgba(0, 0, 0, 0.8);
+}
+
+QLabel {
+    color: rgba(0, 0, 0, 0.8);
+}
+
+QCheckBox::indicator {
+    width: 25px;
+    height: 7px;
+    border-radius: 3px;
+    background-color: #ddd;
+    border: 2px solid #bbb;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #4CAF50;
+    border-color: #45a049;
+}
+QCheckBox::indicator:unchecked {
+    background-color: #ddd;
+}
+
+QCheckBox::indicator:checked:disabled {
+     background-color: #ddd;
+     border-color: #bbb;
+}
+
+QCheckBox::indicator:unchecked:disabled {
+     background-color: #ddd;
+}
+QWidget#chatScrollArea {
+    background-color: rgb(255,255,255);
+    border: 1px solid #d3d3d3;
+    border-radius: 2px;
+}
+
+QTextEdit#chatDisplay {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    color: #212529;
+    font-family: "Segoe UI", Arial;
+    font-size: 14px;
+    padding: 8px;
+    selection-background-color: rgb(91, 163, 235);
+}
+
+QLineEdit {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 15px;
+    color: #212529;
+    padding: 5px 12px;
+    font-size: 14px;
+}
+
+QLineEdit#chatInput:focus {
+    border: 1px solid #90cdf4;
+}
+
+QPushButton {
+    background-color: #007bff;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 12px;
+    min-width: 60px;
+    transition: all 0.5s ease;
+}
+
+QPushButton:hover {
+    background-color: rgba(0,123,255,200);
+    transform: translateY(-3px);
+}
+
+QPushButton:pressed {
+    background-color: #004085;
+}
+#chatMessageLabel {
+    color: white;
+    border-radius: 15px;
+    padding: 12px;
+    margin: 2px;
+}
+
+#chatMessageLabel[messageType="own"] {
+    background-color: #007bff;
+}
+QSplitter::handle { /*я не знаю почему, но так на белой не отображается разделитель*/
+        background: rgba(34, 33, 50);
+        width: 3px;
+}
+#chatMessageLabel[messageType="other"] {
+    background-color: rgb(128, 128, 128);
+}
+#chatMessageLabel small {
+    color: rgb(255,255,255);
+}
+
+#messageRowWidget {
+    background: transparent;
+}
+QCalendarWidget {
+    background-color: rgb(240, 240, 240);
+}
+QCalendarWidget QTableView {
+    background-color: white;
+    border: none;
+    gridline-color: #e0e0e0;
+    selection-background-color: #007bff;
+    selection-color: white;
+}
+QCalendarWidget QTableView {
+    background-color: white;
+    font-weight: bold;
+}
+QCalendarWidget::HorizontalHeaderFormat {
+    background-color:white;
+}
