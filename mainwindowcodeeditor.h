@@ -170,8 +170,11 @@ private:
     QWidget *messageListWidget;    // <-- ДОБАВИТЬ (Контейнер внутри ScrollArea)
     QVBoxLayout *messagesLayout;   // <-- ДОБАВИТЬ (Layout для контейнера)
     QString m_sessionPassword;
+    QByteArray pendingSessionSave; // хранение отложенного сохранения сессий
     QPushButton* m_chatButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
+
+    int m_pendingSaveDays = 0;
     //новое разделение окон
     bool isChatVisible = false;    // Флаг видимости чата
 

@@ -51,7 +51,10 @@ else()
     else()
         add_executable(BAM_IDE
             ${PROJECT_SOURCES}
-            resources.qrc)
+            resources.qrc
+            sessionparamswindow.h sessionparamswindow.cpp
+
+          )
     endif()
 endif()
 
