@@ -19,6 +19,7 @@ public:
     QString getPassword() const;
     bool shouldSaveSession() const;
     int getSaveDays() const;
+    int getUsers() const;
 
 private slots:
     void onSaveCheckboxChanged(int state);
@@ -28,6 +29,9 @@ private:
     QCheckBox *saveCheckbox;
     QSpinBox *daysSpinBox;
     QLabel *daysLabel;
+    QSpinBox *userAmountSpinBox;
+    QLabel *userAmountLabel;
+    QLabel *saveSessionLabel;
 };
 
 #endif // SESSIONPARAMSWINDOW_H
