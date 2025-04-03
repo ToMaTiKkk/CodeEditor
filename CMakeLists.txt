@@ -44,6 +44,8 @@ set(PROJECT_SOURCES
         linenumberarea.h
         terminalwidget.cpp
         terminalwidget.h
+        sessionparamswindow.cpp
+        sessionparamswindow.h
 )
 
 if(QT_VERSION_MAJOR GREATER_EQUAL 6)
@@ -67,7 +69,7 @@ else()
         add_executable(BAM_IDE
             ${PROJECT_SOURCES}
             resources.qrc
-            terminalwidget.h terminalwidget.cpp)
+            terminalwidget.h terminalwidget.cpp
             sessionparamswindow.h sessionparamswindow.cpp
 
           )
