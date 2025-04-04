@@ -29,6 +29,8 @@ set(PROJECT_SOURCES
         todolistwidget.h
         linenumberarea.cpp
         linenumberarea.h
+        lspmanager.cpp
+        lspmanager.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
