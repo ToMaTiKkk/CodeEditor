@@ -115,7 +115,7 @@ private:
     // !!! обраотка конкретных уведов и ответов от сервера !!!
     void handleInitializeResult(const QJsonObject& result); // когда сервер ответил на запрос "initialize"
     void handlePublishDiagnostics(const QJsonObject& params); // когда уведомление "publishDiagnostics", а именно список ошибок
-    void handleCompletionResult(const QJsonObject& result); // когда ответ на зпрос автодополнения
+    void handleCompletionResult(const QJsonValue& result); // когда ответ на зпрос автодополнения
     void handleHoverResult(const QJsonObject& result); // когда ответ на hover-информацию
     void handleDefinitionResult(const QJsonObject& result); // кога ответ на запрос перехода к определению
 
