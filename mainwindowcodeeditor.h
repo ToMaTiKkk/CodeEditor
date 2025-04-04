@@ -135,6 +135,7 @@ private:
     void setupNetwork();          // WebSocket, client_id
     void setupThemeAndNick();     // тема и никнейм
     void setupTerminalArea();     // терминал
+    void compileAndRun();         // автозапуск кода
 
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
@@ -177,6 +178,7 @@ private:
     QString m_sessionPassword;
     QByteArray pendingSessionSave; // хранение отложенного сохранения сессий
     QPushButton* m_chatButton;
+    QPushButton* m_runButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
 
     int m_pendingSaveDays = 0;

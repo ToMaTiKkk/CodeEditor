@@ -8,5 +8,6 @@
         <file>styles/calendar-clock.png</file>
         <file>styles/Dark.colorscheme</file>
         <file>styles/Light.colorscheme</file>
+        <file>styles/run.png</file>
     </qresource>
 </RCC>

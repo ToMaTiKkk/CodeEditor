@@ -10,7 +10,7 @@
 #include <QDebug>
 #include <QColor>
 #include <QPalette>
-
+#include <QProcess>
 
 TerminalWidget::TerminalWidget(QWidget *parent)
     : QWidget(parent)
@@ -84,4 +84,15 @@ void TerminalWidget::applyColorScheme(const QString &schemePath)
         return;
     }
     term_widget->setColorScheme(schemePath);
+}
+void TerminalWidget::sendCommand(const QString& command)
+{
+    if (!term_widget) {
+        return;
+    }
+    QString commandToSend = command;
+    if (!commandToSend.endsWith('\n')) {
+        commandToSend.append('\n');
+    }
+    term_widget->sendText(commandToSend);
 }

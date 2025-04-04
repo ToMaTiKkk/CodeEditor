@@ -275,16 +275,52 @@ void MainWindowCodeEditor::setupNetwork()
 
 void MainWindowCodeEditor::setupThemeAndNick()
 {
-    applyCurrentTheme(); // применение темы, по умолчанию темная
+    applyCurrentTheme();
 
-    m_chatButton = new QPushButton(this);
+    QWidget* buttonContainer = new QWidget(this);
+    QHBoxLayout* buttonsLayout = new QHBoxLayout(buttonContainer);
+    buttonsLayout->setContentsMargins(0, 0, 0, 0);
+    buttonsLayout->setSpacing(5);
+
+    //код
+    m_runButton = new QPushButton(buttonContainer);
+    m_runButton->setObjectName("runButton");
+    QIcon runIcon(":/styles/run.png");
+    m_runButton->setIcon(runIcon);
+    m_runButton->setIconSize(QSize(24, 24));
+    m_runButton->setToolTip(tr("Запустить код"));
+
+    //чат
+    m_chatButton = new QPushButton(buttonContainer);
     m_chatButton->setObjectName("chatButton");
-
     QIcon chatIcon(":/styles/chat_light.png");
     m_chatButton->setIcon(chatIcon);
     m_chatButton->setIconSize(QSize(24, 24));
-
     m_chatButton->setToolTip(tr("Открыть/закрыть чат"));
+
+    buttonsLayout->addWidget(m_runButton);
+    buttonsLayout->addWidget(m_chatButton);
+
+    QHBoxLayout* chatButtonLayout = new QHBoxLayout;
+    chatButtonLayout->addWidget(buttonContainer);
+    chatButtonLayout->setContentsMargins(0,0,0,0);
+
+    QWidget* chatWidgetContainer = new QWidget(this);
+    chatWidgetContainer->setLayout(chatButtonLayout);
+
+    ui->menubar->setCornerWidget(chatWidgetContainer, Qt::TopRightCorner);
+    connect(m_runButton, &QPushButton::clicked, this, [this](bool checked) {
+        Q_UNUSED(checked);
+        //m_terminalWidget->setVisible(!m_terminalWidget->isVisible());
+
+        if (!m_terminalWidget->isVisible()) {
+            m_terminalWidget->setInputFocus();
+            m_terminalWidget->setVisible(true);
+        } else if (m_codeEditor) {
+            m_codeEditor->setFocus();
+        }
+    });
+
     connect(m_chatButton, &QPushButton::clicked, this, [this](bool checked) {
         Q_UNUSED(checked);
         chatWidget->setVisible(!chatWidget->isVisible());
@@ -294,19 +330,10 @@ void MainWindowCodeEditor::setupThemeAndNick()
             scrollToBottom();
         }
     });
-
-    QHBoxLayout* chatButtonLayout = new QHBoxLayout;
-    chatButtonLayout->addWidget(m_chatButton);
-    chatButtonLayout->setContentsMargins(0,0,0,0);
-
-    QWidget* chatWidgetContainer = new QWidget(this);
-    chatWidgetContainer->setLayout(chatButtonLayout);
-
-    ui->menubar->setCornerWidget(chatWidgetContainer, Qt::TopRightCorner);
-
+    connect(m_runButton, &QPushButton::clicked, this, &MainWindowCodeEditor::compileAndRun);
     bool ok;
-    m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok); // окно приложения, заголовок окна (переводимый текст), метка с пояснением для поля ввода, режим обычного текста, начальное значение в поле ввода (имя домашней директории), переменная в которую записывает нажал ли пользователь ОК или нет
-    if (!ok || m_username.isEmpty()) { // если пользователь отменил ввод или оставил стркоу пустой, то рандом имя до 999
+    m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok);
+    if (!ok || m_username.isEmpty()) {
         m_username = "User" + QString::number(QRandomGenerator::global()->bounded(1000));
     }
     qDebug() << "Set username to" << m_username;
@@ -1802,4 +1829,74 @@ void MainWindowCodeEditor::on_actionTerminal_triggered()
     } else if (m_codeEditor) {
         m_codeEditor->setFocus();
     }
+}
+void MainWindowCodeEditor::compileAndRun()
+{
+    if (!m_terminalWidget) {
+        QMessageBox::warning(this, tr("Ошибка"), tr("Терминал не инициализирован"));
+        return;
+    }
+
+    if (currentFilePath.isEmpty() || !QFile::exists(currentFilePath)) {
+        QMessageBox::warning(this, tr("Файл не найден"), tr("Сначала откройте или сохраните файл"));
+        return;
+    }
+
+    QFileInfo fileInfo(currentFilePath);
+    QString dir = QDir::toNativeSeparators(fileInfo.absolutePath());
+    QString fileName = fileInfo.fileName();
+    QString baseName = fileInfo.baseName();
+    QString suffix = fileInfo.suffix().toLower();//ищем расширение файла
+
+    QString command;
+
+    if (suffix == "cpp" || suffix == "cxx" || suffix == "cc") {
+        command = QString("cd \"%1\" && g++ \"%2\" -o \"%3\" && \"./%3\"\n")
+                      .arg(dir)
+                      .arg(fileName)
+                      .arg(baseName);
+        qDebug() << "Generated C++ command:" << command;
+
+    } else if (suffix == "c") {
+        command = QString("cd \"%1\" && gcc \"%2\" -o \"%3\" && \"./%3\"\n")
+                      .arg(dir)
+                      .arg(fileName)
+                      .arg(baseName);
+
+        qDebug() << "Generated C command:" << command;
+
+    } else if (suffix == "py") {
+        command = QString("cd \"%1\" && python3 \"%2\"\n")
+                      .arg(dir)
+                      .arg(fileName);
+        qDebug() << "Generated Python command:" << command;
+
+    } else if (suffix == "go") {
+        command = QString("cd \"%1\" && go run \"%2\"\n")
+                      .arg(dir)
+                      .arg(fileName);
+        qDebug() << "Generated Go command:" << command;
+
+    } else if (suffix == "java") {
+        command = QString("cd \"%1\" && javac \"%2\" && java \"%3\"\n")
+                      .arg(dir)
+                      .arg(fileName)
+                      .arg(baseName);
+        qDebug() << "Generated Java command:" << command;
+
+    } else {
+        QMessageBox::warning(this,
+                             tr("Неподдерживаемый тип файла"),
+                             tr("Извините, но пока что автоматический запуск поддерживается только для файлов C, C++, Python, Go и Java.")
+                                 + "\n\n" + tr("Ваше расширение файла: .") + suffix);
+        return;
+    }
+    if (!m_isTerminalVisible) {
+        ui->actionTerminal->setChecked(true);
+        on_actionTerminal_triggered();
+    }
+
+    // Отправка команды
+    m_terminalWidget->sendCommand(command);
+    m_terminalWidget->setInputFocus();
 }

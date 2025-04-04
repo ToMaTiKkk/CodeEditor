@@ -2,6 +2,7 @@
 #define TERMINALWIDGET_H
 
 #include <QWidget>
+#include <QProcess>
 
 class QTermWidget;
 class QVBoxLayout;
@@ -18,6 +19,7 @@ public:
 
     void setInputFocus();
     void applyColorScheme(const QString& schemePath);
+    void sendCommand(const QString& command);
 
 private slots:
     void handleKeyPress(QKeyEvent *event);
