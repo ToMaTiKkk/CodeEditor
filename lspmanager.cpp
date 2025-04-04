@@ -6,6 +6,7 @@
 #include <QCoreApplication> // чтобы получать ID нашего приложения для инициализации нужен
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QTextBlock>
 
 LspManager::LspManager(QObject *parent) : QObject(parent)
 {
@@ -40,7 +41,7 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     // настройках уведов, когда процесс напишет в stdout, то вызываем функцию
     connect(m_lspProcess, &QProcess::readyReadStandardOutput, this, &LspManager::onReadyReadStandardOutput);
     connect(m_lspProcess, &QProcess::readyReadStandardError, this, &LspManager::onReadyReadStandardError);
-    connect(m_lspProcess, &QProcess::finished, this, &LspManager::onProcessFinished);
+    connect(m_lspProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &LspManager::onProcessFinished);
     connect(m_lspProcess, &QProcess::errorOccurred, this, &LspManager::onProcessError); // ошибки при запуске или работе
 
     // запускаем процесс и qt найдет m_serverExecutable с системных путях в PATH
@@ -49,7 +50,7 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     // задержка в 5 сек, чтобы точно убедиться, что процесс запустился
     if (!m_lspProcess->waitForStarted(5000)) {
         qCritical() << "Не удалось запустить процсс LSP сервера:" << m_lspProcess->errorString();
-        delete m_lspProcess; // так как не запустился
+        m_lspProcess->deleteLater(); // так как не запустился
         m_lspProcess = nullptr;
         emit serverError("Не удалось запустить LSP сервер: " + m_serverExecutable); // посылаем в mainwindow сигнал об ошибке
         return false; // запуск не удался
@@ -284,7 +285,7 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
         } else if (id > 10 && id <= 20) { // допустим всплывашка
             handleHoverResult(resultValue.toObject());
         } else if (id > 20) { // допустим переход к определению функции
-            handleDefinitionResult(resultValue.toObject() ? resultValue.toObject() : QJsonObject()); // результат может быть объектом, array and null
+            handleDefinitionResult(resultValue.toObject()); // результат может быть объектом, array and null
         }
     } else if (message.contains("id") & message.contains("error")) {
         // ошибка в ответ на наш запрос
@@ -299,7 +300,7 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
         // уведомления не содеражт айди, а запросы от сервера к клиенту - содержат
         QString method = message["method"].toString(); // имя метода, например textDocument/publishDiagnostics
         QJsonObject params; // могу отсутствовать при некоторых уведомлениях
-        if (message.contains("params") && message["params"].toObject()) {
+        if (message.contains("params") && message["params"].isObject()) {
             params = message["params"].toObject();
         }
         qDebug() << "LSP < Получено уведомление или запрос от сервера, метод" << method;
@@ -310,7 +311,8 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
             handlePublishDiagnostics(params);
         } else if (method == "window/showMessage") {
             // сервер просит нас показать пользователю какое-то соо
-            int msgType = params.value("type", 4).toInt(); // 1: Error,  2: Wanr,  3: Info,  4: Log
+            QJsonValue typeVal = params.value("type");
+            int msgType = typeVal.isDouble() ? typeVal.toInt(4) : 4; // 1: Error,  2: Wanr,  3: Info,  4: Log
             QString text = params["message"].toString();
             if (msgType == 1) {
                 qCritical() << "LSP Message (Error):" << text;
@@ -365,6 +367,12 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
 {
     // извлекаем URI к которому относится диагностика
     QString fileUri = params["uri"].toString();
+    // проврека что даигностикс - массив
+    QJsonValue diagnosticsValue = params.value("diagnostics");
+    if (!diagnosticsValue.isArray()) {
+        qWarning() << "LSP < Поле diagnostics не является массивом в publishDiagnostics";
+        return;
+    }
     // извлекаем массив джсон-объекто, которые описывают диагностии
     QJsonArray diagsArray = params["diagnostics"].toArray();
     // создаем список наших структур LspDiagnostic для хранения результата
@@ -372,16 +380,35 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
 
     // проходимя по каждому элементу массива диагностики от сервера
     for (const QJsonValue& val : diagsArray) {
+        if (!val.isObject()) continue; //пропуска не-объекты
         QJsonObject diagObj = val.toObject();
+        // проверяем наличие вложенных объектов
+        QJsonValue rangeVal = diagObj.value("range");
+        if (!rangeVal.isObject()) continue;
         QJsonObject range = diagObj["range"].toObject(); // где находится проблема
+        QJsonValue startVal = diagObj.value("start");
+        QJsonValue endVal = diagObj.value("end");
+        if (!startVal.isObject() || !endVal.isObject()) continue;
         QJsonObject start = range["start"].toObject(); // начало диапозона
         QJsonObject end = range["end"].toObject(); // конец диапозона
         
         // создаем структуру LspDiagnostic и заполняем данными из джсон
         LspDiagnostic diag;
         diag.message = diagObj["message"].toString(); // текст ошибки
-        diag.severity = diagObj.value("severity", 3).toInt(); // серьезность может отсутствовать, по умолчанию Info (3)
-        diag.startLine = start["line"].toInt(); // строка начала 
+        QJsonValue severityVal = diagObj.value("severity");
+        diag.severity = severityVal.isDouble() ? severityVal.toInt(3) : 3; // серьезность может отсутствовать, по умолчанию Info (3)
+
+        QJsonValue startLineVal = start.value("line");
+        QJsonValue startCharVal = start.value("character");
+        QJsonValue endLineVal = end.value("line");
+        QJsonValue endCharVal = end.value("character");
+
+        if(!startLineVal.isDouble() || !startCharVal.isDouble() || !endLineVal.isDouble() || !endCharVal.isDouble()) {
+            qWarning() << "LSP < Некорректные координаты в диагностике";
+            continue;
+        }
+
+        diag.startLine = start["line"].toInt(); // строка начала
         diag.startChar = start["character"].toInt(); // символ начала
         diag.endLine = end["line"].toInt(); // строка конца
         diag.endChar = end["character"].toInt(); // символ конца
@@ -396,20 +423,28 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
 }
 
 // когда сервер отвечает на наш запрос автодополнения
-void LspManager::handleCompletionResult(const QJsonObject& result) {
+void LspManager::handleCompletionResult(const QJsonValue& resultValue) {
     QList<LspCompletionItem> completionList; 
     QJsonArray itemsArray; // сюда массив подсказок из ответа сервера
 
     // сервер может вернуть результаты в разных форматах:
     // 1. Обхект, содержащий поле items (массив)
     // 2. Просто массив подсказок
-    if (result.contains("items") && result["items"].isArray()) {
-        itemsArray = result["items"].toArray();
-    } else if (result.isArray()) { // некоторые старые серверы могут возвращать просто массив
-        itemsArray = result.array();
-    } else if (!result.isEmpty()) { // может прийти просто пустой оюъект, если ещё нет подсказок
-        qWarning() << "LSP < Неверный формат ответа на completion";
-    }
+    if (resultValue.isObject()) {
+        QJsonObject resultObj = resultValue.toObject();
+        // некоторые сервера созвращают CompletionList объхект
+        if (resultObj.contains("items") && resultObj["items"].isArray()) {
+            itemsArray = resultObj["items"].toArray();
+        } else if (!resultObj.isEmpty()) {
+            // возможно объект другой пришел
+            qWarning() << "LSP < Неожиданный тип ответа на completion (не объект, не массив, не null):" << resultValue.type();
+        }
+        // если объект, но не содержит items, itemsArray остается пустым
+    } else if (resultValue.isArray()) { // некоторые старые серверы могут возвращать просто массив
+            itemsArray = resultValue.toArray();
+        } else if (!resultValue.isNull()) { // может прийти просто пустой оюъект, если ещё нет подсказок
+            qWarning() << "LSP < Неожиданный тип ответа на completion (не объект, не массив, не null):" << resultValue.type();
+        }
 
     // проходимся по каждому элементу массива подсказок от сервера
     for (const QJsonValue& val : itemsArray) {
@@ -418,7 +453,8 @@ void LspManager::handleCompletionResult(const QJsonObject& result) {
 
         // заполняем поля структуры из джсон-объкт подсказки
         item.label = itemsObj["label"].toString(); // текст для списка
-        item.insertText = itemsObj.value("insertText", item.label).toString(); // текст который фактически вставиться
+        QJsonValue insertTextVal = itemsObj.value("insertText");
+        item.insertText = insertTextVal.isString() ? insertTextVal.toString() : item.label; // текст который фактически вставиться
         item.detail = itemsObj.value("detail").toString(); // тип
 
         // документация может быть строкой или объектом { kind: "markdown", value: "..." }
