@@ -1,0 +1,71 @@
+[General]
+Description=Light
+
+[Background]
+Color=240, 240, 240
+
+[BackgroundIntense]
+Color=104,104,104
+
+[Foreground]
+;Color=49,51,47
+Color=15,15,15
+
+[ForegroundIntense]
+Color=15,15,15
+
+; black
+[Color0]
+Color=255,255,255
+
+[Color0Intense]
+Color=0,123,255
+
+; red
+[Color1]
+Color=204,0,0
+
+[Color1Intense]
+Color=239,41,41
+
+; blue
+[Color2]
+Color=0,132,255
+
+[Color2Intense]
+Color=0,132,255
+
+; yellow
+[Color3]
+Color=196,160,0
+
+[Color3Intense]
+Color=252,233,79
+
+; blue
+[Color4]
+Color=52,101,164
+
+[Color4Intense]
+Color=114,159,207
+
+; magenta
+[Color5]
+Color=117,80,123
+
+[Color5Intense]
+Color=173,127,168
+
+; aqua
+[Color6]
+Color=6,152,154
+
+[Color6Intense]
+Color=52,226,226
+
+; grey
+[Color7]
+Color=49,51,47
+
+[Color7Intense]
+Color=49,51,47

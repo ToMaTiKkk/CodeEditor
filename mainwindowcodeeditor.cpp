@@ -237,7 +237,7 @@ void MainWindowCodeEditor::setupMenuBarActions()
     connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
 
     // подключение меню терминала
-    if (ui->menuView && ui->actionTerminal) {
+    if (ui->menufd && ui->actionTerminal) {
         ui->actionTerminal->setCheckable(true);
         ui->actionTerminal->setChecked(m_isTerminalVisible);
         connect(ui->actionTerminal, &QAction::triggered, this, &MainWindowCodeEditor::on_actionTerminal_triggered);
@@ -302,7 +302,6 @@ void MainWindowCodeEditor::setupThemeAndNick()
     QWidget* chatWidgetContainer = new QWidget(this);
     chatWidgetContainer->setLayout(chatButtonLayout);
 
-    // Добавляем виджет в правый верхний угол menuBar
     ui->menubar->setCornerWidget(chatWidgetContainer, Qt::TopRightCorner);
 
     bool ok;
@@ -1270,7 +1269,6 @@ void MainWindowCodeEditor::applyCurrentTheme()
             qApp->setStyleSheet(lightStyle);
             chatWidget->setStyleSheet(lightStyle);
             lightFile.close();
-            qDebug() << "Light theme applied successfully";
         } else {
             qDebug() << "Failed to open light.qss";
         }
@@ -1281,11 +1279,17 @@ void MainWindowCodeEditor::applyCurrentTheme()
             qApp->setStyleSheet(darkStyle);
             chatWidget->setStyleSheet(darkStyle);
             darkFile.close();
-            qDebug() << "Dark theme applied successfully";
         } else {
             qDebug() << "Failed to open dark.qss";
         }
     }
+    if (!m_terminalWidget) {
+        return;
+    }
+
+    QString terminalSchemePath = m_isDarkTheme ? ":/styles/Dark.colorscheme" : ":/styles/Light.colorscheme";
+
+    m_terminalWidget->applyColorScheme(terminalSchemePath);
 }
 
 void MainWindowCodeEditor::onToolButtonClicked()
@@ -1758,7 +1762,6 @@ void MainWindowCodeEditor::on_actionToDoList_triggered()
 
 }
 
-// РЕАЛИЗАЦИЯ НАСТРОЙКИ ТЕРМИНАЛА (метода)
 void MainWindowCodeEditor::setupTerminalArea()
 {
     qDebug() << "Setting up Terminal Area (using wrapper)...";
@@ -1772,12 +1775,13 @@ void MainWindowCodeEditor::setupTerminalArea()
     if (!m_terminalWidget) { qFatal("Failed to create TerminalWidget wrapper!"); return; }
     m_terminalWidget->setObjectName("terminalWidgetWrapper");
 
-    int minTerminalHeight = 80;
+    int minTerminalHeight = 50;
     m_terminalWidget->setMinimumHeight(minTerminalHeight);
 
     mainVerticalSplitter->addWidget(m_terminalWidget);
 
     mainVerticalSplitter->setChildrenCollapsible(false);
+
     delete this->centralWidget();
     this->setCentralWidget(mainVerticalSplitter);
 
@@ -1786,7 +1790,6 @@ void MainWindowCodeEditor::setupTerminalArea()
     qDebug() << "Terminal Area setup complete.";
 }
 
-// СЛОТ ДЛЯ МЕНЮ ТЕРМИНАЛА
 void MainWindowCodeEditor::on_actionTerminal_triggered()
 {
     if (!ui || !ui->actionTerminal || !m_terminalWidget) return;

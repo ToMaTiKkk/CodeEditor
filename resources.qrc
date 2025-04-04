@@ -6,5 +6,7 @@
         <file>styles/chat_dark.png</file>
         <file>styles/send.png</file>
         <file>styles/calendar-clock.png</file>
+        <file>styles/Dark.colorscheme</file>
+        <file>styles/Light.colorscheme</file>
     </qresource>
 </RCC>

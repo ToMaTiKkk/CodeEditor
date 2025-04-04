@@ -8,6 +8,9 @@
 #include <QDesktopServices>
 #include <QApplication>
 #include <QDebug>
+#include <QColor>
+#include <QPalette>
+
 
 TerminalWidget::TerminalWidget(QWidget *parent)
     : QWidget(parent)
@@ -20,17 +23,22 @@ TerminalWidget::TerminalWidget(QWidget *parent)
     term_widget->setObjectName("internalTermWidget");
 
     QFont termFont = QApplication::font();
-    termFont.setFamily("JetBrains Mono Medium");
+    termFont.setFamily("Fira Code");
     termFont.setPointSize(12);
+    termFont.setStyleHint(QFont::TypeWriter); //не убирпть!!!!!1
     term_widget->setTerminalFont(termFont);
 
-    term_widget->setColorScheme("Tango");
-    term_widget->setBlinkingCursor(true);
-    term_widget->setMargin(5);
+    term_widget->setColorScheme(":/styles/Dark.colorscheme"); // по дефолту
+
+
+    //term_widget->setBlinkingCursor(true); //как по мне так лучше
+    //term_widget->setMargin(5);
 
     layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(term_widget);
+    term_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
 
     connect(term_widget, &QTermWidget::termKeyPressed, this, &TerminalWidget::handleKeyPress);
     connect(term_widget, &QTermWidget::urlActivated, this, &TerminalWidget::handleLinkActivation);
@@ -69,4 +77,11 @@ void TerminalWidget::handleLinkActivation(const QUrl &url, bool fromContextMenu)
         qDebug() << "Opening link:" << url.toString();
         QDesktopServices::openUrl(url);
     }
+}
+void TerminalWidget::applyColorScheme(const QString &schemePath)
+{
+    if (!term_widget) {
+        return;
+    }
+    term_widget->setColorScheme(schemePath);
 }

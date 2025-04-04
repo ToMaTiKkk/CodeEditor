@@ -17,6 +17,7 @@ public:
     ~TerminalWidget();
 
     void setInputFocus();
+    void applyColorScheme(const QString& schemePath);
 
 private slots:
     void handleKeyPress(QKeyEvent *event);
