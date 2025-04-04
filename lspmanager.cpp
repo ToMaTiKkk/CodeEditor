@@ -614,4 +614,110 @@ void LspManager::requestCompletion(const QString& fileUri, int line, int charact
     message["params"] = params;
     sendMessage(message);
     qDebug() << "LSP > Запрошено автодополнения для" << fileUri << "в" << line << ":" << character << "ID:" << m_requestId;
+    // -------- TODO дописать, чтобы принимался конкретный айдишник процесс для дальнейшего распознавания ответа
+}
+
+// запрос всплывашки (подсказки-hover)
+void LspManager::requestHover(const QString& fileUri, int line, int character)
+{
+    if (!m_isServerReady) return;
+
+    QJsonObject params;
+    QJsonObject textDocument;
+    textDocument["uri"] = fileUri;
+    params["textDocument"] = textDocument;
+    QJsonObject position;
+    position["line"] = line;
+    position["character"] = character;
+    params["position"] = position;
+
+    QJsonObject message;
+    message["jsonrpc"] = "2.0";
+    message["id"] = ++m_requestId;
+    message["method"] = "textDocument/hover";
+    message["params"] = params;
+    sendMessage(message);
+    qDebug() << "LSP > Запрошен hover для" << fileUri << "в" << line << ":" << character << "ID:" << m_requestId;
+    // --------- TODO сохранить ID и имя метода
+}
+
+// запрос место определения символа
+void LspManager::requestDefinition(const QString& fileUri, int line, int character)
+{
+    if (!m_isServerReady) return;
+
+    QJsonObject params;
+    QJsonObject textDocument;
+    textDocument["uri"] = fileUri;
+    params["textDocument"] = textDocument;
+    QJsonObject position;
+    position["line"] = line;
+    position["character"] = character;
+    params["position"] = position;
+
+    QJsonObject message;
+    message["jsonrpc"] = "2.0";
+    message["id"] = ++m_requestId;
+    message["method"] = "textDocument/definition";
+    message["params"] = params;
+    sendMessage(message);
+    qDebug() << "LSP > Запрошен definition для" << fileUri << "в" << line << ":" << character << "ID:" << m_requestId;
+    // --------- TODO сохранить ID и имя метода
+}
+
+// !!! конвектор позиций из QPlainTextEdit (одно число - номер символа) в LSP-формат (два числа - номер строки и номер символа в строке)
+QPoint LspManager::editorPosToLspPos(const QString& text, int editorPos)
+{
+    int line = 0;
+    int character = 0;
+    int currentPos = 0;
+
+    // проходимся посимвольно по тексту до нужной позиции
+    for (int i = 0; i < text.length() && currentPos < editorPos; ++i) {
+        if (text[i] == '\n') { // если встретился перевод строки
+            line++;
+            character = 0;
+        } else {
+            // -------- TODO усложнить и уточнить логику, потмоу что табуляция занимает больше 1 места, так же многобайтные символа в utf-8 могут занимат больше 1 места и быть одним символом
+            character++;
+        }
+        currentPos++;
+    }
+    // если позиция указывает на '\n'
+    if (currentPos == editorPos && editorPos > 0 && text.at(editorPos-1) == QChar('\n')) {
+        // мы стоим на символе перевода строки, значит это позиция 0 следующей строки
+        character = 0;
+    }
+
+    return QPoint(line, character);
+}
+
+// обратный конвектор из лсп
+int LspManager::lspPosToEditorPos(const QString& text, int line, int character)
+{
+    int currentLine = 0;
+    int currentCharacter = 0;
+
+    for (int pos = 0; pos < text.length(); ++pos) {
+        // если мы на нужной строке и на нужном символе
+        if (currentLine == line && currentCharacter == character) {
+            return pos;
+        }
+
+        if (text[pos] == '\n') {
+            currentLine++;
+            currentCharacter = 0;
+        } else {
+            currentCharacter++;
+            // ----- TODO tabs and utf-8
+        }
+    }
+
+    // если весь текст пройден и искомая позиция совпадает с концом файла
+    if (currentLine == line && currentCharacter == character) {
+        return text.length();
+    }
+
+    // например запросили строку 100 в файла с 50 строками
+    return -1;
 }
