@@ -8,7 +8,9 @@
 #include <QJsonObject>
 #include <QTextBlock>
 
-LspManager::LspManager(QObject *parent) : QObject(parent)
+LspManager::LspManager(QString serverExecutablePath = "clangd", QObject *parent) 
+    : QObject(parent)
+    , m_serverExecutablePath(serverExecutablePath)
 {
 
 }
@@ -31,10 +33,9 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
 
     // созранение параметров
     m_languageId = languageId; // запоминаем язык
-    m_serverExecutable = "clangd";
     m_rootUri = QUrl::fromLocalFile(projectRootPath).toString(); // конвектируем формат пути из "/home/user/project" в "file:///home/user/project", который требует ЛСП
 
-    qInfo() << "Запускаем LSP сервер:" << m_serverExecutable << "для проекта" << m_rootUri;
+    qInfo() << "Запускаем LSP сервер:" << m_serverExecutablePath << "для проекта" << m_rootUri;
 
     m_lspProcess = new QProcess(this); // создаем объект, который будет управлять внешним процессом, удаляется вместе с родителем, то есть с LspManager
 
@@ -45,14 +46,14 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     connect(m_lspProcess, &QProcess::errorOccurred, this, &LspManager::onProcessError); // ошибки при запуске или работе
 
     // запускаем процесс и qt найдет m_serverExecutable с системных путях в PATH
-    m_lspProcess->start(m_serverExecutable);
+    m_lspProcess->start(m_serverExecutablePath);
 
     // задержка в 5 сек, чтобы точно убедиться, что процесс запустился
     if (!m_lspProcess->waitForStarted(5000)) {
         qCritical() << "Не удалось запустить процсс LSP сервера:" << m_lspProcess->errorString();
         m_lspProcess->deleteLater(); // так как не запустился
         m_lspProcess = nullptr;
-        emit serverError("Не удалось запустить LSP сервер: " + m_serverExecutable); // посылаем в mainwindow сигнал об ошибке
+        emit serverError("Не удалось запустить LSP сервер: " + m_serverExecutablePath); // посылаем в mainwindow сигнал об ошибке
         return false; // запуск не удался
     }
 
@@ -64,7 +65,37 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     params["processId"] = (qint64)QCoreApplication::applicationPid(); // сообщаем наш айди редактора
     // сообщаем серверу какие функции поддерживаются нашим редактором, пока что просто заглушка!!!
     QJsonObject capabilities;
-    params["capabilities"] = capabilities;
+    QJsonObject windowCap;
+    // сообщаем, что можем показывать сообщения от сервера
+    windowCap["showMessage"] = QJsonObject{{ "messageActionItem",  QJsonObject{} }};
+    // базовая поддержка
+    capabilities["window"] = windowCap;
+
+    QJsonObject textDocumentCap;
+    // синхра: сообщаем, что будем слать полный текст при изменении (SyncKind.Full)
+    textDocumentCap["synchronization"] = QJsonObject {
+      {"dynamicRegistration", false}, // пока что нет поддержки динамической регистрации
+      {"willSave", false}, // не уведомляем перед сохранением
+      {"willSaveWaitUntil", false}, // не ждем ответа перед сохранением
+      {"didSave", true}, // уведомляем ПОСЛЕ сохранения   
+    };
+    // автодополнение: сообщаем, что поддерживается бащовое автодополнение
+    textDocumentCap["completion"] = QJsonObject {
+        {"dynamicRegistration", false},
+        {"completionItem", QJsonObject{
+            {"snippetSupport", false}, // пока не поддерживаем сниппеты
+            {"documentationFormat", QJsonArray{"plaintext", "markdown"}} // понимаем текст и markdown в документации
+        }},
+        {"contextSupport", true} // сообщаем triggerKind при запроса
+    };
+    // hover
+    textDocumentCap["hover"] = QJsonObject {
+        {"dynamicRegistration", false},
+        {"linkSupport", false}, // пока не поддерживаем LocationLink
+    };
+    capabilities["textDocument"] = textDocumentCap;
+
+    params["capabilities"] = capabilities; // вставляем наши возможности
     params["rootUri"] = m_rootUri; // путь к папке проекта
     params["trace"] = "off"; // уровень отладки соо
 
@@ -86,6 +117,7 @@ void LspManager::stopServer()
     if (m_lspProcess && m_lspProcess->state() != QProcess::NotRunning) {
         qInfo() << "Останавливаем LSP сервер...";
         m_isServerReady = false; // сервер больше не готов
+        m_pendingRequests.clear(); // очищаем незавершенные запросы
 
         // !!! отправляем shutdown и exit !!!
         // вежливо просим чтобы сервер завершил работу
@@ -97,14 +129,14 @@ void LspManager::stopServer()
         qDebug() << "LSP > Отправлен запрос на shutdown, ID:" << m_requestId; // -------------------TODO в идеале нужно дождаться ответа на это, преждем чем отправлть exit
 
         // уведомление, чтобы сервер точно завершился
-        QJsonObject exitMsg;
-        exitMsg["jsonrpc"] = "2.0";
-        exitMsg["method"] = "exit";
-        sendMessage(exitMsg);
-        qDebug() << "LSP ОТправлено уведомление exit";
+        // QJsonObject exitMsg;
+        // exitMsg["jsonrpc"] = "2.0";
+        // exitMsg["method"] = "exit";
+        // sendMessage(exitMsg);
+        // qDebug() << "LSP ОТправлено уведомление exit";
 
-        // даем серверу немного времени, чтобы завершиться самому
-        if (!m_lspProcess->waitForFinished(2000)) {
+        // даем серверу немного времени, чтобы завершиться позже, так как асинхронный шаг
+        if (!m_lspProcess->waitForFinished(5000)) {
             qWarning() << "LSP сервер не завершился сам, пытаемся терминировать";
             // просим OC принудитеьно его остановить
             m_lspProcess->terminate();
@@ -113,12 +145,12 @@ void LspManager::stopServer()
                 // крайняя мера
                 m_lspProcess->kill();
             }
+        } else {
+            qInfo() << "LSP сервер остановлен";
         }
-        qInfo() << "LSP сервер остановлен";
     }
     // освобождаем память
     if (m_lspProcess) {
-        delete m_lspProcess;
         m_lspProcess = nullptr;
     }
 }
@@ -188,13 +220,23 @@ void LspManager::sendMessage(const QJsonObject& message)
 
     // формирование обязательного заголовка
     QByteArray header;
-    header.append("Content-Length: "); // текст заговлока
-    header.append(QString::number(jsonContent.size())); // размер джсон в байтах
-    header.append("\r\n\r\n"); // обязательные символы конца заголовка, перевод строки и возврат каретки x2
+    header.append("Content-Length: ").append(QString::number(jsonContent.size())).append("\r\n\r\n"); // текст заговлока? размер джсон в байтах,  обязательные символы конца заголовка, перевод строки и возврат каретки x2
+    //header.append(QString::number(jsonContent.size())); // 
+    //header.append("\r\n\r\n"); //
 
     // отправляем сначала заголовок, а потом само сообщение джсон в стандартный ввод процесса (stding)
     m_lspProcess->write(header);
     m_lspProcess->write(jsonContent);
+
+    // сохраняем айди и метод для запросов
+    if (message.contains("id") && message.contains("method")) {
+        qint64 id = message["id"].toVariant().toLongLong();
+        QString method = message["method"].toString();
+        if (id > 0 && !method.isEmpty()) { // убедимся что запрос валидный
+            m_pendingRequests.insert(id, method); 
+            qDebug() << "LSP > Запрос поставлен в очередь ожидания: ID" << id << "Метод:" << method;
+        }
+    }
 }
 
 // обрабатывает входящие данные из буфера
@@ -271,30 +313,50 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
 
     QJsonObject message = doc.object(); // для удобного доступа к полям преобразуем
     // определяем тип соо на наличие полей "id", "result", "error", "method" and etc
-    if (message.contains("id") && message.contains("result")) {
+    if (message.contains("id") && message.contains("result") || message.contains("error")) {
         // это ответ на наш вопрос
         qint64 id = message["id"].toVariant().toLongLong();
-        // поле результата может быть любым объектом, массивом или другим типом
-        QJsonValue resultValue = message["result"];
-
-        // -------------TODO сделать корректный обработчик айдишников, чтобы правильно идентифицировать запросы
-        if (id == 1) { // допустим инициализация
-            handleInitializeResult(resultValue.toObject());
-        } else if (id > 1 && id <= 10) { // доупстим автодополнени
-            handleCompletionResult(resultValue.toObject());
-        } else if (id > 10 && id <= 20) { // допустим всплывашка
-            handleHoverResult(resultValue.toObject());
-        } else if (id > 20) { // допустим переход к определению функции
-            handleDefinitionResult(resultValue.toObject()); // результат может быть объектом, array and null
+        if (!m_pendingRequests.contains(id)) {
+            qWarning() << "LSP < Получен ответ на неизвсетный или уже обработанный запрос ID:" << id;
         }
-    } else if (message.contains("id") & message.contains("error")) {
-        // ошибка в ответ на наш запрос
-        qint64 id = message["id"].toVariant().toLongLong();
-        QJsonObject errorObj = message["error"].toObject();
-        int code = errorObj["code"].toInt(); 
-        QString errorMsg = errorObj["message"].toString();
-        qWarning() << "LSP < Ошибка в ответе на запрос ID" << id << "Код:" << code << "Сообщение:" << errorMsg;
-        // ----------TODO посылать сигнали клиенту что бы показать ошибка
+        QString method = m_pendingRequests.take(id); // полуаем метод и сразу удаляем из словаря
+        if (message.contains("result")) {
+            // поле результата может быть любым объектом, массивом или другим типом
+            QJsonValue resultValue = message["result"];
+
+            if (method == "initialize") {
+                handleInitializeResult(resultValue.toObject());
+            } else if (method == "textDocument/completion") {
+                // рез может быть массивом или объектом
+                if (resultValue.isObject()) {
+                    handleCompletionResult(resultValue.toObject());
+                } else if (resultValue.isArray()) {
+                    handleCompletionResult(QJsonObject{{ "items", resultValue }}); // обернем массив в объект для единообразия
+                } else if (resultValue.isNull()) {
+                    handleCompletionResult({});
+                } else {
+                    qWarning() << "LSP < неожиданный тип результата для completion: " << resultValue.type();
+                }
+            } else if (method == "textDocument/definition") {
+                // definition может вернуть просто Location, LOcation[] or Null
+                handleDefinitionResult(resultValue.toObject());
+            } else if (method == "textDocument/hover") {
+                handleHoverResult(resultValue.isObject() ? resultValue.toObject() : QJsonObject());
+            } else if (method == "shutdown") {
+                // сервер подтвердил готовность к завершению
+                qInfo() << "LSP < Получен ответ на shutdown";
+                QJsonObject exitMsg;
+                exitMsg["jsonrpc"] = "2.0";
+                exitMsg["method"] = "exit";
+                sendMessage(exitMsg);
+            }
+        } else {
+            QJsonObject errorObj = message["error"].toObject();
+            int code = errorObj["code"].toInt(); 
+            QString errorMsg = errorObj["message"].toString();
+            qWarning() << "LSP < Ошибка в ответе на запрос ID" << id << "Код:" << code << "Сообщение:" << errorMsg;
+            // ----------TODO посылать сигнали клиенту что бы показать ошибка
+        }
     } else if (message.contains("method")) {
         // уведомление или запрос от сервера Notification/Request
         // уведомления не содеражт айди, а запросы от сервера к клиенту - содержат
@@ -702,58 +764,90 @@ void LspManager::requestDefinition(const QString& fileUri, int line, int charact
 }
 
 // !!! конвектор позиций из QPlainTextEdit (одно число - номер символа) в LSP-формат (два числа - номер строки и номер символа в строке)
-QPoint LspManager::editorPosToLspPos(const QString& text, int editorPos)
+QPoint LspManager::editorPosToLspPos(QTextDocument *doc, int editorPos)
 {
-    int line = 0;
-    int character = 0;
-    int currentPos = 0;
-
-    // проходимся посимвольно по тексту до нужной позиции
-    for (int i = 0; i < text.length() && currentPos < editorPos; ++i) {
-        if (text[i] == '\n') { // если встретился перевод строки
-            line++;
-            character = 0;
-        } else {
-            // -------- TODO усложнить и уточнить логику, потмоу что табуляция занимает больше 1 места, так же многобайтные символа в utf-8 могут занимат больше 1 места и быть одним символом
-            character++;
-        }
-        currentPos++;
-    }
-    // если позиция указывает на '\n'
-    if (currentPos == editorPos && editorPos > 0 && text.at(editorPos-1) == QChar('\n')) {
-        // мы стоим на символе перевода строки, значит это позиция 0 следующей строки
-        character = 0;
+    if (!doc || editorPos < 0) {
+        return QPoint(-1, -1); // некорректный ввод
     }
 
+    // находим блок текста (Строку), которая содержит editorPos
+    QTextBlock tb = doc->findBlock(editorPos);
+    if (!tb.isValid()) {
+        // если позиция за пределами документа, то вернем позицию конца последней строки
+        tb = doc->lastBlock();
+        if (!tb.isValid()) {
+            return QPoint(0, 0); // пустой документ?
+        } 
+        return QPoint(doc->blockCount() - 1, tb.length() - 1); // конец документа (-1, т.к нет \n)
+        // return QPoint(-1, -1); // можно вернуть ошибку
+    }
+
+    int line = tb.blockNumber(); // номер строки
+    int character = editorPos - tb.position(); // позиция символа нутри строки
+    // // проходимся посимвольно по тексту до нужной позиции
+    // for (int i = 0; i < text.length() && currentPos < editorPos; ++i) {
+    //     if (text[i] == '\n') { // если встретился перевод строки
+    //         line++;
+    //         character = 0;
+    //     } else {
+    //         // -------- TODO усложнить и уточнить логику, потмоу что табуляция занимает больше 1 места, так же многобайтные символа в utf-8 могут занимат больше 1 места и быть одним символом
+    //         character++;
+    //     }
+    //     currentPos++;
+    // }
+    // // если позиция указывает на '\n'
+    // if (currentPos == editorPos && editorPos > 0 && text.at(editorPos-1) == QChar('\n')) {
+    //     // мы стоим на символе перевода строки, значит это позиция 0 следующей строки
+    //     character = 0;
+    // }
+
+    // ------- TODO табы пока что не учитываются
     return QPoint(line, character);
 }
 
 // обратный конвектор из лсп
-int LspManager::lspPosToEditorPos(const QString& text, int line, int character)
+int LspManager::lspPosToEditorPos(QTextDocument *doc, int line, int character)
 {
-    int currentLine = 0;
-    int currentCharacter = 0;
-
-    for (int pos = 0; pos < text.length(); ++pos) {
-        // если мы на нужной строке и на нужном символе
-        if (currentLine == line && currentCharacter == character) {
-            return pos;
-        }
-
-        if (text[pos] == '\n') {
-            currentLine++;
-            currentCharacter = 0;
-        } else {
-            currentCharacter++;
-            // ----- TODO tabs and utf-8
-        }
+    if (!doc || line < 0 || character < 0) {
+        return -1; // некорректный ввод
     }
 
-    // если весь текст пройден и искомая позиция совпадает с концом файла
-    if (currentLine == line && currentCharacter == character) {
-        return text.length();
+    QTextBlock tb = doc->findBlockByNumber(line);
+    if (!tb.isValid()) {
+        // запрашиваем строка не существует (может слишком большая)
+        // можно вернуть конец документа или -1
+        // return doc->characterCount() - 1; // позиция последнего символа
+        return -1;
     }
+    int lineStartPosition = tb.position(); // начальная позиция строки в документе
+    int posInLine = character; // символ внутри строки
 
-    // например запросили строку 100 в файла с 50 строками
-    return -1;
+    // ------- TODO табы и сложные символы обрабатывать, потому character - смещение от начала строки, а он может быть больше длины строки и пока что возвращаем символ конца строки
+    if (posInLine >= tb.length()) {
+        return qMin(lineStartPosition + posInLine, doc->characterCount() - 1);
+    }
+    
+    return lineStartPosition + posInLine;
+    // for (int pos = 0; pos < text.length(); ++pos) {
+    //     // если мы на нужной строке и на нужном символе
+    //     if (currentLine == line && currentCharacter == character) {
+    //         return pos;
+    //     }
+
+    //     if (text[pos] == '\n') {
+    //         currentLine++;
+    //         currentCharacter = 0;
+    //     } else {
+    //         currentCharacter++;
+    //         // ----- TODO tabs and utf-8
+    //     }
+    // }
+
+    // // если весь текст пройден и искомая позиция совпадает с концом файла
+    // if (currentLine == line && currentCharacter == character) {
+    //     return text.length();
+    // }
+
+    // // например запросили строку 100 в файла с 50 строками
+    // return -1;
 }

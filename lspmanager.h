@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QMap>
 #include <QPoint>
+#include <QTextDocument>
 
 // !!! структуры ъранения данных !!!
 // описания ошибок или предупреждений в коде
@@ -42,7 +43,7 @@ class LspManager : public QObject
 
 // будет доступно в MainWindowCodeEditor
 public:
-    explicit LspManager(QObject *parent = nullptr);
+    explicit LspManager(QString serverExecutablePath = "clangd", QObject *parent = nullptr);
     ~LspManager();
 
     // !!! управление сервером !!!
@@ -96,8 +97,9 @@ private slots:
 
 // внутренние детали сервака, скрытые от основнго приложения
 private:
+    QMap<qint64, QString> m_pendingRequests; // ID запроса - имя метода 
     QProcess *m_lspProcess = nullptr; // нулевой - процесс не запущен
-    QString m_serverExecutable; // имя или полный путь к анализатору, например для cpp clangd "/usr/bin/clangd"
+    QString m_serverExecutablePath; // имя или полный путь к анализатору, например для cpp clangd "/usr/bin/clangd"
     QString m_languageId; // короткое имя языка, например cpp
     QString m_rootUri; // путь к корню проекта в формате URI, "file:///home/user/my_project", нужно для контекста
     bool m_isServerReady = false;
@@ -120,8 +122,8 @@ private:
     void handleDefinitionResult(const QJsonObject& result); // кога ответ на запрос перехода к определению
 
     // функции для перевода координат между форматом редактор (номер символа) на формат сервера (строка, символ)
-    QPoint editorPosToLspPos(const QString& text, int editorPos);
-    int lspPosToEditorPos(const QString& text, int line, int character);
+    QPoint editorPosToLspPos(QTextDocument *doc, int editorPos);
+    int lspPosToEditorPos(QTextDocument *doc, int line, int character);
 };
 
 #endif
