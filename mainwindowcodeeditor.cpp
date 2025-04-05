@@ -120,10 +120,12 @@ void MainWindowCodeEditor::setupCodeEditorArea()
 
     lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
 
-    // инициализация подсветки синтаксиса
-    highlighter = new CppHighlighter(m_codeEditor->document());
-    // фильтр событий для viewport
+
+    QFileInfo fileInfo(currentFilePath);
+    QString suffix = fileInfo.suffix().toLower();//ищем расширение файла
+    highlighter = new CppHighlighter(m_codeEditor->document(), currentFilePath); //подсветка только для C++ и C
     m_codeEditor->viewport()->installEventFilter(this);
+
 }
 
 void MainWindowCodeEditor::setupChatWidget()
@@ -1734,7 +1736,7 @@ void MainWindowCodeEditor::addChatMessageWidget(const QString &username, const Q
 
     QString formattedText = formatMessageText(text.toHtmlEscaped(), maxLabelWidth - 24);
 
-    // Исправленный HTML - убрали CSS переменную
+    // Исправленный HTML - убрcppали CSS переменную
     QString messageHtml = QString(
                               "<div style='word-break: break-word; white-space: pre-wrap;'>"
                               "<b>%1</b><br>%2<br>"
