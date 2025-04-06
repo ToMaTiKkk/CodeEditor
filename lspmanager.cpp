@@ -8,7 +8,7 @@
 #include <QJsonObject>
 #include <QTextBlock>
 
-LspManager::LspManager(QString serverExecutablePath = "clangd", QObject *parent) 
+LspManager::LspManager(QString serverExecutablePath, QObject *parent)
     : QObject(parent)
     , m_serverExecutablePath(serverExecutablePath)
 {
@@ -31,6 +31,11 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
         return false; // запустить не удалось, так как уже запущен
     }
 
+    if (m_serverExecutablePath.isEmpty()) {
+        qCritical() << "Путь к исполняемому файлу LSP сервера не задан!";
+        emit serverError("Путь к LSP серверу не задан");
+        return false;
+    }
     // созранение параметров
     m_languageId = languageId; // запоминаем язык
     m_rootUri = QUrl::fromLocalFile(projectRootPath).toString(); // конвектируем формат пути из "/home/user/project" в "file:///home/user/project", который требует ЛСП
