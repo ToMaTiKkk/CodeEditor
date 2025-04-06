@@ -388,8 +388,12 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
     // обработка событий редактора для LSP
     if (obj == m_codeEditor->viewport()) { // ловим события от области редактора
         if (event->type() == QEvent::KeyPress) {
-            handleEditorKeyPressEvent(static_cast<QKeyEvent *>(event));
-            // TODO: нужно съедать данное событие внутри (например для навигации в автодополнении), съедать, чтобы событие и дальше обрабатывалось например для ввода текста
+            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+            handleEditorKeyPressEvent(keyEvent);
+            if (keyEvent->isAccepted()) { // проверяем было ли событие принято
+                return true; // если да, то съедаем здесь и не передаем
+            }
+            // если не принято, то оно пойдет на стандартный обработчик
         } else if (event->type() == QEvent::MouseMove) {
             handleEditorMouseMoveEvent(static_cast<QMouseEvent *>(event));
             // не съедаем
@@ -412,7 +416,7 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
             }
         }
     }
-    return QMainWindow::eventFilter(obj, event);
+    return QMainWindow::eventFilter(obj, event); // стандартная обработка
 }
 
 void MainWindowCodeEditor::handleEditorKeyPressEvent(QKeyEvent *event)
@@ -428,23 +432,24 @@ void MainWindowCodeEditor::handleEditorKeyPressEvent(QKeyEvent *event)
             case Qt::Key_PageDown:
                 m_completionWidget->handleKeyEvent(event); // передаем навигацию
                 event->accept(); // съедаем событие, чтобы редактор не двигал курсор
-                return;
             case Qt::Key_Return:
             case Qt::Key_Enter:
             case Qt::Key_Tab:
                 m_completionWidget->triggerSelection(); // выбираем элемент
                 event->accept(); // съедаем событие, чтобы редактор не двигал курсор
-                return;
             case Qt::Key_Escape:
                 m_completionWidget->hide(); // скрываем по Escape
                 event->accept(); // съедаем событие, чтобы редактор не двигал курсор
-                return;
             default:
                 // TODO: если другая клавиша (буква, цифра, бэкспейс), то автодопление должно скрыться и перефильтроваться
                 // пока что просто скрываем
                 m_completionWidget->hide();
                 break; // передаем событие дальше редактору
         }
+            // если в свитч обработали, то будет true, если default - false
+            if (event->isAccepted()) {
+            return; // если обработали в свитч, то выходим
+            }
     }
 
     // если автодополнение неактивно, то проверяем хоткеи
@@ -957,6 +962,7 @@ void MainWindowCodeEditor::onOpenFileClicked()
             m_currentLspFileUri = getFileUri(currentFilePath);
             m_currentDocumentVersion = 1;
             if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
                 m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
             }
 
@@ -1180,6 +1186,13 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
         QString filePath = fileInfo.absoluteFilePath(); // если это файл, вы получаем полный путь
         QFile file(filePath);
         if (file.open(QFile::ReadOnly | QFile::Text)) {
+            // LSP закрываем предыдущий файл
+            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                m_lspManager->notifyDidClose(m_currentLspFileUri);
+            }
+            m_diagnostics.clear();
+            updateDiagnosticsView();
+
             QTextStream in(&file);
             QString fileContent = in.readAll();
             file.close();
@@ -1194,6 +1207,14 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
                 loadingFile = false;
             }
             highlighter->rehighlight();
+
+            // LSP открываем новый файл
+            m_currentLspFileUri = getFileUri(currentFilePath);
+            m_currentDocumentVersion = 1;
+            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
+                m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
+            }
 
             // ОТправка соо на сервер с полным содержимым файла
             QJsonObject fileUpdate;
@@ -1251,7 +1272,9 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
         QTextCursor cursor = m_codeEditor->textCursor();
         if (cursor.position() > 0 && charsAdded > 0) {
             QString lastChar = currentText.at(cursor.position() - 1);
-            if (lastChar == '.' || lastChar == ':' || (lastChar == '>' && cursor.position() - 1 && currentText.at(cursor.position() - 2) == '-')) {
+            if (lastChar == QLatin1Char('.') ||
+                (lastChar == QLatin1Char(':') && cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char(':')) ||
+                (lastChar == '>' && cursor.position() > 1 && currentText.at(cursor.position() - 2) == '-')) {
                 triggerCompletionRequest(); // вызываем автодополнение
             }
         }
