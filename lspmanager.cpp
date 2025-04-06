@@ -293,6 +293,7 @@ void LspManager::processIncomingData(const QByteArray& data)
         m_buffer = m_buffer.mid(totalMessageLength);
 
         // цикл начинается снова чтобы проверить, а нет ли ещё полного соо в буфере
+        parseMessage(jsonContent);
     }
 
     qDebug() << "LSP < Закончил обработку куска данных, остаток в буфере:" << m_buffer.size();

@@ -67,6 +67,10 @@ public:
     void requestDefinition(const QString& fileUri, int line, int character);
     // -------------- TODO: форматирование, поиски ссылок
 
+    // функции для перевода координат между форматом редактор (номер символа) на формат сервера (строка, символ)
+    QPoint editorPosToLspPos(QTextDocument *doc, int editorPos);
+    int lspPosToEditorPos(QTextDocument *doc, int line, int character);
+
 // сервер сообщает MainWindow что что-то произошло
 signals:
     // сигналы состояния сервера
@@ -120,10 +124,6 @@ private:
     void handleCompletionResult(const QJsonValue& result); // когда ответ на зпрос автодополнения
     void handleHoverResult(const QJsonObject& result); // когда ответ на hover-информацию
     void handleDefinitionResult(const QJsonObject& result); // кога ответ на запрос перехода к определению
-
-    // функции для перевода координат между форматом редактор (номер символа) на формат сервера (строка, символ)
-    QPoint editorPosToLspPos(QTextDocument *doc, int editorPos);
-    int lspPosToEditorPos(QTextDocument *doc, int line, int character);
 };
 
 #endif

@@ -8,6 +8,7 @@ set(CMAKE_AUTORCC ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Network Widgets WebSockets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Network Widgets WebSockets)
@@ -29,8 +30,12 @@ set(PROJECT_SOURCES
         todolistwidget.h
         linenumberarea.cpp
         linenumberarea.h
+        sessionparamswindow.cpp
+        sessionparamswindow.h
         lspmanager.cpp
         lspmanager.h
+        completionwidget.cpp
+        completionwidget.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
