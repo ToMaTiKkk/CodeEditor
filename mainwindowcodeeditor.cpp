@@ -426,40 +426,46 @@ void MainWindowCodeEditor::handleEditorKeyPressEvent(QKeyEvent *event)
     // если виджет автодополнения видим, то передаем ему управление
     if (m_completionWidget && m_completionWidget->isVisible()) {
         switch (event->key()) {
+            // список клавиш, которые должен обработать виджет
             case Qt::Key_Up:
             case Qt::Key_Down:
             case Qt::Key_PageUp:
             case Qt::Key_PageDown:
-                m_completionWidget->handleKeyEvent(event); // передаем навигацию
-                event->accept(); // съедаем событие, чтобы редактор не двигал курсор
             case Qt::Key_Return:
             case Qt::Key_Enter:
             case Qt::Key_Tab:
-                m_completionWidget->triggerSelection(); // выбираем элемент
-                event->accept(); // съедаем событие, чтобы редактор не двигал курсор
             case Qt::Key_Escape:
-                m_completionWidget->hide(); // скрываем по Escape
-                event->accept(); // съедаем событие, чтобы редактор не двигал курсор
+                // просто передаем событие виджету автодополнения, а он сам решит что делать
+                m_completionWidget->keyPressEvent(event);
+                event->accept(); // съедаем событие, чтобы редактор не реагировал
+                return; // выходим, событие обработано
+            // пользователь печатает дальше, пока список виден
             default:
-                // TODO: если другая клавиша (буква, цифра, бэкспейс), то автодопление должно скрыться и перефильтроваться
-                // пока что просто скрываем
-                m_completionWidget->hide();
-                break; // передаем событие дальше редактору
+                // если это буква, цифра или _, то нужно фильтвровать список на клиенте
+                if (event->text().length() == 1 && (event->text().at(0).isLetterOrNumber() || event->text().at(0) == QLatin1Char('_'))) {
+                    // TODO: если другая клавиша (буква, цифра, бэкспейс), то автодопление должно скрыться и перефильтроваться в CompletionWidget
+                    // временное решение, скрыть виджет и дать символу напечататься
+                    m_completionWidget->hide();
+                    break; // переходим к стандартной обработке ниже, отправка изменения и тп
+                } else {
+                    // другие клавиши - модификаторы, Ф-клавиши и тп
+                    m_completionWidget->hide();
+                    break; // передаем событие дальше редактору
+                }
         }
-            // если в свитч обработали, то будет true, если default - false
-            if (event->isAccepted()) {
-            return; // если обработали в свитч, то выходим
-            }
+        // если мы пришли сюда, то есть дефолт был и не вышли раньше, то событи ене полностью обработано и съедено виджетом, значит идет дальше не обработку редактором
     }
 
     // если автодополнение неактивно, то проверяем хоткеи
     if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_Space) { // Ctrl+пробел
         triggerCompletionRequest();
         event->accept(); // съедаем событие, чтобы избежать других действий по Ctrl+пробел
+        return;
     } else if (event->key() == Qt::Key_F12) { // переход к определнию по F12
         // TODO: добавить ctrl+click
         triggerDefinitionRequest();
         event->accept();
+        return;
     }
 }
 

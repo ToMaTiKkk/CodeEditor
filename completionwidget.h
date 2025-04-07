@@ -11,21 +11,26 @@ class CompletionWidget : public QListWidget
 public:
     explicit CompletionWidget(QWidget *parent = nullptr);
     void updateItems(const QList<LspCompletionItem>& items); // заполнить список
-    void handleKeyEvent(QKeyEvent *event); // обработка навигации
-    void triggerSelection(); // выбрать текущий элемент (по Enter/Tab)
+    void triggerSelection(); //выбрать текущий элемент (по Enter/Tab)
+    void triggerSelectionFromItem(QListWidgetItem *item);
+
+    void filterItems(const QString& prefix); // метод для фильтрации
+
+    void keyPressEvent(QKeyEvent *event) override; // перехват Enter/Tab/Esc
 
 signals:
     void completionSelected(const QString& textToInsert); // сигнал о выборе
 
 protected:
-    void keyPressEvent(QKeyEvent *event) override; // перехват Enter/Tab/Esc
     void focusOutEvent(QFocusEvent *event) override; // скрывать при потере фокуса
 
 private slots:
     void onItemDoubleClicked(QListWidgetItem *item); // выбор по дабл-клику
 
 private:
-    QMap<QListWidgetItem*, QString> m_itemInsertText; // хранение текста для вставки
+    // храним оригинальный список для фильтрации
+    QList<LspCompletionItem> m_originalItems;
+    QMap<QListWidgetItem*, LspCompletionItem> m_itemData; // хранение текста для вставки
 };
 
 #endif
