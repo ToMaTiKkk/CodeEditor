@@ -1,4 +1,5 @@
 #include "cpphighlighter.h"
+#include <utility> // добавил для использования std::as_const() из C++17
 
 CppHighlighter::CppHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent)
@@ -58,7 +59,10 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //quolationFormat.setForeground(Qt::darkGreen);
     //quolationFormat.setForeground(QColor("#E6DB74"));
     //quolationFormat.setForeground(QColor(245, 236, 64));
+
+    //quolationFormat.setForeground(QColor(152, 229, 121));
     quolationFormat.setForeground(QColor(80, 150, 50));
+
     rule.pattern = QRegularExpression(QStringLiteral("\".*\""));
     rule.format = quolationFormat;
     highlightingRules.append(rule);
@@ -66,7 +70,10 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //functionFormat.setFontItalic(true);
     //functionFormat.setForeground(Qt::blue);
     //functionFormat.setForeground(QColor("#A6E22E"));
+
+    //functionFormat.setForeground(QColor(64, 170, 255));
     functionFormat.setForeground(QColor(10, 138, 240));
+
     //functionFormat.setForeground(QColor(255, 255, 255));
     rule.pattern = QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()\\b"));
     rule.format = functionFormat;
@@ -87,7 +94,10 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
 
 void CppHighlighter::highlightBlock(const QString &text)
 {
-    for (const HighlightingRule &rule : qAsConst(highlightingRules))
+    // ---------------------------------------------
+    // поменял строку с "for (const HighlightingRule &rule : qAsConst(highlightingRules))" чтобы убрать предупреждения при сборке, в связи с изменённым синтаксисом в Qt6
+    // ---------------------------------------------
+    for (const HighlightingRule &rule : std::as_const(highlightingRules))
     {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
         while (matchIterator.hasNext())
