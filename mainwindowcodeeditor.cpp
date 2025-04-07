@@ -398,6 +398,7 @@ void MainWindowCodeEditor::onConnected()
     if (m_sessionId == "NEW") {
         message["type"] = "create_session";
         message["password"] = m_sessionPassword; // Добавляем пароль
+        message["days"]= m_pendingSaveDays;
         if (!pendingSessionSave.isEmpty()) {
             QJsonDocument saveDoc = QJsonDocument::fromJson(pendingSessionSave);
             socket->sendTextMessage(QString::fromUtf8(saveDoc.toJson(QJsonDocument::Compact)));
@@ -1100,8 +1101,12 @@ void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
         qDebug() << "Применена операция удаления";
     } else if (opType == "session_saved") {
         int days = op["days"].toInt();
-        QMessageBox::information(this, "Успех",
-                                 QString("Сессия сохранена на %1 дней").arg(days));
+        if (days == -1){
+            QMessageBox::warning(this, "Ошибка",
+                                    QString("Не удалось сохранить сессию"));
+        } else {
+            statusBar()->showMessage(tr("Сессия сохранена на %1 дней").arg(days));
+        }
     }
 }
 
