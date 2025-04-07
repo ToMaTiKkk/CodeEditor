@@ -1271,12 +1271,63 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
         // авто-запрос автодополнения после точки или ->
         QTextCursor cursor = m_codeEditor->textCursor();
         if (cursor.position() > 0 && charsAdded > 0) {
-            QString lastChar = currentText.at(cursor.position() - 1);
-            if (lastChar == QLatin1Char('.') ||
-                (lastChar == QLatin1Char(':') && cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char(':')) ||
-                (lastChar == '>' && cursor.position() > 1 && currentText.at(cursor.position() - 2) == '-')) {
-                triggerCompletionRequest(); // вызываем автодополнение
+            QString currentText = m_codeEditor->toPlainText();
+            QChar lastChar = currentText.at(cursor.position() - 1);
+            bool shouldTrigger = false;
+
+            // тригеры от сервера
+            // TODO: получать конкретный список тригеров при инициализации!!! пока что хардим
+            const QString triggerChars = ".:>";
+            if (triggerChars.contains(lastChar)) {
+                if (lastChar == QLatin1Char(':')) {
+                    if (cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char(':')) {
+                        shouldTrigger = true;
+                    }
+                } else if (lastChar == QLatin1Char('>')) {
+                    if (cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char('>')) {
+                        shouldTrigger = true;
+                    }
+                } else if (lastChar == QLatin1Char('.')) {
+                    shouldTrigger = true;
+                }
             }
+
+            // тригер при начале или продолжении ввода идентификатора (буквы, цифры, _)
+            if (lastChar.isLetterOrNumber() || lastChar == QLatin1Char('_')) {
+                // проверяем символ перед последним введем для контекста
+                if (cursor.position() == 1) { // если это самый первый символ в документе
+                    shouldTrigger = true;
+                } else {
+                    QChar charBeforeLast = currentText.at(cursor.position() - 2);
+                    // тригерим и проверяем, а вдруг начали новое слово или предыдущий символ тоже буква или цифра или _, то есть продолжаем слово (для фильтрации)
+                    if (!charBeforeLast.isLetterOrNumber() && charBeforeLast != QLatin1Char('_')) {
+                        // начали новое слова после пробела, скобки, оператора и тп
+                        shouldTrigger = true;
+                    } else {
+                        // TODO: фильтровать список на клиенте, дабы сервер не нагружать каждый раз
+                        if (m_completionWidget && m_completionWidget->isVisible()) {
+                            shouldTrigger = true; // перезапросим для обновление списка
+                        }
+                    }
+                }
+            }
+
+            if (shouldTrigger) {
+                // задержка чтобы не спамить сервер быстрым набором
+                QTimer::singleShot(300, this, &MainWindowCodeEditor::triggerCompletionRequest);
+                // singleShot чтобы не блокать ввод!
+            } else if (m_completionWidget && m_completionWidget->isVisible()) {
+                // если ввели символ который не должен тригерить запро, пока что просто скроем (условно после пробела, точки с запятой)
+                if (!lastChar.isLetterOrNumber() && lastChar != QLatin1Char('_') && !triggerChars.contains(lastChar)) {
+                    m_completionWidget->hide();
+                } else {
+                // TODO: ФИЛЬТРАЦИЮ КЛИЕНТСКУЮ сделать уже существуещего списка
+                }
+            }
+        } else if (charsRemoved > 0 && m_completionWidget && m_completionWidget->isVisible()) {
+            // пользователь удалил символ
+            // TODO: обновляем и перефилтровываем список
+            m_completionWidget->hide();
         }
     }
     m_codeEditor->document()->setModified(true);
