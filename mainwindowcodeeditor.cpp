@@ -398,7 +398,7 @@ void MainWindowCodeEditor::onConnected()
     if (m_sessionId == "NEW") {
         message["type"] = "create_session";
         message["password"] = m_sessionPassword; // Добавляем пароль
-        message["days"]= -1;
+        message["days"]= M-m_pendingSaveDays;
         if (!pendingSessionSave.isEmpty()) {
             QJsonDocument saveDoc = QJsonDocument::fromJson(pendingSessionSave);
             socket->sendTextMessage(QString::fromUtf8(saveDoc.toJson(QJsonDocument::Compact)));
