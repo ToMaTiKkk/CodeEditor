@@ -520,6 +520,8 @@ void MainWindowCodeEditor::onLspDiagnosticsReceived(const QString& fileUri, cons
 
 void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem>& items)
 {
+    if (!m_codeEditor) return;
+
     if (!m_completionWidget || items.isEmpty()) {
         if (m_completionWidget) {
             m_completionWidget->hide();
@@ -527,22 +529,24 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
         return;
     }
 
+    // вычисление позиции
+    QRect currentCursorRect = m_codeEditor->cursorRect(); // получаем актуальную позицию курсора
+    // преобразуем координаты в глобальные координаты экрана
+    QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(currentCursorRect.bottomLeft());
+
     // заполняем виджет автодополнения данными
     m_completionWidget->updateItems(items);
 
-    // позиционируем виджет рядом с курсором
-    QRect cursorRect = m_codeEditor->cursorRect();
-    // преобразуем координаты в глобальные координаты экрана
-    QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(cursorRect.bottomLeft());
-
     // устанавливаем геометрию (позицию и размер виджета)
-    int width = qMax(300, m_completionWidget->sizeHintForColumn(0) + 2 * m_codeEditor->verticalScrollBar()->width());
-    int height = qMin(200, m_completionWidget->sizeHintForRow(0) * qMin(10, items.count()) + 5); // примерная высота (макс 10 элементов)
+    int width = m_completionWidget->sizeHintForColumn(0) + m_codeEditor->verticalScrollBar()->width() + 10; // запа сна скроллбар виджета и отступы
+    width = qMax(300, width); // минимальная ширина
+    int height = m_completionWidget->sizeHintForRow(0) * qMin(10, m_completionWidget->count()) + 5; // высота примерно 10 элементов + рамка
+    height = qMin(300, height); // максимальная высота, что не перекрывать полэкрана
     m_completionWidget->setGeometry(globalPos.x(), globalPos.y(), width, height);
 
     m_completionWidget->show();
-    m_completionWidget->setFocus(); // передаем фокус при навигаации
     m_completionWidget->raise(); //поверх других виджетов
+    m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
 }
 
 void MainWindowCodeEditor::onLspHoverReceived(const LspHoverInfo& hoverInfo)
