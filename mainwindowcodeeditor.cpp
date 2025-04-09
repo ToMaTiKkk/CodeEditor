@@ -157,7 +157,7 @@ void MainWindowCodeEditor::setupLsp()
 
 void MainWindowCodeEditor::setupLspCompletionAndHover()
 {
-    m_completionWidget = new CompletionWidget(this); // создаем виджет автодополнения
+    m_completionWidget = new CompletionWidget(m_codeEditor, this); // создаем виджет автодополнения
     m_completionWidget->hide();
     connect(m_completionWidget, &CompletionWidget::completionSelected, this, &MainWindowCodeEditor::applyCompletion);
 
@@ -385,88 +385,120 @@ void MainWindowCodeEditor::closeEvent(QCloseEvent *event) {
 
 bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
 {
-    // обработка событий редактора для LSP
-    if (obj == m_codeEditor->viewport()) { // ловим события от области редактора
+    if (m_completionWidget && obj == m_completionWidget) {
         if (event->type() == QEvent::KeyPress) {
             QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-            handleEditorKeyPressEvent(keyEvent);
-            if (keyEvent->isAccepted()) { // проверяем было ли событие принято
-                return true; // если да, то съедаем здесь и не передаем
+            qDebug() << "[COMPL_FILTER] KeyPress on CompletionWidget. Key:" << keyEvent->key() << keyEvent->text();
+            bool consumedCompletionFilter = true; // по умолчанию считаем что событие обработано и съедено (то есть не передалось никуда)
+
+            switch (keyEvent->key()) {
+                case Qt::Key_Up:
+                    m_completionWidget->navigateUp();
+                    qDebug() << "[COMPL_FILTER] -> Handled Up";
+                    break;
+                case Qt::Key_Down:
+                    m_completionWidget->navigateDown();
+                    qDebug() << "[COMPL_FILTER] -> Handled Down";
+                    break;
+                case Qt::Key_PageUp:
+                    m_completionWidget->navigatePageUp();
+                    qDebug() << "[COMPL_FILTER] -> Handled PageUp";
+                    break;
+                case Qt::Key_PageDown:
+                    m_completionWidget->navigatePageDown();
+                    qDebug() << "[COMPL_FILTER] -> Handled PageDown";
+                    break;
+                case Qt::Key_Return:
+                case Qt::Key_Enter:
+                case Qt::Key_Tab:
+                    m_completionWidget->triggerSelection(); // он скроет виджет и вызовет applyCompletion
+                    qDebug() << "[COMPL_FILTER] -> Handled Select (Enter/Tab)";
+                    break;
+                case Qt::Key_Escape:
+                    m_completionWidget->hide();
+                    qDebug() << "[COMPL_FILTER] -> Handled Escape";
+                    // после скрытия возвращаем фокус редактору
+                    QMetaObject::invokeMethod(m_codeEditor, "setFocus", Qt::QueuedConnection);
+                    break;
+                default:
+                    // пересылаем текстовый ввод и другие символы в редактор
+                    if (!keyEvent->text().isEmpty() || 
+                        keyEvent->key() == Qt::Key_Backspace ||
+                        keyEvent->key() == Qt::Key_Delete ||
+                        keyEvent->key() == Qt::Key_Space ||
+                        (keyEvent->modifiers() != Qt::NoModifier && keyEvent->modifiers() != Qt::ShiftModifier)) // пропускаем модификаторы для шорткатов
+                    {
+                        qDebug() << "[COMPL_FILTER] -> Default key/text. Forwarding to editor:" << keyEvent->key() << keyEvent->text();
+                        // создаем копию события
+                        QKeyEvent* forwardEvent = new QKeyEvent(event->type(), keyEvent->key(), keyEvent->modifiers(), keyEvent->text(), keyEvent->isAutoRepeat(), keyEvent->count());
+                        // используем асинхронну доставку сообщение редактору
+                        QCoreApplication::postEvent(m_codeEditor->viewport(), forwardEvent);
+                    }
+                    // мы перехватили и переслали (или игнор), поэтому считаем обработанным
+                    consumedCompletionFilter = true;
+                    break;
             }
-            // если не принято, то оно пойдет на стандартный обработчик
-        } else if (event->type() == QEvent::MouseMove) {
-            handleEditorMouseMoveEvent(static_cast<QMouseEvent *>(event));
-            // не съедаем
-        } else if (event->type() == QEvent::MouseButtonPress) {
-            //handleEditorMouseMoveEvent(static_cast<QMouseEvent *>(event)); // для Ctrl+Click
-            // не съедаем
-        } else if (event->type() == QEvent::FocusOut && m_completionWidget && m_completionWidget->isVisible()) {
-            m_completionWidget->hide(); // обработка потери фокуса viewport чтобы скрывалось автодополнение
+            // всегда возвращаем тру, если событие пришло от виджета автодополнения, чтобы не обрабатывалось стандартным образом самим QListWidget 
+            return true;
+        } else if (event->type() == QEvent::Hide) {
+            // перехватываем событие Hide самого виджета
+            m_completionWidget->removeEventFilter(this); // удаляем фильтр при скрытии
+            if (!m_codeEditor->hasFocus()) {
+                QMetaObject::invokeMethod(m_codeEditor, "setFocus", Qt::QueuedConnection);
+            }
         }
+        return false; // пропускаем другие события такие как мышь и тд
     }
 
-    // пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
-    // проверяем, что событие относится к viewport редактора и является событие измнения размера
-    if (obj == m_codeEditor->viewport() && event->type() == QEvent::Resize) {
-        for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
-            QString senderId = it.key();
-            int position = lastCursorPositions.value(senderId, -1);
-            if (position != -1) {
-                updateLineHighlight(senderId, position);
+    if (obj == m_codeEditor->viewport()) {
+        if (event->type() == QEvent::KeyPress && (!m_completionWidget || !m_completionWidget->isVisible())) {
+            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+            // используем обработчики для шорткатов, когда автодоп не видно
+            handleEditorKeyPressEvent(keyEvent);
+            if (keyEvent->isAccepted()) {
+                return true;
             }
-        }
+        } else if (event->type() == QEvent::Resize) {
+            for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
+                QString senderId = it.key();
+                int position = lastCursorPositions.value(senderId, -1);
+                if (position != -1) {
+                    updateLineHighlight(senderId, position);
+                }
+            }
+        } else if (event->type() == QEvent::MouseMove) {
+            handleEditorMouseMoveEvent(static_cast<QMouseEvent*>(event));
+        } 
     }
-    return QMainWindow::eventFilter(obj, event); // стандартная обработка
+
+    // стандартная обработка для всех остальных объектов
+    return QMainWindow::eventFilter(obj, event);
 }
 
 void MainWindowCodeEditor::handleEditorKeyPressEvent(QKeyEvent *event)
 {
-    if (!m_codeEditor) return;
+    if (!m_codeEditor || !m_codeEditor->viewport()) return;
 
-    // если виджет автодополнения видим, то передаем ему управление
-    if (m_completionWidget && m_completionWidget->isVisible()) {
-        switch (event->key()) {
-            // список клавиш, которые должен обработать виджет
-            case Qt::Key_Up:
-            case Qt::Key_Down:
-            case Qt::Key_PageUp:
-            case Qt::Key_PageDown:
-            case Qt::Key_Return:
-            case Qt::Key_Enter:
-            case Qt::Key_Tab:
-            case Qt::Key_Escape:
-                // просто передаем событие виджету автодополнения, а он сам решит что делать
-                m_completionWidget->keyPressEvent(event);
-                event->accept(); // съедаем событие, чтобы редактор не реагировал
-                return; // выходим, событие обработано
-            // пользователь печатает дальше, пока список виден
-            default:
-                // если это буква, цифра или _, то нужно фильтвровать список на клиенте
-                if (event->text().length() == 1 && (event->text().at(0).isLetterOrNumber() || event->text().at(0) == QLatin1Char('_'))) {
-                    // TODO: если другая клавиша (буква, цифра, бэкспейс), то автодопление должно скрыться и перефильтроваться в CompletionWidget
-                    // временное решение, скрыть виджет и дать символу напечататься
-                    m_completionWidget->hide();
-                    break; // переходим к стандартной обработке ниже, отправка изменения и тп
-                } else {
-                    // другие клавиши - модификаторы, Ф-клавиши и тп
-                    m_completionWidget->hide();
-                    break; // передаем событие дальше редактору
-                }
+    // если виджет не виден и событие прошло через дефолт
+    if (!event->isAccepted()) { // доп ропеврка, что событие не было съедено
+        // если автодополнение неактивно, то проверяем хоткеи
+        if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_Space) { // Ctrl+пробел
+            qDebug() << "  [HANDLER] -> Ctrl+Space detected. Triggering completion.";
+            triggerCompletionRequest();
+            event->accept(); // съедаем событие, чтобы избежать других действий по Ctrl+пробел
+            //return;
+        } else if (event->key() == Qt::Key_F12) { // переход к определнию по F12
+            // TODO: добавить ctrl+click
+            qDebug() << "  [HANDLER] -> F12 detected. Triggering definition.";
+            triggerDefinitionRequest();
+            event->accept();
+            return;
+        } else {
+            qDebug() << "  [HANDLER] Key not handled by shortcuts.";
         }
-        // если мы пришли сюда, то есть дефолт был и не вышли раньше, то событи ене полностью обработано и съедено виджетом, значит идет дальше не обработку редактором
-    }
-
-    // если автодополнение неактивно, то проверяем хоткеи
-    if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_Space) { // Ctrl+пробел
-        triggerCompletionRequest();
-        event->accept(); // съедаем событие, чтобы избежать других действий по Ctrl+пробел
-        return;
-    } else if (event->key() == Qt::Key_F12) { // переход к определнию по F12
-        // TODO: добавить ctrl+click
-        triggerDefinitionRequest();
-        event->accept();
-        return;
-    }
+    } else {
+        qDebug() << "  [HANDLER] Event already accepted before shortcut check.";
+   }
 }
 
 void MainWindowCodeEditor::handleEditorMouseMoveEvent(QMouseEvent *event)
@@ -550,9 +582,11 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
     height = qMin(300, height); // максимальная высота, что не перекрывать полэкрана
     m_completionWidget->setGeometry(globalPos.x(), globalPos.y(), width, height);
 
+    m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
     m_completionWidget->show();
     m_completionWidget->raise(); //поверх других виджетов
-    m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
+    //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
+    qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
 }
 
 void MainWindowCodeEditor::onLspHoverReceived(const LspHoverInfo& hoverInfo)
@@ -613,6 +647,7 @@ void MainWindowCodeEditor::applyCompletion(const QString& textToInsert)
     // просто вставляем как есть
     cursor.insertText(textToInsert);
     m_codeEditor->setFocus(); // возвращаем фокус редактору
+    qDebug() << "[applyCompletion] Completion applied, focus set to m_codeEditor";
 }
 
 void MainWindowCodeEditor::requestHoverOnTimer()
