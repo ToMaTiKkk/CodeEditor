@@ -225,7 +225,7 @@ void LspManager::sendMessage(const QJsonObject& message)
 
     // формирование обязательного заголовка
     QByteArray header;
-    header.append("Content-Length: ").append(QString::number(jsonContent.size())).append("\r\n\r\n"); // текст заговлока? размер джсон в байтах,  обязательные символы конца заголовка, перевод строки и возврат каретки x2
+    header.append("Content-Length: ").append(QString::number(jsonContent.size()).toUtf8()).append("\r\n\r\n"); // текст заговлока? размер джсон в байтах,  обязательные символы конца заголовка, перевод строки и возврат каретки x2
     //header.append(QString::number(jsonContent.size())); // 
     //header.append("\r\n\r\n"); //
 
