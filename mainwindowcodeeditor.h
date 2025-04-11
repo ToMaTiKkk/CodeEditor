@@ -7,6 +7,7 @@
 #include "linenumberarea.h"
 #include "lspmanager.h"
 #include "completionwidget.h"
+#include "diagnostictooltip.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -130,7 +131,7 @@ private slots: // функции, которые будут вызваны в о
     // слот для обработки выбора в виджете автодополнения
     void applyCompletion(const QString& textToInsert);
     // слот дял таймера запроса hover
-    void requestHoverOnTimer();
+    void showDiagnoticTooltipOrRequestHover();
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -207,6 +208,8 @@ private:
     CompletionWidget *m_completionWidget = nullptr; // виджет автодоплнения
     QTimer *m_hoverTimer = nullptr; // таймер для отложенного запроса hover
     QPoint m_lastMousePosForHover; // последняя позиция мыши для hover (всплывашка)
+    DiagnosticTooltip* m_diagnosticTooltip; // кастомный тултип
+    bool m_isDiagnosticTooltipVisible;
 
     // управление версиями и состоянии LSP для открытого файла
     QString m_currentLspFileUri; // URI текущего файла

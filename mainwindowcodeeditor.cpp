@@ -50,6 +50,8 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , m_completionWidget(nullptr)
     , m_hoverTimer(nullptr)
     , m_projectRootPath(QDir::homePath()) // корень проект по умолчанию - домашняя папка
+    , m_diagnosticTooltip(nullptr)
+    , m_isDiagnosticTooltipVisible(false)
 {
     ui->setupUi(this);
 
@@ -85,6 +87,7 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     m_codeEditor->setFont(QFont("Fira Code", 12));
     m_codeEditor->setTabStopDistance(25.0);
     m_codeEditor->setFocusPolicy(Qt::StrongFocus); // чтобы мог получать фокус для ввода
+    m_codeEditor->setMouseTracking(true);
 
     lineNumberArea = new LineNumberArea(m_codeEditor); // передаем наш собственный новый редактор, чтобы у класса было понимание, рядом с чем рисовать номера
 
@@ -163,8 +166,8 @@ void MainWindowCodeEditor::setupLspCompletionAndHover()
 
     m_hoverTimer = new QTimer(this);
     m_hoverTimer->setSingleShot(true); // срабатывает один раз
-    m_hoverTimer->setInterval(500); // задержка в мс перед запросом hover
-    connect(m_hoverTimer, &QTimer::timeout, this, &MainWindowCodeEditor::requestHoverOnTimer);
+    m_hoverTimer->setInterval(700); // задержка в мс перед запросом hover
+    connect(m_hoverTimer, &QTimer::timeout, this, &MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover);
 }
 
 void MainWindowCodeEditor::setupChatWidget()
@@ -408,7 +411,7 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
                     m_completionWidget->navigatePageDown();
                     qDebug() << "[COMPL_FILTER] -> Handled PageDown";
                     break;
-                case Qt::Key_Return:
+                //case Qt::Key_Return:
                 //case Qt::Key_Enter:
                 case Qt::Key_Tab:
                     m_completionWidget->triggerSelection(); // он скроет виджет и вызовет applyCompletion
@@ -468,7 +471,15 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
             }
         } else if (event->type() == QEvent::MouseMove) {
             handleEditorMouseMoveEvent(static_cast<QMouseEvent*>(event));
-        } 
+        } else if (event->type() == QEvent::Leave) {
+            qDebug() << "[EVENT_FILTER] Mouse left viewport. Hiding tooltip and stopping hover timer.";
+            m_hoverTimer->stop();
+            if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
+                m_diagnosticTooltip->hide();
+                m_isDiagnosticTooltipVisible = false;
+            }
+            QToolTip::hideText();
+        }
     }
 
     // стандартная обработка для всех остальных объектов
@@ -501,16 +512,30 @@ void MainWindowCodeEditor::handleEditorKeyPressEvent(QKeyEvent *event)
    }
 }
 
+// обработк движения мыши
 void MainWindowCodeEditor::handleEditorMouseMoveEvent(QMouseEvent *event)
 {
-    if (!m_lspManager || !m_lspManager->isReady() || !m_codeEditor) {
+    if (!m_codeEditor || !m_codeEditor->viewport()) {
         return;
+    }
+
+    if ((event->globalPos() - m_lastMousePosForHover).manhattanLength() < 7) {
+        return; // дрожание небольшое игнорируем
     }
 
     // сохраняем позицию мыши (глобальные координаты)
     m_lastMousePosForHover = event->globalPos();
     // запускаем таймер с задержкой, если мышка снова сдвинется, то таймер перезапустится и старый запрос не отправится
+    //qDebug() << "[handleEditorMouseMoveEvent] m_hoverTimer are starting...";
     m_hoverTimer->start();
+
+    // скроем существующий кастомный тултип если он видим
+    if (m_isDiagnosticTooltipVisible && m_diagnosticTooltip) {
+        m_diagnosticTooltip->hide();
+        m_isDiagnosticTooltipVisible = false;
+    }
+    // скроем на всяки и дефолт тултип
+    QToolTip::hideText();
 }
 
 // !!! слота для обработки сигналов от LspManager !!!
@@ -591,7 +616,7 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
     m_completionWidget->show();
     m_completionWidget->raise(); //поверх других виджетов
     //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
-    qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
+    //qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
 }
 
 void MainWindowCodeEditor::onLspHoverReceived(const LspHoverInfo& hoverInfo)
@@ -655,19 +680,88 @@ void MainWindowCodeEditor::applyCompletion(const QString& textToInsert)
     qDebug() << "[applyCompletion] Completion applied, focus set to m_codeEditor";
 }
 
-void MainWindowCodeEditor::requestHoverOnTimer()
+void MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover()
 {
-    if (!m_lspManager || !m_lspManager->isReady() || m_currentLspFileUri.isEmpty() || !m_codeEditor->document()) {
+    // проверяем, существует ли редактор и находится ли мышь над его viewport
+    if (!m_codeEditor || !m_codeEditor->viewport() || !m_codeEditor->viewport()->rect().contains(m_codeEditor->viewport()->mapFromGlobal(m_lastMousePosForHover))) {
+        // мышь ушла из окна видимости во время таймера или редактора нет
+        if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
+            m_diagnosticTooltip->hide();
+            m_isDiagnosticTooltipVisible = false;
+        }
+        QToolTip::hideText();
         return;
     }
 
-    // заапрашиваем всплывашку для позиции, сохраненный в m_lasrMousePosForhover
     QPoint viewportPos = m_codeEditor->viewport()->mapFromGlobal(m_lastMousePosForHover);
-    int editorPos = m_codeEditor->cursorForPosition(viewportPos).position();
-    QPoint lspPos = m_lspManager->editorPosToLspPos(m_codeEditor->document(), editorPos);
+    QTextCursor cursor = m_codeEditor->cursorForPosition(viewportPos);
+    int currentPos = cursor.position();
 
-    if (lspPos.x() != -1) { // проверка корректности позиции
-        m_lspManager->requestHover(m_currentLspFileUri, lspPos.x(), lspPos.y());
+    QString diagnosticMessage;
+    QList<QTextEdit::ExtraSelection> currentSelections = m_codeEditor->extraSelections(); // они были установлены в updateDiagnosticsView
+
+    // ищем первую диагностику под курсором
+    for (const auto& selection : currentSelections) {
+        // проверяем если ли у формата кастомное пользовательское свойство
+        QVariant messageData = selection.format.property(QTextFormat::UserProperty + 1);
+        if (messageData.isValid() && !messageData.toString().isEmpty()) {
+            if (currentPos >= selection.cursor.selectionStart() && currentPos < selection.cursor.selectionEnd()) {
+                diagnosticMessage = messageData.toString();
+                break; // выходим, потому что показываем только первый найденный
+            }
+        }
+    }
+
+    // если тултип диагностики не показали, то обычный можно будет запросить
+    if (!diagnosticMessage.isEmpty()) {
+        qDebug() << "[HoverTimer] Diagnostic found:" << diagnosticMessage << ". Showing custom tooltip.";
+        // создаем тултип если его не было ешё
+        if (!m_diagnosticTooltip) {
+            m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
+
+            // убедимся что создался
+            if (!m_diagnosticTooltip) {
+                qCritical() << "[HoverTimer] Failed to create DiagnosticTooltip!";
+                return;
+            }
+        }
+
+        m_diagnosticTooltip->setText(diagnosticMessage);
+        //qDebug() << "[HoverTimer] Tooltip text set. Calculated size:" << m_diagnosticTooltip->sizeHint() << m_diagnosticTooltip->size(); // Посмотрим размер
+        // позиционируем рядом с мышкой
+        QPoint tooltipPos = m_lastMousePosForHover + QPoint(10, 15); // чуть ниже и правее
+        // TODO: добавить чтобы за экране не уходил
+        //qDebug() << "[HoverTimer] Moving tooltip to globalPos:" << tooltipPos;
+        m_diagnosticTooltip->move(tooltipPos);
+        //qDebug() << "[HoverTimer] Calling show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+        m_diagnosticTooltip->show();
+        m_isDiagnosticTooltipVisible = true;
+        //qDebug() << "[HoverTimer] After show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+
+        QToolTip::hideText();
+    } else {
+        qDebug() << "[HoverTimer] No diagnostic found. Hiding custom tooltip and potentially requesting LSP hover.";
+        if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
+            m_diagnosticTooltip->hide();
+            m_isDiagnosticTooltipVisible = false;
+            //qDebug() << "[HoverTimer] After hide(). Visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+        }
+        QToolTip::hideText();
+
+        // ЛОГИКА ОБЫЧНОГО ЗАПРОСА LSP HOVER
+        // проверяем существует ли редактор и находится ли мышь над его viewport
+        if (!m_lspManager || !m_lspManager->isReady() || m_currentLspFileUri.isEmpty() || !m_codeEditor->document()) {
+            return;
+        }
+
+        qDebug() << "[HoverTimer] Requesting LSP hover.";
+        // заапрашиваем всплывашку для позиции, сохраненный в m_lasrMousePosForhover
+        //int editorPos = m_codeEditor->cursorForPosition(viewportPos).position();
+        QPoint lspPos = m_lspManager->editorPosToLspPos(m_codeEditor->document(), currentPos);
+
+        if (lspPos.x() != -1) { // проверка корректности позиции
+            m_lspManager->requestHover(m_currentLspFileUri, lspPos.x(), lspPos.y());
+        }
     }
 }
 
@@ -726,7 +820,7 @@ void MainWindowCodeEditor::updateDiagnosticsView()
     // берем диагностики для ТЕКУЩЕГо файла из хранилища
     const QList<LspDiagnostic>& currentFileDiagnostics = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
 
-    qDebug() << "[UPDATE_DIAG_VIEW] Diagnostics count found in map:" << currentFileDiagnostics.count();
+    //qDebug() << "[UPDATE_DIAG_VIEW] Diagnostics count found in map:" << currentFileDiagnostics.count();
 
     for (const LspDiagnostic& diag : currentFileDiagnostics) {
         qDebug() << "[UPDATE_DIAG_VIEW] Processing diag: msg='" << diag.message
@@ -778,9 +872,11 @@ void MainWindowCodeEditor::updateDiagnosticsView()
                 qWarning() << "[UPDATE_DIAG_VIEW]   Failed to create valid cursor for positions:" << startPos << "->" << endPos;
             } else {
                 selection.cursor = cursor;
-                // добавим само сообщение в тултип
-                selection.format.setToolTip(QString("[%1] %2").arg(diag.severity).arg(diag.message));
-                 qDebug() << "[UPDATE_DIAG_VIEW]   Added ExtraSelection with range:" << selection.cursor.selectionStart() << "->" << selection.cursor.selectionEnd() << "and tooltip:" << selection.format.toolTip();
+                // сообщение для тултипа
+                QString tooltipMessage = QString("[%1] %2").arg(diag.severity).arg(diag.message);
+                // сохраняем как пользовательское свойство с уникальным айди
+                selection.format.setProperty(QTextFormat::UserProperty + 1, tooltipMessage);
+                qDebug() << "[UPDATE_DIAG_VIEW]   Added ExtraSelection with range:" << selection.cursor.selectionStart() << "->" << selection.cursor.selectionEnd() << "and stored message:" << tooltipMessage;;
                 extraSelections.append(selection);
             }
         } else {
