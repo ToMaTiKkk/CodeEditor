@@ -1,7 +1,11 @@
 #include "cpphighlighter.h"
+#include <utility> // добавил для использования std::as_const() из C++17
+#include <QFileInfo>
 
-CppHighlighter::CppHighlighter(QTextDocument *parent)
-    : QSyntaxHighlighter(parent)
+
+CppHighlighter::CppHighlighter(QTextDocument *document, const QString &filePath, QObject *parent)
+    : QSyntaxHighlighter(document),
+    currentFilePath(filePath)
 {
     HighlightingRule rule;
 
@@ -58,7 +62,10 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //quolationFormat.setForeground(Qt::darkGreen);
     //quolationFormat.setForeground(QColor("#E6DB74"));
     //quolationFormat.setForeground(QColor(245, 236, 64));
+
+    //quolationFormat.setForeground(QColor(152, 229, 121));
     quolationFormat.setForeground(QColor(80, 150, 50));
+
     rule.pattern = QRegularExpression(QStringLiteral("\".*\""));
     rule.format = quolationFormat;
     highlightingRules.append(rule);
@@ -66,9 +73,12 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     //functionFormat.setFontItalic(true);
     //functionFormat.setForeground(Qt::blue);
     //functionFormat.setForeground(QColor("#A6E22E"));
+
+    //functionFormat.setForeground(QColor(64, 170, 255));
     functionFormat.setForeground(QColor(10, 138, 240));
+
     //functionFormat.setForeground(QColor(255, 255, 255));
-    rule.pattern = QRegularExpression(QStringLiteral("\\b[A-Za-z0-9_]+(?=\\()\\b"));
+    rule.pattern = QRegularExpression(QStringLiteral("\\b(?:[A-Za-z0-9_]+(?=\\()|def\\s+[A-Za-z0-9_]+)\\b"));
     rule.format = functionFormat;
     highlightingRules.append(rule);
 
@@ -77,7 +87,11 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     preprocessorFormat.setForeground(QColor(64, 170, 255));
     //preprocessorFormat.setForeground(QColor(127, 117, 218));
     preprocessorFormat.setFontWeight(QFont::Bold);
-    rule.pattern = QRegularExpression(QStringLiteral("#include\\b"));
+    rule.pattern = QRegularExpression(QStringLiteral("(?:#include|import)\\b"));
+    rule.format = preprocessorFormat;
+    highlightingRules.append(rule);
+
+    rule.pattern = QRegularExpression(QStringLiteral("\\bpackage\\b"));
     rule.format = preprocessorFormat;
     highlightingRules.append(rule);
 
@@ -85,9 +99,28 @@ CppHighlighter::CppHighlighter(QTextDocument *parent)
     commentEndExpression = QRegularExpression(QStringLiteral("\\*/"));
 }
 
+bool CppHighlighter::isSupportedFileSuffix(const QString &fileName) const
+{
+    const QStringList supportedSuffixes = {
+        "cpp", "cxx", "cc", "c", "h", "hpp", "hxx",
+        "py", "go", "java"
+    };
+    QFileInfo fileInfo(fileName);
+    QString suf = fileInfo.suffix().toLower();
+    return supportedSuffixes.contains(suf);
+}
+
 void CppHighlighter::highlightBlock(const QString &text)
 {
-    for (const HighlightingRule &rule : qAsConst(highlightingRules))
+    QFileInfo fileInfo(currentFilePath);
+    QString fileName = fileInfo.fileName();
+    if (isSupportedFileSuffix(fileName)) {
+        return;
+    }
+    // ---------------------------------------------
+    // поменял строку с "for (const HighlightingRule &rule : qAsConst(highlightingRules))" чтобы убрать предупреждения при сборке, в связи с изменённым синтаксисом в Qt6
+    // ---------------------------------------------
+    for (const HighlightingRule &rule : std::as_const(highlightingRules))
     {
         QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
         while (matchIterator.hasNext())

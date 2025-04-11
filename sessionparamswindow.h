@@ -28,6 +28,7 @@ private:
     QCheckBox *saveCheckbox;
     QSpinBox *daysSpinBox;
     QLabel *daysLabel;
+    QLabel *saveSessionLabel;
 };
 
 #endif // SESSIONPARAMSWINDOW_H
