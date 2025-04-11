@@ -36,6 +36,8 @@ set(PROJECT_SOURCES
         lspmanager.h
         completionwidget.cpp
         completionwidget.h
+        diagnostictooltip.cpp
+        diagnostictooltip.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
