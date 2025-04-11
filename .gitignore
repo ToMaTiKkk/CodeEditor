@@ -1,5 +1,7 @@
+
 # --- Build Artifacts ---
 # C++ / Generic
+
 *.slo
 *.lo
 *.o
@@ -10,7 +12,6 @@
 *.so.*
 *.dll
 *.dylib
-
 
 # CMake / Make specific
 CMakeCache.txt
@@ -48,10 +49,7 @@ CMakeLists.txt.user*
 *.swp
 
 # --- Qt Specific Generated Files ---
-moc_*.cpp
-moc_*.h
-qrc_*.cpp
-ui_*.h
+
 *.moc 
 object_script.*.Release
 object_script.*.Debug
@@ -64,7 +62,7 @@ object_script.*.Debug
 *.qm
 
 # --- Caching ---
-.cache/ # Твоя папка clangd
+.cache/ 
 
 # --- Project Specific / User Added ---
 collab-server/ 
@@ -74,3 +72,34 @@ saves/
 # --- OS Generated Files ---
 .DS_Store
 Thumbs.db
+=======
+*.qmlc
+*.jsc
+Makefile*
+*build-*
+*.qm
+*.prl
+build/
+.vscode
+
+# Qt unit tests
+target_wrapper.*
+
+# QtCreator
+*.autosave
+
+# QtCreator Qml
+*.qmlproject.user
+*.qmlproject.user.*
+
+# QtCreator CMake
+CMakeLists.txt.user*
+
+
+# QtCreator local machine specific files for imported projects
+*creator.user*
+
+# AtH stuff
+*.swp
+debug/
+saves/

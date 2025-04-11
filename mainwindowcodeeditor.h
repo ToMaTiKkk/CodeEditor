@@ -6,6 +6,9 @@
 #include "linehighlightwidget.h"
 #include "cpphighlighter.h"
 #include "linenumberarea.h"
+#include "lspmanager.h"
+#include "completionwidget.h"
+#include "diagnostictooltip.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -52,7 +55,6 @@ public:
     ~MainWindowCodeEditor();
 
 private slots: // функции, которые будут вызваны в ответ на определенные события
-    bool eventFilter(QObject *obj, QEvent *event) override;
 
     void onOpenFileClicked(); // вызывается при вызове пункта мен дл открытия файлы
     void onSaveFileClicked(); // сохранение файла
@@ -115,12 +117,24 @@ private slots: // функции, которые будут вызваны в о
 
     void on_actionChangeTheme_triggered();
     void updateChatButtonIcon();
-    void closeEvent(QCloseEvent *event);
-
+    void closeEvent(QCloseEvent *event) override;
 
     void on_actionToDoList_triggered();
 
     void on_actionTerminal_triggered(); // слот для терминала
+
+    // слоты для обработки сигналов от LspManager
+    void onLspServerReady();
+    void onLspServerStopped();
+    void onLspServerError(const QString& message);
+    void onLspDiagnosticsReceived(const QString& fileUri, const QList<LspDiagnostic>& diagnostics);
+    void onLspCompletionReceived(const QList<LspCompletionItem>& items);
+    void onLspHoverReceived(const LspHoverInfo& hoverInfo);
+    void onLspDefinitionReceived(const QList<LspDefinitionLocation>& locations);
+    // слот для обработки выбора в виджете автодополнения
+    void applyCompletion(const QString& textToInsert);
+    // слот дял таймера запроса hover
+    void showDiagnoticTooltipOrRequestHover();
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -137,7 +151,23 @@ private:
     void setupTerminalArea();     // терминал
     void compileAndRun();         // автозапуск кода
 
-    QString currentFilePath;    // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
+    // LSP
+    void setupLsp(); // найстрока и запуска
+    void setupLspCompletionAndHover();
+    void triggerCompletionRequest(); // инициировать запрос автодополнения
+    void triggerDefinitionRequest(); // инициировать запрос определения
+    void updateDiagnosticsView(); // обновить подчеркивания ошибок в редакторе
+    QString getFileUri(const QString& localPath) const; // конвектировать локальный путь в URI
+    QString getLocalPath(const QString& fileUri) const; // обратный конвектор
+
+    // переопределение событий для hover и хоткеев
+    bool eventFilter(QObject *obj, QEvent *event) override;
+    void handleEditorKeyPressEvent(QKeyEvent *event); // обработчик нажатий в редакторе
+    void handleEditorMouseMoveEvent(QMouseEvent *event); // обработчик движения мыши в редакторе
+    // void handleEditorMousePressEvent(QMouseEvent *event); // для Ctrl+Click
+
+    QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
+
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
     QWebSocket *socket = nullptr;
     CppHighlighter *highlighter;
@@ -171,15 +201,31 @@ private:
     QWidget *chatWidget; // Виджет чата
     // QTextEdit *chatDisplay; // Поле для отображения сообщений
     QLineEdit *chatInput; // Поле для ввода сообщений
-    // --- Новые члены чата ---
-    QScrollArea *chatScrollArea;     // <-- ДОБАВИТЬ (Вместо chatDisplay)
-    QWidget *messageListWidget;    // <-- ДОБАВИТЬ (Контейнер внутри ScrollArea)
-    QVBoxLayout *messagesLayout;   // <-- ДОБАВИТЬ (Layout для контейнера)
+
+    // чат
+    QScrollArea *chatScrollArea;     // Вместо chatDisplay
+    QWidget *messageListWidget;    // Контейнер внутри ScrollArea
+    QVBoxLayout *messagesLayout;   // Layout для контейнера
     QString m_sessionPassword;
     QByteArray pendingSessionSave; // хранение отложенного сохранения сессий
     QPushButton* m_chatButton;
     QPushButton* m_runButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
+
+    LspManager *m_lspManager = nullptr; // Lsp-менеджер
+    CompletionWidget *m_completionWidget = nullptr; // виджет автодоплнения
+    QTimer *m_hoverTimer = nullptr; // таймер для отложенного запроса hover
+    QPoint m_lastMousePosForHover; // последняя позиция мыши для hover (всплывашка)
+    DiagnosticTooltip* m_diagnosticTooltip; // кастомный тултип
+    bool m_isDiagnosticTooltipVisible;
+    QPair<int, int> m_currentlyShownTooltipPange; // startPos and endPos, храним диапозон информации, что сейчас показывает тултип
+    QPoint calculateTooltipPosition(const QPoint& globalMousePos);
+
+    // управление версиями и состоянии LSP для открытого файла
+    QString m_currentLspFileUri; // URI текущего файла
+    int m_currentDocumentVersion = 0; // счетчик версий для лсп
+    QString m_projectRootPath; // путь к корневой папке проекта для LSP
+    QMap<QString, QList<LspDiagnostic>> m_diagnostics; // хранение диагностик по файлам
 
     int m_pendingSaveDays = 0;
     //новое разделение окон
@@ -191,5 +237,6 @@ private:
     // инициализация терминала
     TerminalWidget *m_terminalWidget = nullptr;
     bool m_isTerminalVisible = false;
+
 };
 #endif // MAINWINDOWCODEEDITOR_H

@@ -1,8 +1,6 @@
 #include "cpphighlighter.h"
 #include <utility> // добавил для использования std::as_const() из C++17
 #include <QFileInfo>
-#include <QFileInfo>
-
 
 
 CppHighlighter::CppHighlighter(QTextDocument *document, const QString &filePath, QObject *parent)
@@ -100,6 +98,7 @@ CppHighlighter::CppHighlighter(QTextDocument *document, const QString &filePath,
     commentStartExpression = QRegularExpression(QStringLiteral("/\\*"));
     commentEndExpression = QRegularExpression(QStringLiteral("\\*/"));
 }
+
 bool CppHighlighter::isSupportedFileSuffix(const QString &fileName) const
 {
     const QStringList supportedSuffixes = {

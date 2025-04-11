@@ -7,12 +7,14 @@ QMainWindow {
     min-width: 25px;
     min-height: 25px;
 }
+
 #runButton {
     background: transparent;
     border: none;
     min-width: 25px;
     min-height: 25px;
 }
+
 QWidget {
     background-color: rgb(240, 240, 240);
     color: rgba(0, 0, 0, 0.8);
@@ -26,10 +28,12 @@ QWidget[selected="true"] {
     border: 1px solid #007bff;
     border-radius: 10px;
 }
+
 #runButton:hover {
     border: 1px solid #007bff;
     border-radius: 10px;
 }
+
 QMenuBar {
     background-color: rgb(240, 240, 240);
     color: rgba(0, 0, 0, 0.8);
