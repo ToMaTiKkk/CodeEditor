@@ -30,6 +30,9 @@
 #include <QTimer>
 #include <QStringList>
 #include <QAction>
+#include <QToolTip>
+#include <QScreen>
+#include <QGuiApplication>
 
 // Константы для чата
 const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
@@ -49,11 +52,20 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , m_muteTimer(new QTimer(this))
     , m_terminalWidget(nullptr)
     , m_isTerminalVisible(false)
+    , m_lspManager(nullptr)
+    , m_completionWidget(nullptr)
+    , m_hoverTimer(nullptr)
+    , m_projectRootPath(QDir::homePath()) // корень проект по умолчанию - домашняя папка
+    , m_diagnosticTooltip(nullptr)
+    , m_isDiagnosticTooltipVisible(false)
+    , m_currentlyShownTooltipPange(-1, -1)
 {
     ui->setupUi(this);
 
     setupMainWindow(); // окно и шрифт
     setupCodeEditorArea(); // редактор и нумерация
+    setupLsp(); // настраиваем и запускаем LSP
+    setupLspCompletionAndHover();
     setupChatWidget(); // чат
     setupUserFeatures(); // меню пользователей, мьют, таймер и тп
     setupMenuBarActions(); // подключение сигналов
@@ -83,6 +95,7 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     m_codeEditor->setFont(QFont("Fira Code", 12));
     m_codeEditor->setTabStopDistance(25.0);
     m_codeEditor->setFocusPolicy(Qt::StrongFocus); // чтобы мог получать фокус для ввода
+    m_codeEditor->setMouseTracking(true);
 
     lineNumberArea = new LineNumberArea(m_codeEditor); // передаем наш собственный новый редактор, чтобы у класса было понимание, рядом с чем рисовать номера
 
@@ -120,10 +133,54 @@ void MainWindowCodeEditor::setupCodeEditorArea()
 
     lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
 
-    // инициализация подсветки синтаксиса
-    highlighter = new CppHighlighter(m_codeEditor->document());
-    // фильтр событий для viewport
+    QFileInfo fileInfo(currentFilePath);
+    QString suffix = fileInfo.suffix().toLower();//ищем расширение файла
+    highlighter = new CppHighlighter(m_codeEditor->document(), currentFilePath); //подсветка только для C++ и C
     m_codeEditor->viewport()->installEventFilter(this);
+
+}
+
+void MainWindowCodeEditor::setupLsp()
+{
+    // TODO: сделать путь к серверу и язык настраиваемыми
+    QString lspExecutable = "clangd";
+    QString languageId = "cpp";
+
+    m_lspManager = new LspManager(lspExecutable, this);
+
+    // подключаем сигналы от ЛСП к клиентским слотам
+    connect(m_lspManager, &LspManager::serverReady, this, &MainWindowCodeEditor::onLspServerReady);
+    connect(m_lspManager, &LspManager::serverStopped, this, &MainWindowCodeEditor::onLspServerStopped);
+    connect(m_lspManager, &LspManager::serverError, this, &MainWindowCodeEditor::onLspServerError);
+    connect(m_lspManager, &LspManager::diagnosticsReceived, this, &MainWindowCodeEditor::onLspDiagnosticsReceived);
+    connect(m_lspManager, &LspManager::completionReceived, this, &MainWindowCodeEditor::onLspCompletionReceived);
+    connect(m_lspManager, &LspManager::hoverReceived, this, &MainWindowCodeEditor::onLspHoverReceived);
+    connect(m_lspManager, &LspManager::definitionReceived, this, &MainWindowCodeEditor::onLspDefinitionReceived);
+
+    // запускаем сервер для текущего корневого пути проекта
+    if (!m_lspManager->startServer(languageId, m_projectRootPath)) {
+        qWarning() << "Не удалось запустить LSP сервер для" << m_projectRootPath;
+        // TODO: показывать QMessageBox
+        statusBar()->showMessage(tr("Не удалось запустить LSP сервер (%1)").arg(lspExecutable), 5000);
+    } else {
+        statusBar()->showMessage(tr("LSP сервер (%1) запускается").arg(lspExecutable), 3000);
+    }
+}
+
+void MainWindowCodeEditor::setupLspCompletionAndHover()
+{
+    m_completionWidget = new CompletionWidget(m_codeEditor, this); // создаем виджет автодополнения
+    m_completionWidget->hide();
+    connect(m_completionWidget, &CompletionWidget::completionSelected, this, &MainWindowCodeEditor::applyCompletion);
+
+    if (!m_diagnosticTooltip) {
+        m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
+    }
+
+    m_hoverTimer = new QTimer(this);
+    m_hoverTimer->setSingleShot(true); // срабатывает один раз
+    m_hoverTimer->setInterval(700); // задержка в мс перед запросом hover
+    connect(m_hoverTimer, &QTimer::timeout, this, &MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover);
 }
 
 void MainWindowCodeEditor::setupChatWidget()
@@ -330,6 +387,7 @@ void MainWindowCodeEditor::setupThemeAndNick()
             scrollToBottom();
         }
     });
+
     connect(m_runButton, &QPushButton::clicked, this, &MainWindowCodeEditor::compileAndRun);
     bool ok;
     m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok);
@@ -341,6 +399,17 @@ void MainWindowCodeEditor::setupThemeAndNick()
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
 {
+    if (m_lspManager) {
+        m_lspManager->stopServer();
+        m_lspManager = nullptr;
+    }
+
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+        m_trayIcon->deleteLater();
+        m_trayIcon = nullptr;
+    }
+
     delete ui; // освобождает память, выделенную под интерфейс
     qDeleteAll(remoteCursors); // удаление курсоров всех пользователей
     qDeleteAll(remoteLineHighlights);
@@ -352,15 +421,14 @@ MainWindowCodeEditor::~MainWindowCodeEditor()
     delete m_muteTimeLabel;
     delete lineNumberArea;
     delete m_codeEditor;
-    if (m_trayIcon) {
-        m_trayIcon->hide();
-        m_trayIcon->deleteLater();
-        m_trayIcon = nullptr;
-    }
+    delete m_completionWidget;
 }
 
 void MainWindowCodeEditor::closeEvent(QCloseEvent *event) {
     if (maybeSave()) {
+        if (m_lspManager) {
+            m_lspManager->stopServer();
+        }
         disconnectFromServer();
         event->accept();
     } else {
@@ -368,22 +436,582 @@ void MainWindowCodeEditor::closeEvent(QCloseEvent *event) {
     }
 }
 
-// пересчет размеров (ширины) всех подсветок строк при измнении размеров окна
 bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
 {
-    // проверяем, что событие относится к viewport редактора и является событие измнения размера
-    if (obj == m_codeEditor->viewport() && event->type() == QEvent::Resize) {
-        for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
-            QString senderId = it.key();
-            int position = lastCursorPositions.value(senderId, -1);
-            if (position != -1) {
-                updateLineHighlight(senderId, position);
+    if (m_completionWidget && obj == m_completionWidget) {
+        if (event->type() == QEvent::KeyPress) {
+            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+            qDebug() << "[COMPL_FILTER] KeyPress on CompletionWidget. Key:" << keyEvent->key() << keyEvent->text();
+            bool consumedCompletionFilter = true; // по умолчанию считаем что событие обработано и съедено (то есть не передалось никуда)
+
+            switch (keyEvent->key()) {
+                case Qt::Key_Up:
+                    m_completionWidget->navigateUp();
+                    qDebug() << "[COMPL_FILTER] -> Handled Up";
+                    break;
+                case Qt::Key_Down:
+                    m_completionWidget->navigateDown();
+                    qDebug() << "[COMPL_FILTER] -> Handled Down";
+                    break;
+                case Qt::Key_PageUp:
+                    m_completionWidget->navigatePageUp();
+                    qDebug() << "[COMPL_FILTER] -> Handled PageUp";
+                    break;
+                case Qt::Key_PageDown:
+                    m_completionWidget->navigatePageDown();
+                    qDebug() << "[COMPL_FILTER] -> Handled PageDown";
+                    break;
+                //case Qt::Key_Return:
+                //case Qt::Key_Enter:
+                case Qt::Key_Tab:
+                    m_completionWidget->triggerSelection(); // он скроет виджет и вызовет applyCompletion
+                    qDebug() << "[COMPL_FILTER] -> Handled Select (Enter/Tab)";
+                    break;
+                case Qt::Key_Escape:
+                    m_completionWidget->hide();
+                    qDebug() << "[COMPL_FILTER] -> Handled Escape";
+                    // после скрытия возвращаем фокус редактору
+                    QMetaObject::invokeMethod(m_codeEditor, "setFocus", Qt::QueuedConnection);
+                    break;
+                default:
+                    // пересылаем текстовый ввод и другие символы в редактор
+                    if (!keyEvent->text().isEmpty() || 
+                        keyEvent->key() == Qt::Key_Backspace ||
+                        keyEvent->key() == Qt::Key_Delete ||
+                        keyEvent->key() == Qt::Key_Space ||
+                        (keyEvent->modifiers() != Qt::NoModifier && keyEvent->modifiers() != Qt::ShiftModifier)) // пропускаем модификаторы для шорткатов
+                    {
+                        qDebug() << "[COMPL_FILTER] -> Default key/text. Forwarding to editor:" << keyEvent->key() << keyEvent->text();
+                        // создаем копию события
+                        QKeyEvent* forwardEvent = new QKeyEvent(event->type(), keyEvent->key(), keyEvent->modifiers(), keyEvent->text(), keyEvent->isAutoRepeat(), keyEvent->count());
+                        // используем асинхронну доставку сообщение редактору
+                        QCoreApplication::postEvent(m_codeEditor->viewport(), forwardEvent);
+                    }
+                    // мы перехватили и переслали (или игнор), поэтому считаем обработанным
+                    consumedCompletionFilter = true;
+                    break;
+            }
+            // всегда возвращаем тру, если событие пришло от виджета автодополнения, чтобы не обрабатывалось стандартным образом самим QListWidget 
+            return true;
+        } else if (event->type() == QEvent::Hide) {
+            // перехватываем событие Hide самого виджета
+            m_completionWidget->removeEventFilter(this); // удаляем фильтр при скрытии
+            if (!m_codeEditor->hasFocus()) {
+                QMetaObject::invokeMethod(m_codeEditor, "setFocus", Qt::QueuedConnection);
             }
         }
+        return false; // пропускаем другие события такие как мышь и тд
     }
+
+    if (obj == m_codeEditor->viewport()) {
+        if (event->type() == QEvent::KeyPress && (!m_completionWidget || !m_completionWidget->isVisible())) {
+            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+            // используем обработчики для шорткатов, когда автодоп не видно
+            handleEditorKeyPressEvent(keyEvent);
+            if (keyEvent->isAccepted()) {
+                return true;
+            }
+        } else if (event->type() == QEvent::Resize) {
+            for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
+                QString senderId = it.key();
+                int position = lastCursorPositions.value(senderId, -1);
+                if (position != -1) {
+                    updateLineHighlight(senderId, position);
+                }
+            }
+        } else if (event->type() == QEvent::MouseMove) {
+            handleEditorMouseMoveEvent(static_cast<QMouseEvent*>(event));
+        } else if (event->type() == QEvent::Leave) {
+            qDebug() << "[EVENT_FILTER] Mouse left viewport. Hiding tooltip and stopping hover timer.";
+            m_hoverTimer->stop();
+            if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
+                m_diagnosticTooltip->hide();
+                m_isDiagnosticTooltipVisible = false;
+                m_currentlyShownTooltipPange = {-1, -1}; // сброс
+            }
+            QToolTip::hideText();
+        }
+    }
+
+    // стандартная обработка для всех остальных объектов
     return QMainWindow::eventFilter(obj, event);
 }
 
+void MainWindowCodeEditor::handleEditorKeyPressEvent(QKeyEvent *event)
+{
+    if (!m_codeEditor || !m_codeEditor->viewport()) return;
+
+    // если виджет не виден и событие прошло через дефолт
+    if (!event->isAccepted()) { // доп ропеврка, что событие не было съедено
+        // если автодополнение неактивно, то проверяем хоткеи
+        if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_Space) { // Ctrl+пробел
+            qDebug() << "  [HANDLER] -> Ctrl+Space detected. Triggering completion.";
+            triggerCompletionRequest();
+            event->accept(); // съедаем событие, чтобы избежать других действий по Ctrl+пробел
+            //return;
+        } else if (event->key() == Qt::Key_F12) { // переход к определнию по F12
+            // TODO: добавить ctrl+click
+            qDebug() << "  [HANDLER] -> F12 detected. Triggering definition.";
+            triggerDefinitionRequest();
+            event->accept();
+            return;
+        } else {
+            qDebug() << "  [HANDLER] Key not handled by shortcuts.";
+        }
+    } else {
+        qDebug() << "  [HANDLER] Event already accepted before shortcut check.";
+   }
+}
+
+// обработк движения мыши
+void MainWindowCodeEditor::handleEditorMouseMoveEvent(QMouseEvent *event)
+{
+    if (!m_codeEditor || !m_codeEditor->viewport()) {
+        return;
+    }
+
+    if ((event->globalPos() - m_lastMousePosForHover).manhattanLength() < 7) {
+        if (!m_hoverTimer->isActive()) m_hoverTimer->start();
+        return; // дрожание небольшое игнорируем, таймер НЕ перезапускаем, чтобы не сбивать показ
+    }
+
+    // сохраняем позицию мыши (глобальные координаты)
+    m_lastMousePosForHover = event->globalPos();
+    if (!m_hoverTimer) return;
+    // запускаем таймер с задержкой, если мышка снова сдвинется, то таймер перезапустится и старый запрос не отправится
+    //qDebug() << "[handleEditorMouseMoveEvent] m_hoverTimer are starting...";
+    m_hoverTimer->start();
+}
+
+// !!! слота для обработки сигналов от LspManager !!!
+void MainWindowCodeEditor::onLspServerReady()
+{
+    qInfo() << "LSP сервер готов к работе";
+    statusBar()->showMessage(tr("LSP сервер готов"), 3000);
+    // если файл уже открыт при старте сервера, то отправляем didOpen
+    if (!currentFilePath.isEmpty()) {
+        m_currentLspFileUri = getFileUri(currentFilePath);
+        m_currentDocumentVersion = 1; // сброс версии
+        QString currentText = m_codeEditor->toPlainText();
+        if (m_lspManager) {
+            m_lspManager->notifyDidOpen(m_currentLspFileUri, currentText, m_currentDocumentVersion);
+        }
+    }
+}
+
+void MainWindowCodeEditor::onLspServerStopped()
+{
+    qInfo() << "LSP сервер остановлен";
+    statusBar()->showMessage(tr("LSP сервер остановлен"), 3000);
+    m_diagnostics.clear(); // очищаем старые диагностики
+    updateDiagnosticsView(); // убираем подчеркивания
+}
+
+void MainWindowCodeEditor::onLspServerError(const QString& message)
+{
+    qWarning() << "Ошибка LSP сервера:" << message;
+    // TODO: выводить окно QMessageBox АСИНХРОННО
+    QMessageBox::warning(this, tr("Ошибка LSP"), tr("Произошла ошибка LSP сервера: \n%1").arg(message));
+    statusBar()->showMessage(tr("Ошибка LSP сервера!"), 5000);
+}
+
+void MainWindowCodeEditor::onLspDiagnosticsReceived(const QString& fileUri, const QList<LspDiagnostic>& diagnostics)
+{
+    // сохраняем диагностики для данного файла
+    //m_diagnostics[fileUri] = diagnostics;
+
+    // если диагностики пришла для ТЕКУЩЕГо открытого файла, то обновляем UI
+    if (QUrl(fileUri) == QUrl(m_currentLspFileUri)) {
+        qDebug() << "[DIAG] Соответствует URI. Обновляем диагностики и их отображения";
+        m_diagnostics[QUrl(m_currentLspFileUri).toString()] = diagnostics;
+        updateDiagnosticsView();
+    } else {
+        qDebug() << "[DIAG] URI НЕ соответствует! Получен:" << QUrl(fileUri).toString() << "Ожидаемый:" << QUrl(m_currentLspFileUri).toString();
+        m_diagnostics[QUrl(fileUri).toString()] = diagnostics; // сохраняем на всякий
+    }
+}
+
+void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem>& items)
+{
+    if (!m_codeEditor) return;
+
+    if (!m_completionWidget || items.isEmpty()) {
+        if (m_completionWidget) {
+            m_completionWidget->hide();
+        }
+        return;
+    }
+
+    // вычисление позиции
+    QRect currentCursorRect = m_codeEditor->cursorRect(); // получаем актуальную позицию курсора
+    // преобразуем координаты в глобальные координаты экрана
+    QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(currentCursorRect.bottomLeft());
+
+    // заполняем виджет автодополнения данными
+    m_completionWidget->updateItems(items);
+
+    // устанавливаем геометрию (позицию и размер виджета)
+    int width = m_completionWidget->sizeHintForColumn(0) + m_codeEditor->verticalScrollBar()->width() + 10; // запа сна скроллбар виджета и отступы
+    width = qMax(300, width); // минимальная ширина
+    int height = m_completionWidget->sizeHintForRow(0) * qMin(10, m_completionWidget->count()) + 5; // высота примерно 10 элементов + рамка
+    height = qMin(300, height); // максимальная высота, что не перекрывать полэкрана
+    m_completionWidget->setGeometry(globalPos.x(), globalPos.y(), width, height);
+
+    m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
+    m_completionWidget->show();
+    m_completionWidget->raise(); //поверх других виджетов
+    //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
+    //qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
+}
+
+void MainWindowCodeEditor::onLspHoverReceived(const LspHoverInfo& hoverInfo)
+{
+    if (hoverInfo.contents.isEmpty()) {
+        // TODO: если пришла пустая инфа, можно скрыть тултип
+        // QToolTip::hidetext(); // ненадежно, не всегда работает
+        return;
+    }
+
+    // преобразуем глобальную позициб мышки в локальную для viewport
+    QPoint viewportPos = m_codeEditor->viewport()->mapFromGlobal(m_lastMousePosForHover);
+    QRect cursorRect = m_codeEditor->cursorRect(); // берем высоту из курсора
+    QRect tipRect(viewportPos.x(), viewportPos.y(), 1, cursorRect.height()); // прямоугольник для позиционирования тултипа
+    QToolTip::showText(m_lastMousePosForHover, hoverInfo.contents.toHtmlEscaped().replace("\n", "<br>"), m_codeEditor->viewport());
+}
+
+void MainWindowCodeEditor::onLspDefinitionReceived(const QList<LspDefinitionLocation>& locations)
+{
+    if (locations.isEmpty()) {
+        statusBar()->showMessage(tr("Определение не найдено"), 3000);
+        return;
+    }
+
+    // INFO: пока что переходим к первому найденному определению
+    const LspDefinitionLocation& loc = locations.first();
+    QString targerFilePath = getLocalPath(loc.fileUri); // конвектируем в локальный путь
+    qInfo() << "Переход к определению:" << targerFilePath << "строка" << loc.line << "символ" << loc.character;
+
+    // проверяем является ли файл с определением текушим открытым файлом
+    if (targerFilePath == currentFilePath) {
+        if (m_lspManager && m_codeEditor && m_codeEditor->document()) {
+            int targetPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), loc.line, loc.character);
+            if (targetPos != -1) {
+                QTextCursor cursor = m_codeEditor->textCursor();
+                cursor.setPosition(targetPos);
+                m_codeEditor->setTextCursor(cursor);
+                m_codeEditor->ensureCursorVisible(); // прокуртить к курсору
+                m_codeEditor->setFocus();
+            } else {
+                qWarning() << "Не удалось конвертировать позицию LSP в позицию редактора для определения";
+            }
+        }
+    } else {
+        // открываем другой файл
+        qInfo() << "Нужно открыть файл:" << targerFilePath;
+        // TODO: реализовать открытие файла и перемещени курсора после открытия
+        statusBar()->showMessage(tr("Определение в другом файле (открытие пока не реализовано): %1").arg(targerFilePath), 5000);
+    }
+}
+
+void MainWindowCodeEditor::applyCompletion(const QString& textToInsert)
+{
+    if (!m_codeEditor) return;
+
+    QTextCursor cursor = m_codeEditor->textCursor();
+    // TODO: более умная вставка, чтобы может указывался диапозон который нужно заменить и какой текст вставить
+    // просто вставляем как есть
+    cursor.insertText(textToInsert);
+    m_codeEditor->setFocus(); // возвращаем фокус редактору
+    qDebug() << "[applyCompletion] Completion applied, focus set to m_codeEditor";
+}
+
+void MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover()
+{
+    // проверяем, существует ли редактор и находится ли мышь над его viewport
+    if (!m_codeEditor || !m_codeEditor->viewport() || !m_codeEditor->viewport()->rect().contains(m_codeEditor->viewport()->mapFromGlobal(m_lastMousePosForHover))) {
+        // мышь ушла из окна видимости во время таймера или редактора нет
+        if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
+            m_diagnosticTooltip->hide();
+            m_isDiagnosticTooltipVisible = false;
+            m_currentlyShownTooltipPange = {-1, -1};
+        }
+        QToolTip::hideText();
+        return;
+    }
+
+    QPoint viewportPos = m_codeEditor->viewport()->mapFromGlobal(m_lastMousePosForHover);
+    QTextCursor cursor = m_codeEditor->cursorForPosition(viewportPos);
+    int currentPos = cursor.position();
+
+    QString diagnosticMessage;
+    QPair<int, int> foundRange = {-1, -1}; // диапозон найденной диагностики
+    QList<QTextEdit::ExtraSelection> currentSelections = m_codeEditor->extraSelections(); // они были установлены в updateDiagnosticsView
+
+    // ищем первую диагностику под курсором
+    for (const auto& selection : currentSelections) {
+        int selStart = selection.cursor.selectionStart();
+        int selEnd = selection.cursor.selectionEnd();
+        // проверяем если ли у формата кастомное пользовательское свойство
+        QVariant messageData = selection.format.property(QTextFormat::UserProperty + 1);
+        if (messageData.isValid() && !messageData.toString().isEmpty()) {
+            if (currentPos >= selStart && currentPos <= selEnd) {
+                diagnosticMessage = messageData.toString();
+                foundRange = {selStart, selEnd};
+                break; // выходим, потому что показываем только первый найденный
+            }
+        }
+    }
+
+    // если тултип диагностики не показали, то обычный можно будет запросить
+    if (!diagnosticMessage.isEmpty()) { // нашли диагностику под мышкой
+        // проверяем, показываем ли мы ЭТУ ЖЕ диагностику или нет
+        if (m_isDiagnosticTooltipVisible && m_currentlyShownTooltipPange == foundRange) {
+            //qDebug() << "[HoverTimer]   Tooltip already visible for this range. Doing nothing.";
+            // не показываем, что уже есть, чтобы не перерисовывалось, не мерцало, но позицию курсора на всякий случай обновим
+            QPoint tooltipPos = calculateTooltipPosition(m_lastMousePosForHover);
+            m_diagnosticTooltip->move(tooltipPos);
+            return;
+        } else { // тултип или не виден или он для ДРУГОГО диапозона
+            qDebug() << "[HoverTimer]   Need to show/update tooltip for range:" << foundRange.first << "->" << foundRange.second;            // создаем тултип если его не было ешё
+            if (!m_diagnosticTooltip) {
+                qCritical() << "[HoverTimer] Error: m_diagnosticTooltip is NULL when trying to show diagnostic!";
+            }
+
+            m_diagnosticTooltip->setText(diagnosticMessage);
+            qDebug() << "[HoverTimer] Tooltip text set. Calculated size:" << m_diagnosticTooltip->sizeHint() << m_diagnosticTooltip->size(); // Посмотрим размер
+            // позиционируем рядом с мышкой
+            //QPoint tooltipPos = m_lastMousePosForHover + QPoint(10, 15); // чуть ниже и правее
+            QPoint tooltipPos = calculateTooltipPosition(m_lastMousePosForHover);
+            //qDebug() << "[HoverTimer] Moving tooltip to globalPos:" << tooltipPos;
+            m_diagnosticTooltip->move(tooltipPos);
+            //qDebug() << "[HoverTimer] Calling show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+            if (!m_isDiagnosticTooltipVisible) { // если не был виден, то показываем
+                m_diagnosticTooltip->show();
+                m_isDiagnosticTooltipVisible = true;
+            }
+            m_currentlyShownTooltipPange = foundRange; // запоминаем, что показываем
+            //qDebug() << "[HoverTimer] After show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+
+            QToolTip::hideText();
+        }
+    } else {
+        qDebug() << "[HoverTimer] No diagnostic found. Hiding custom tooltip and potentially requesting LSP hover.";
+        if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
+            m_diagnosticTooltip->hide();
+            m_isDiagnosticTooltipVisible = false;
+            m_currentlyShownTooltipPange = {-1, -1};
+            //qDebug() << "[HoverTimer] After hide(). Visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+        }
+        QToolTip::hideText();
+
+        // ЛОГИКА ОБЫЧНОГО ЗАПРОСА LSP HOVER
+        // проверяем существует ли редактор и находится ли мышь над его viewport
+        if (!m_lspManager || !m_lspManager->isReady() || m_currentLspFileUri.isEmpty() || !m_codeEditor->document()) {
+            return;
+        }
+
+        qDebug() << "[HoverTimer] Requesting LSP hover.";
+        // заапрашиваем всплывашку для позиции, сохраненный в m_lasrMousePosForhover
+        //int editorPos = m_codeEditor->cursorForPosition(viewportPos).position();
+        QPoint lspPos = m_lspManager->editorPosToLspPos(m_codeEditor->document(), currentPos);
+
+        if (lspPos.x() != -1) { // проверка корректности позиции
+            m_lspManager->requestHover(m_currentLspFileUri, lspPos.x(), lspPos.y());
+        }
+    }
+}
+
+// функция для вызова запроса автодополнения
+void MainWindowCodeEditor::triggerCompletionRequest()
+{
+    if (!m_lspManager || !m_lspManager->isReady() || m_currentLspFileUri.isEmpty() || !m_codeEditor->document()) {
+        if (m_completionWidget) {
+            m_completionWidget->hide();
+        }
+        return;
+    }
+    QTextCursor cursor = m_codeEditor->textCursor();
+    int editorPos = cursor.position();
+    QPoint lspPos = m_lspManager->editorPosToLspPos(m_codeEditor->document(), editorPos);
+
+    if (lspPos.x() != -1) {
+        // отправляем запрос TriggerKind = 1 (вызвано вручную)
+        m_lspManager->requestCompletion(m_currentLspFileUri, lspPos.x(), lspPos.y(), 1);
+    } else {
+        if (m_completionWidget) {
+            m_completionWidget->hide();
+        }
+    }
+}
+
+// функция для вызова запроса определения
+void MainWindowCodeEditor::triggerDefinitionRequest()
+{
+    if (!m_lspManager || !m_lspManager->isReady() || m_currentLspFileUri.isEmpty() || !m_codeEditor->document()) {
+        return;
+    }
+
+    QTextCursor cursor = m_codeEditor->textCursor();
+    int editorPos = cursor.position();
+    QPoint lspPos = m_lspManager->editorPosToLspPos(m_codeEditor->document(), editorPos);
+
+    if (lspPos.x() != -1) {
+        m_lspManager->requestDefinition(m_currentLspFileUri, lspPos.x(), lspPos.y());
+    }
+}
+
+// обновляет подчеркивания ошибок в редакторе
+void MainWindowCodeEditor::updateDiagnosticsView()
+{
+    if (!m_codeEditor || !m_lspManager) {
+        qDebug() << "[UPDATE_DIAG_VIEW] Aborted: editor or lspManager is null.";
+        return;
+    }
+
+    // Получаем актуальный URI для логов
+    QString currentUriStr = QUrl(m_currentLspFileUri).toString();
+    qDebug() << "[UPDATE_DIAG_VIEW] Called for URI:" << currentUriStr;
+
+    QList<QTextEdit::ExtraSelection> extraSelections; // список подчеркивания
+    // берем диагностики для ТЕКУЩЕГо файла из хранилища
+    const QList<LspDiagnostic>& currentFileDiagnostics = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+
+    //qDebug() << "[UPDATE_DIAG_VIEW] Diagnostics count found in map:" << currentFileDiagnostics.count();
+
+    for (const LspDiagnostic& diag : currentFileDiagnostics) {
+        qDebug() << "[UPDATE_DIAG_VIEW] Processing diag: msg='" << diag.message
+                 << "', line:" << diag.startLine << ", char:" << diag.startChar
+                 << "-> line:" << diag.endLine << ", char:" << diag.endChar
+                 << ", severity:" << diag.severity;
+
+        QTextEdit::ExtraSelection selection;
+
+        // устанавливаем цвет и стиль подчеркивания
+        QColor color;
+        QTextCharFormat::UnderlineStyle style = QTextCharFormat::WaveUnderline; // оставим волнистую или выберем другую
+        QColor backgroundColor = Qt::transparent; // по умолчанию прозрачный
+        if (diag.severity == 1){
+            color = QColor(255, 80, 80); // Error
+            backgroundColor = QColor(255, 0, 0, 20); // красный с низкой прозрачностью
+        } else if (diag.severity == 2) {
+            color = QColor(255, 190, 0); // Warning (оранж)
+            backgroundColor = QColor(255, 190, 0, 20);
+        } else if (diag.severity == 3) {
+            color = QColor(100, 150, 255); // Info
+            style = QTextCharFormat::DotLine;
+        } else {
+            color = Qt::gray;
+            style = QTextCharFormat::DotLine;
+        }
+
+        selection.format.setBackground(backgroundColor);
+        selection.format.setUnderlineColor(color);
+        selection.format.setUnderlineStyle(style);
+        selection.format.setProperty(QTextFormat::FullWidthSelection, true); // Попробуем на всякий случай
+
+        // КОНВЕРТАЦИЯ устанавливаем курсор на диапозон диагностики
+        int startPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), diag.startLine, diag.startChar);
+        int endPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), diag.endLine, diag.endChar);
+
+        // проверяем корректность позиций
+        if (startPos != -1 && endPos != -1 && startPos <= endPos) {
+            QTextCursor cursor(m_codeEditor->document());
+            cursor.setPosition(startPos);
+            if (startPos == endPos && endPos < m_codeEditor->document()->characterCount() -1) {
+                qDebug() << "[UPDATE_DIAG_VIEW]   Zero-length range, extending endPos by 1 (tentative).";
+                endPos++; // если сервер дает что начало равно концу для одного символа
+            }
+
+            // выделяем текст от начала до конца
+            cursor.setPosition(endPos, QTextCursor::KeepAnchor);
+            if (cursor.isNull()) {
+                qWarning() << "[UPDATE_DIAG_VIEW]   Failed to create valid cursor for positions:" << startPos << "->" << endPos;
+            } else {
+                selection.cursor = cursor;
+                // сообщение для тултипа
+                QString tooltipMessage = QString("[%1] %2").arg(diag.severity).arg(diag.message);
+                // сохраняем как пользовательское свойство с уникальным айди
+                selection.format.setProperty(QTextFormat::UserProperty + 1, tooltipMessage);
+                qDebug() << "[UPDATE_DIAG_VIEW]   Added ExtraSelection with range:" << selection.cursor.selectionStart() << "->" << selection.cursor.selectionEnd() << "and stored message:" << tooltipMessage;;
+                extraSelections.append(selection);
+            }
+        } else {
+            qWarning() << "Не удалось отобразить диагностику: неверный диапозон" << diag.startLine << diag.startChar << "-" << diag.endLine << diag.endChar;
+        }
+    }
+
+    qDebug() << "[UPDATE_DIAG_VIEW] Setting" << extraSelections.count() << "extra selections to the editor.";
+    // применяем созданный список подчеркиваний к редактору
+    m_codeEditor->setExtraSelections(extraSelections);
+}
+
+
+QPoint MainWindowCodeEditor::calculateTooltipPosition(const QPoint& globalMousePos)
+{
+    if (!m_diagnosticTooltip) {
+        return globalMousePos + QPoint(10, 15); // базовое смещение если виджета нет
+    }
+
+    QSize tipSize = m_diagnosticTooltip->sizeHint(); // берем рекомендуемый размер
+    if (!tipSize.isValid()) {
+        tipSize = m_diagnosticTooltip->size(); // или текущий, если реккомендованный невалидный
+    }
+    if (!tipSize.isValid() || tipSize.isEmpty()) {
+        tipSize = QSize(200, 50); // запасной размер
+        m_diagnosticTooltip->resize(tipSize);
+    }
+
+    QPoint pos = globalMousePos + QPoint(10, 15); // начальная позиция
+    // получаем геометрию экрана где мышь
+    QScreen *screen = QGuiApplication::screenAt(globalMousePos);
+    if (!screen) {
+        // экран не определили, поэтому базовую позицию используем
+        qWarning() << "[CalcTooltipPos] Could not determine screen for position calculation.";
+        return pos;
+    }
+    QRect screenGeometry = screen->availableGeometry(); // доступная геометрия без панели задач и тп
+
+    // проверяем выход за правую границу
+    if (pos.x() + tipSize.width() > screenGeometry.right()) {
+        pos.setX(globalMousePos.x() - tipSize.width() - 10); // перемещаем влево от курсора
+        // праверим левую границу
+        if (pos.x() < screenGeometry.left()) {
+            pos.setX(screenGeometry.left()); //прижимаем к левому краю
+        }
+    }
+
+    // проверяем выход за нижнюю границу
+    if (pos.y() + tipSize.height() > screenGeometry.bottom()) {
+        pos.setY(globalMousePos.y() - tipSize.height() - 15); // перемещаем над курсором
+        // праверим верхнюю границу
+        if (pos.y() < screenGeometry.top()) {
+            pos.setY(screenGeometry.top()); //прижимаем к верхнему краю
+        }
+    }
+
+    // проверка на выход за левую или верхнюю грацниы если изначально сдвинули
+    if (pos.x() < screenGeometry.left()) {
+        pos.setX(screenGeometry.left());
+    }
+    if (pos.y() < screenGeometry.top()) {
+        pos.setY(screenGeometry.top());
+    }
+
+    qDebug() << "[CalcTooltipPos] Mouse:" << globalMousePos << "TipSize:" << tipSize << "Screen:" << screenGeometry << "ResultPos:" << pos;
+    return pos;
+}
+
+QString MainWindowCodeEditor::getFileUri(const QString& localPath) const
+{
+    return QUrl::fromLocalFile(localPath).toString();
+}
+
+QString MainWindowCodeEditor::getLocalPath(const QString& fileUri) const
+{
+    return QUrl(fileUri).toLocalFile();
+}
+
+// !!! слоты для обработки сигналов сессий !!!
 void MainWindowCodeEditor::onConnected()
 {
     qDebug() << "Клиент успешно подключился к серверу";
@@ -600,11 +1228,18 @@ void MainWindowCodeEditor::onOpenFileClicked()
         QFile file(fileName); // при непустом файле создается объект для работы с файлом
         QString fileContent;
         if (file.open(QFile::ReadOnly | QFile::Text)) { // открытие файла для чтения в текстовом режиме
+            // LSP закрываем предыдущий файл
+            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                m_lspManager->notifyDidClose(m_currentLspFileUri);
+            }
+            m_diagnostics.clear();
+            updateDiagnosticsView();
+
             // считывание всего текста из файла и устанавливание в редактор CodeEditor
             QTextStream in(&file);
             fileContent = in.readAll();
             file.close();
-            currentFilePath = fileName;
+            currentFilePath = fileName; // сохраняем локальный путь
             {
                 QSignalBlocker blocker(m_codeEditor->document());
                 loadingFile = true;
@@ -615,6 +1250,14 @@ void MainWindowCodeEditor::onOpenFileClicked()
                 loadingFile = false;
             }
             highlighter->rehighlight();
+
+            // LSP открываем новый файл
+            m_currentLspFileUri = getFileUri(currentFilePath);
+            m_currentDocumentVersion = 1;
+            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
+                m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
+            }
 
             // ОТправка соо на сервер с полным содержимым файла
             QJsonObject fileUpdate;
@@ -647,7 +1290,8 @@ void MainWindowCodeEditor::onSaveFileClicked()
     if (file.open(QFile::WriteOnly | QFile::Text)) {
         // запись содержимог CodeEditor в файл
         QTextStream out(&file);
-        out << m_codeEditor->toPlainText();
+        QString currentText = m_codeEditor->toPlainText();
+        out << currentText;
         file.close();
         m_codeEditor->document()->setModified(false);
         statusBar()->showMessage(tr("Файл сохранен: %1").arg(currentFilePath), 2000);
@@ -660,17 +1304,40 @@ void MainWindowCodeEditor::onSaveAsFileClicked()
 {
     QString fileName = QFileDialog::getSaveFileName(this, "Сохранить как"); // открытие диалогового окна для сохранения файла под другим именем
     if (!fileName.isEmpty()) {
+        // LSP закрываем предыдущий файл
+        if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+            m_lspManager->notifyDidClose(m_currentLspFileUri);
+        }
+
         QFile file(fileName);
         if (file.open(QFile::WriteOnly | QFile::Text)) {
             QTextStream out(&file);
-            out << m_codeEditor->toPlainText();
+            QString currentText = m_codeEditor->toPlainText();
+            out << currentText;
             file.close();
+            bool wasNewFile = currentFilePath.isEmpty(); // запоминаем был ли это новый файл
             currentFilePath = fileName;
             m_codeEditor->document()->setModified(false);
+
+            // LSP отправляем didOpen, если это было первое сохранени
+            QString newUri = getFileUri(currentFilePath);
+            if (m_lspManager && m_lspManager->isReady() && wasNewFile) {
+                m_currentLspFileUri = newUri;
+                m_currentDocumentVersion = 1;
+                m_lspManager->notifyDidOpen(m_currentLspFileUri, currentText, m_currentDocumentVersion);
+            } else if (m_lspManager && m_lspManager->isReady() && newUri != m_currentLspFileUri) {
+                // если файл был пересохранен под другим именем, закрываем старый URI и открываем новый
+                if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                    m_lspManager->notifyDidClose(m_currentLspFileUri);
+                }
+                m_currentLspFileUri = newUri;
+                m_currentDocumentVersion = 1;
+                m_lspManager->notifyDidOpen(m_currentLspFileUri, currentText, m_currentDocumentVersion);
+            }
             statusBar()->showMessage(tr("Файл сохранен: %1").arg(currentFilePath), 2000);
+        } else {
+            QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
         }
-    } else {
-        QMessageBox::critical(this, "ОШИБКА", "Невозможно сохранить файл");
     }
 }
 
@@ -715,10 +1382,22 @@ void MainWindowCodeEditor::onNewFileClicked()
         return; // нажали отмену
     }
     if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
+
+    // LSP закрываем предыдущий файл
+    if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+        m_lspManager->notifyDidClose(m_currentLspFileUri);
+    }
+    m_diagnostics.clear();
+    updateDiagnosticsView();
+
     // очищения поля редактирование и очищение пути к текущему файлу
     m_codeEditor->clear();
     currentFilePath.clear();
+    m_currentLspFileUri.clear();
+    m_currentDocumentVersion = 0;
     m_codeEditor->document()->setModified(false);
+
+    // TODO: реализовать генерацию временного URI, чтобы для нового и несохраненного файла иметь Lsp
     if (socket && socket->state() == QAbstractSocket::ConnectedState) {
         QJsonObject fileUpdate;
         fileUpdate["type"] = "file_content_update";
@@ -730,6 +1409,7 @@ void MainWindowCodeEditor::onNewFileClicked()
         socket->sendTextMessage(message);
         qDebug() << "Отправлено сообщении о создании нового файла (очистке)";
     }
+    statusBar()->showMessage(tr("Новый файл создан"), 2000);
 }
 
 void MainWindowCodeEditor::onCopyIdClicked()
@@ -757,12 +1437,33 @@ void MainWindowCodeEditor::onOpenFolderClicked()
             QModelIndex rootIndex = fileSystemModel->setRootPath(folderPath);
             // отображение содержимого выбранной папки
             ui->fileSystemTreeView->setRootIndex(rootIndex);
+
+            // перезапуск LSP для новой папки
+            m_projectRootPath = folderPath; // обновили корень проекта
+            m_diagnostics.clear();
+            updateDiagnosticsView();
+            currentFilePath.clear(); // считаем что файл не открыт
+            m_currentDocumentVersion = 0;
+            m_codeEditor->clear();
+            m_codeEditor->document()->setModified(false);
+
+            if (m_lspManager) {
+                m_lspManager->stopServer(); // останавливаем старый сервер
+                // запускаем новый
+                if (!m_lspManager->startServer("cpp", m_projectRootPath)) {
+                    qWarning() << "Не удалось перезапустить LSP сервер для" << m_projectRootPath;
+                    statusBar()->showMessage(tr("Не удалось перезапустить LSP сервер"), 5000);
+                } else {
+                    statusBar()->showMessage(tr("LSP сервер перезапускается для папки %1...").arg(folderPath), 3000);
+                }
+            }
+
             // вывод сообщения об открытие папки в строку состояния и в консоль
-            statusBar()->showMessage("Opened folder: " + folderPath);
-            qDebug() << "Opened folder:" << folderPath;
+            statusBar()->showMessage("Открыта папка: " + folderPath);
+            qDebug() << "Открыта папка:" << folderPath;
         } else {
             qDebug() << "Error: выбрана невалидная папка или папка не существует: " << folderPath;
-            QMessageBox::critical(this, "Warning", "Выбранная папка несуществует или не является папкой.");
+            QMessageBox::warning(this, "Предупреждение", "Выбранная папка несуществует или не является папкой.");
         }
     }
 }
@@ -777,6 +1478,13 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
         QString filePath = fileInfo.absoluteFilePath(); // если это файл, вы получаем полный путь
         QFile file(filePath);
         if (file.open(QFile::ReadOnly | QFile::Text)) {
+            // LSP закрываем предыдущий файл
+            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                m_lspManager->notifyDidClose(m_currentLspFileUri);
+            }
+            m_diagnostics.clear();
+            updateDiagnosticsView();
+
             QTextStream in(&file);
             QString fileContent = in.readAll();
             file.close();
@@ -791,6 +1499,14 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
                 loadingFile = false;
             }
             highlighter->rehighlight();
+
+            // LSP открываем новый файл
+            m_currentLspFileUri = getFileUri(currentFilePath);
+            m_currentDocumentVersion = 1;
+            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
+                m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
+            }
 
             // ОТправка соо на сервер с полным содержимым файла
             QJsonObject fileUpdate;
@@ -838,6 +1554,75 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
         socket->sendTextMessage(message);
         qDebug() << "Отправлено сообщение:" << message;
     }
+
+    if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+        m_currentDocumentVersion++;
+        QString currentText = m_codeEditor->toPlainText();
+        m_lspManager->notifyDidChange(m_currentLspFileUri, currentText, m_currentDocumentVersion);
+
+        // авто-запрос автодополнения после точки или ->
+        QTextCursor cursor = m_codeEditor->textCursor();
+        if (cursor.position() > 0 && charsAdded > 0) {
+            QString currentText = m_codeEditor->toPlainText();
+            QChar lastChar = currentText.at(cursor.position() - 1);
+            bool shouldTrigger = false;
+
+            // тригеры от сервера
+            // TODO: получать конкретный список тригеров при инициализации!!! пока что хардим
+            const QString triggerChars = ".:>";
+            if (triggerChars.contains(lastChar)) {
+                if (lastChar == QLatin1Char(':')) {
+                    if (cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char(':')) {
+                        shouldTrigger = true;
+                    }
+                } else if (lastChar == QLatin1Char('>')) {
+                    if (cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char('>')) {
+                        shouldTrigger = true;
+                    }
+                } else if (lastChar == QLatin1Char('.')) {
+                    shouldTrigger = true;
+                }
+            }
+
+            // тригер при начале или продолжении ввода идентификатора (буквы, цифры, _)
+            if (lastChar.isLetterOrNumber() || lastChar == QLatin1Char('_')) {
+                // проверяем символ перед последним введем для контекста
+                if (cursor.position() == 1) { // если это самый первый символ в документе
+                    shouldTrigger = true;
+                } else {
+                    QChar charBeforeLast = currentText.at(cursor.position() - 2);
+                    // тригерим и проверяем, а вдруг начали новое слово или предыдущий символ тоже буква или цифра или _, то есть продолжаем слово (для фильтрации)
+                    if (!charBeforeLast.isLetterOrNumber() && charBeforeLast != QLatin1Char('_')) {
+                        // начали новое слова после пробела, скобки, оператора и тп
+                        shouldTrigger = true;
+                    } else {
+                        // TODO: фильтровать список на клиенте, дабы сервер не нагружать каждый раз
+                        if (m_completionWidget && m_completionWidget->isVisible()) {
+                            shouldTrigger = true; // перезапросим для обновление списка
+                        }
+                    }
+                }
+            }
+
+            if (shouldTrigger) {
+                // задержка чтобы не спамить сервер быстрым набором
+                QTimer::singleShot(300, this, &MainWindowCodeEditor::triggerCompletionRequest);
+                // singleShot чтобы не блокать ввод!
+            } else if (m_completionWidget && m_completionWidget->isVisible()) {
+                // если ввели символ который не должен тригерить запро, пока что просто скроем (условно после пробела, точки с запятой)
+                if (!lastChar.isLetterOrNumber() && lastChar != QLatin1Char('_') && !triggerChars.contains(lastChar)) {
+                    m_completionWidget->hide();
+                } else {
+                // TODO: ФИЛЬТРАЦИЮ КЛИЕНТСКУЮ сделать уже существуещего списка
+                }
+            }
+        } else if (charsRemoved > 0 && m_completionWidget && m_completionWidget->isVisible()) {
+            // пользователь удалил символ
+            // TODO: обновляем и перефилтровываем список
+            m_completionWidget->hide();
+        }
+    }
+    m_codeEditor->document()->setModified(true);
 }
 
 void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
@@ -1308,6 +2093,7 @@ void MainWindowCodeEditor::applyCurrentTheme()
             qApp->setStyleSheet(lightStyle);
             chatWidget->setStyleSheet(lightStyle);
             lightFile.close();
+            qDebug() << "Light theme applied successfully";
         } else {
             qDebug() << "Failed to open light.qss";
         }
@@ -1318,6 +2104,7 @@ void MainWindowCodeEditor::applyCurrentTheme()
             qApp->setStyleSheet(darkStyle);
             chatWidget->setStyleSheet(darkStyle);
             darkFile.close();
+            qDebug() << "Dark theme applied successfully";
         } else {
             qDebug() << "Failed to open dark.qss";
         }

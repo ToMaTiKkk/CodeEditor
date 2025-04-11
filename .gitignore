@@ -1,4 +1,7 @@
-# C++ objects and libs
+
+# --- Build Artifacts ---
+# C++ / Generic
+
 *.slo
 *.lo
 *.o
@@ -10,21 +13,66 @@
 *.dll
 *.dylib
 
-# Qt-es
+# CMake / Make specific
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile*
+*.make
+target_wrapper.* 
+
+# Build Directories (Common Patterns)
+build/
+build-*/
+*build-*/
+build_terminal/
+debug/
+release/ 
+
+# --- IDE / Editor Specific ---
+# QtCreator
+CMakeLists.txt.user* 
+*.pro.user*
+*.qbs.user*
+*.autosave
+*.creator.user*
+/.qmake.cache 
+/.qmake.stash
+
+# VSCode
+.vscode/
+
+# IntelliJ / CLion / etc.
+.idea/
+
+# Vim swap files
+*.swp
+
+# --- Qt Specific Generated Files ---
+
+*.moc 
 object_script.*.Release
 object_script.*.Debug
 *_plugin_import.cpp
-/.qmake.cache
-/.qmake.stash
-*.pro.user
-*.pro.user.*
-*.qbs.user
-*.qbs.user.*
-*.moc
-moc_*.cpp
-moc_*.h
-qrc_*.cpp
-ui_*.h
+*.prl # qmake library file
+
+# Compiled Qt Quick/Translations
+*.qmlc
+*.jsc
+*.qm
+
+# --- Caching ---
+.cache/ 
+
+# --- Project Specific / User Added ---
+collab-server/ 
+backend/      
+saves/         
+
+# --- OS Generated Files ---
+.DS_Store
+Thumbs.db
+=======
 *.qmlc
 *.jsc
 Makefile*
@@ -47,8 +95,6 @@ target_wrapper.*
 # QtCreator CMake
 CMakeLists.txt.user*
 
-# QtCreator 4.8< compilation database 
-compile_commands.json
 
 # QtCreator local machine specific files for imported projects
 *creator.user*
