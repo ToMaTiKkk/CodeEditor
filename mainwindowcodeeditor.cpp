@@ -52,6 +52,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     , m_projectRootPath(QDir::homePath()) // корень проект по умолчанию - домашняя папка
     , m_diagnosticTooltip(nullptr)
     , m_isDiagnosticTooltipVisible(false)
+    , m_currentlyShownTooltipPange(-1, -1)
 {
     ui->setupUi(this);
 
@@ -163,6 +164,10 @@ void MainWindowCodeEditor::setupLspCompletionAndHover()
     m_completionWidget = new CompletionWidget(m_codeEditor, this); // создаем виджет автодополнения
     m_completionWidget->hide();
     connect(m_completionWidget, &CompletionWidget::completionSelected, this, &MainWindowCodeEditor::applyCompletion);
+
+    if (!m_diagnosticTooltip) {
+        m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
+    }
 
     m_hoverTimer = new QTimer(this);
     m_hoverTimer->setSingleShot(true); // срабатывает один раз
@@ -477,6 +482,7 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
             if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
                 m_diagnosticTooltip->hide();
                 m_isDiagnosticTooltipVisible = false;
+                m_currentlyShownTooltipPange = {-1, -1}; // сброс
             }
             QToolTip::hideText();
         }
@@ -520,22 +526,16 @@ void MainWindowCodeEditor::handleEditorMouseMoveEvent(QMouseEvent *event)
     }
 
     if ((event->globalPos() - m_lastMousePosForHover).manhattanLength() < 7) {
-        return; // дрожание небольшое игнорируем
+        if (!m_hoverTimer->isActive()) m_hoverTimer->start();
+        return; // дрожание небольшое игнорируем, таймер НЕ перезапускаем, чтобы не сбивать показ
     }
 
     // сохраняем позицию мыши (глобальные координаты)
     m_lastMousePosForHover = event->globalPos();
+    if (!m_hoverTimer) return;
     // запускаем таймер с задержкой, если мышка снова сдвинется, то таймер перезапустится и старый запрос не отправится
     //qDebug() << "[handleEditorMouseMoveEvent] m_hoverTimer are starting...";
     m_hoverTimer->start();
-
-    // скроем существующий кастомный тултип если он видим
-    if (m_isDiagnosticTooltipVisible && m_diagnosticTooltip) {
-        m_diagnosticTooltip->hide();
-        m_isDiagnosticTooltipVisible = false;
-    }
-    // скроем на всяки и дефолт тултип
-    QToolTip::hideText();
 }
 
 // !!! слота для обработки сигналов от LspManager !!!
@@ -688,6 +688,7 @@ void MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover()
         if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
             m_diagnosticTooltip->hide();
             m_isDiagnosticTooltipVisible = false;
+            m_currentlyShownTooltipPange = {-1, -1};
         }
         QToolTip::hideText();
         return;
@@ -698,52 +699,68 @@ void MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover()
     int currentPos = cursor.position();
 
     QString diagnosticMessage;
+    QPair<int, int> foundRange = {-1, -1}; // диапозон найденной диагностики
     QList<QTextEdit::ExtraSelection> currentSelections = m_codeEditor->extraSelections(); // они были установлены в updateDiagnosticsView
 
     // ищем первую диагностику под курсором
     for (const auto& selection : currentSelections) {
+        int selStart = selection.cursor.selectionStart();
+        int selEnd = selection.cursor.selectionEnd();
         // проверяем если ли у формата кастомное пользовательское свойство
         QVariant messageData = selection.format.property(QTextFormat::UserProperty + 1);
         if (messageData.isValid() && !messageData.toString().isEmpty()) {
-            if (currentPos >= selection.cursor.selectionStart() && currentPos < selection.cursor.selectionEnd()) {
+            if (currentPos >= selStart && currentPos <= selEnd) {
                 diagnosticMessage = messageData.toString();
+                foundRange = {selStart, selEnd};
                 break; // выходим, потому что показываем только первый найденный
             }
         }
     }
 
     // если тултип диагностики не показали, то обычный можно будет запросить
-    if (!diagnosticMessage.isEmpty()) {
-        qDebug() << "[HoverTimer] Diagnostic found:" << diagnosticMessage << ". Showing custom tooltip.";
-        // создаем тултип если его не было ешё
-        if (!m_diagnosticTooltip) {
-            m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
+    if (!diagnosticMessage.isEmpty()) { // нашли диагностику под мышкой
+        // проверяем, показываем ли мы ЭТУ ЖЕ диагностику или нет
+        if (m_isDiagnosticTooltipVisible && m_currentlyShownTooltipPange == foundRange) {
+            //qDebug() << "[HoverTimer]   Tooltip already visible for this range. Doing nothing.";
+            // не показываем, что уже есть, чтобы не перерисовывалось, не мерцало, но позицию курсора на всякий случай обновим
+            QPoint tooltipPos = m_diagnosticTooltip->calculateTooltipPosition(m_lastMousePosForHover);
+            m_diagnosticTooltip->move(tooltipPos);
+            return;
+        } else { // тултип или не виден или он для ДРУГОГО диапозона
+            qDebug() << "[HoverTimer]   Need to show/update tooltip for range:" << foundRange.first << "->" << foundRange.second;            // создаем тултип если его не было ешё
+            // if (!m_diagnosticTooltip) {
+            //     m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
 
-            // убедимся что создался
-            if (!m_diagnosticTooltip) {
-                qCritical() << "[HoverTimer] Failed to create DiagnosticTooltip!";
-                return;
+            //     // убедимся что создался
+            //     if (!m_diagnosticTooltip) {
+            //         qCritical() << "[HoverTimer] Failed to create DiagnosticTooltip!";
+            //         return;
+            //     }
+            // }
+
+            m_diagnosticTooltip->setText(diagnosticMessage);
+            //qDebug() << "[HoverTimer] Tooltip text set. Calculated size:" << m_diagnosticTooltip->sizeHint() << m_diagnosticTooltip->size(); // Посмотрим размер
+            // позиционируем рядом с мышкой
+            //QPoint tooltipPos = m_lastMousePosForHover + QPoint(10, 15); // чуть ниже и правее
+            QPoint tooltipPos = m_diagnosticTooltip->calculateTooltipPosition(m_lastMousePosForHover);
+            //qDebug() << "[HoverTimer] Moving tooltip to globalPos:" << tooltipPos;
+            m_diagnosticTooltip->move(tooltipPos);
+            //qDebug() << "[HoverTimer] Calling show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+            if (!m_isDiagnosticTooltipVisible) { // если не был виден, то показываем
+                m_diagnosticTooltip->show();
+                m_isDiagnosticTooltipVisible = true;
             }
+            m_currentlyShownTooltipPange = foundRange; // запоминаем, что показываем
+            //qDebug() << "[HoverTimer] After show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
+
+            QToolTip::hideText();
         }
-
-        m_diagnosticTooltip->setText(diagnosticMessage);
-        //qDebug() << "[HoverTimer] Tooltip text set. Calculated size:" << m_diagnosticTooltip->sizeHint() << m_diagnosticTooltip->size(); // Посмотрим размер
-        // позиционируем рядом с мышкой
-        QPoint tooltipPos = m_lastMousePosForHover + QPoint(10, 15); // чуть ниже и правее
-        // TODO: добавить чтобы за экране не уходил
-        //qDebug() << "[HoverTimer] Moving tooltip to globalPos:" << tooltipPos;
-        m_diagnosticTooltip->move(tooltipPos);
-        //qDebug() << "[HoverTimer] Calling show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
-        m_diagnosticTooltip->show();
-        m_isDiagnosticTooltipVisible = true;
-        //qDebug() << "[HoverTimer] After show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
-
-        QToolTip::hideText();
     } else {
         qDebug() << "[HoverTimer] No diagnostic found. Hiding custom tooltip and potentially requesting LSP hover.";
         if (m_diagnosticTooltip && m_isDiagnosticTooltipVisible) {
             m_diagnosticTooltip->hide();
             m_isDiagnosticTooltipVisible = false;
+            m_currentlyShownTooltipPange = {-1, -1};
             //qDebug() << "[HoverTimer] After hide(). Visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
         }
         QToolTip::hideText();

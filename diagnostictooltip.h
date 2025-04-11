@@ -13,9 +13,11 @@ public:
     explicit DiagnosticTooltip(QWidget *parent = nullptr);
     void setText(const QString &text);
     void setRichText(const QString &richText); // для форматирования
+    QPoint calculateTooltipPosition(const QPoint& globalMousePos);
 
 private:
     QLabel *m_label;
+    DiagnosticTooltip* m_diagnosticTooltip;
 };
 
 #endif

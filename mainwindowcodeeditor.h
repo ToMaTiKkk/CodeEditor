@@ -210,6 +210,7 @@ private:
     QPoint m_lastMousePosForHover; // последняя позиция мыши для hover (всплывашка)
     DiagnosticTooltip* m_diagnosticTooltip; // кастомный тултип
     bool m_isDiagnosticTooltipVisible;
+    QPair<int, int> m_currentlyShownTooltipPange; // startPos and endPos, храним диапозон информации, что сейчас показывает тултип
 
     // управление версиями и состоянии LSP для открытого файла
     QString m_currentLspFileUri; // URI текущего файла
