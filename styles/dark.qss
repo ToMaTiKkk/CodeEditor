@@ -7,6 +7,12 @@ QMainWindow {
     min-width: 25px;
     min-height: 25px;
 }
+#runButton {
+    background: transparent;
+    border: none;
+    min-width: 25px;
+    min-height: 25px;
+}
 QPushButton {
         background-color: rgb(92, 84, 165);
         color: white;
@@ -31,6 +37,10 @@ QWidget {
     color: rgb(255,255,255);
 }
 #chatButton:hover {
+    border: 1px solid rgb(92, 84, 155);
+    border-radius: 10px;
+}
+#runButton:hover {
     border: 1px solid rgb(92, 84, 155);
     border-radius: 10px;
 }

@@ -140,7 +140,7 @@
       </widget>
       <widget class="QWidget" name="horizontalWidget_2" native="true">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -217,6 +217,7 @@
      <string>Параметры</string>
     </property>
     <addaction name="actionToDoList"/>
+    <addaction name="actionTerminal"/>
     <addaction name="actionChangeTheme"/>
    </widget>
    <addaction name="menuFile"/>
@@ -251,6 +252,9 @@
   <action name="actionSave">
    <property name="text">
     <string>&amp;Сохранить</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
    </property>
   </action>
   <action name="actionSave_As">
@@ -310,6 +314,17 @@
   <action name="actionToDoList">
    <property name="text">
     <string>Открыть ToDo-List</string>
+   </property>
+  </action>
+  <action name="actionTerminal">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Терминал</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+`</string>
    </property>
   </action>
  </widget>
