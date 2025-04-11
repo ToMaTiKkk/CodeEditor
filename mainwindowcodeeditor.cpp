@@ -29,6 +29,8 @@
 #include <QTimer>
 #include <QStringList>
 #include <QToolTip>
+#include <QScreen>
+#include <QGuiApplication>
 
 // Константы для чата
 const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
@@ -723,26 +725,20 @@ void MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover()
         if (m_isDiagnosticTooltipVisible && m_currentlyShownTooltipPange == foundRange) {
             //qDebug() << "[HoverTimer]   Tooltip already visible for this range. Doing nothing.";
             // не показываем, что уже есть, чтобы не перерисовывалось, не мерцало, но позицию курсора на всякий случай обновим
-            QPoint tooltipPos = m_diagnosticTooltip->calculateTooltipPosition(m_lastMousePosForHover);
+            QPoint tooltipPos = calculateTooltipPosition(m_lastMousePosForHover);
             m_diagnosticTooltip->move(tooltipPos);
             return;
         } else { // тултип или не виден или он для ДРУГОГО диапозона
             qDebug() << "[HoverTimer]   Need to show/update tooltip for range:" << foundRange.first << "->" << foundRange.second;            // создаем тултип если его не было ешё
-            // if (!m_diagnosticTooltip) {
-            //     m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
-
-            //     // убедимся что создался
-            //     if (!m_diagnosticTooltip) {
-            //         qCritical() << "[HoverTimer] Failed to create DiagnosticTooltip!";
-            //         return;
-            //     }
-            // }
+            if (!m_diagnosticTooltip) {
+                qCritical() << "[HoverTimer] Error: m_diagnosticTooltip is NULL when trying to show diagnostic!";
+            }
 
             m_diagnosticTooltip->setText(diagnosticMessage);
-            //qDebug() << "[HoverTimer] Tooltip text set. Calculated size:" << m_diagnosticTooltip->sizeHint() << m_diagnosticTooltip->size(); // Посмотрим размер
+            qDebug() << "[HoverTimer] Tooltip text set. Calculated size:" << m_diagnosticTooltip->sizeHint() << m_diagnosticTooltip->size(); // Посмотрим размер
             // позиционируем рядом с мышкой
             //QPoint tooltipPos = m_lastMousePosForHover + QPoint(10, 15); // чуть ниже и правее
-            QPoint tooltipPos = m_diagnosticTooltip->calculateTooltipPosition(m_lastMousePosForHover);
+            QPoint tooltipPos = calculateTooltipPosition(m_lastMousePosForHover);
             //qDebug() << "[HoverTimer] Moving tooltip to globalPos:" << tooltipPos;
             m_diagnosticTooltip->move(tooltipPos);
             //qDebug() << "[HoverTimer] Calling show(). Current visible state:" << m_diagnosticTooltip->isVisible() << "isDiagnosticTooltipVisible flag:" << m_isDiagnosticTooltipVisible;
@@ -904,6 +900,62 @@ void MainWindowCodeEditor::updateDiagnosticsView()
     qDebug() << "[UPDATE_DIAG_VIEW] Setting" << extraSelections.count() << "extra selections to the editor.";
     // применяем созданный список подчеркиваний к редактору
     m_codeEditor->setExtraSelections(extraSelections);
+}
+
+
+QPoint MainWindowCodeEditor::calculateTooltipPosition(const QPoint& globalMousePos)
+{
+    if (!m_diagnosticTooltip) {
+        return globalMousePos + QPoint(10, 15); // базовое смещение если виджета нет
+    }
+
+    QSize tipSize = m_diagnosticTooltip->sizeHint(); // берем рекомендуемый размер
+    if (!tipSize.isValid()) {
+        tipSize = m_diagnosticTooltip->size(); // или текущий, если реккомендованный невалидный
+    }
+    if (!tipSize.isValid() || tipSize.isEmpty()) {
+        tipSize = QSize(200, 50); // запасной размер
+        m_diagnosticTooltip->resize(tipSize);
+    }
+
+    QPoint pos = globalMousePos + QPoint(10, 15); // начальная позиция
+    // получаем геометрию экрана где мышь
+    QScreen *screen = QGuiApplication::screenAt(globalMousePos);
+    if (!screen) {
+        // экран не определили, поэтому базовую позицию используем
+        qWarning() << "[CalcTooltipPos] Could not determine screen for position calculation.";
+        return pos;
+    }
+    QRect screenGeometry = screen->availableGeometry(); // доступная геометрия без панели задач и тп
+
+    // проверяем выход за правую границу
+    if (pos.x() + tipSize.width() > screenGeometry.right()) {
+        pos.setX(globalMousePos.x() - tipSize.width() - 10); // перемещаем влево от курсора
+        // праверим левую границу
+        if (pos.x() < screenGeometry.left()) {
+            pos.setX(screenGeometry.left()); //прижимаем к левому краю
+        }
+    }
+
+    // проверяем выход за нижнюю границу
+    if (pos.y() + tipSize.height() > screenGeometry.bottom()) {
+        pos.setY(globalMousePos.y() - tipSize.height() - 15); // перемещаем над курсором
+        // праверим верхнюю границу
+        if (pos.y() < screenGeometry.top()) {
+            pos.setY(screenGeometry.top()); //прижимаем к верхнему краю
+        }
+    }
+
+    // проверка на выход за левую или верхнюю грацниы если изначально сдвинули
+    if (pos.x() < screenGeometry.left()) {
+        pos.setX(screenGeometry.left());
+    }
+    if (pos.y() < screenGeometry.top()) {
+        pos.setY(screenGeometry.top());
+    }
+
+    qDebug() << "[CalcTooltipPos] Mouse:" << globalMousePos << "TipSize:" << tipSize << "Screen:" << screenGeometry << "ResultPos:" << pos;
+    return pos;
 }
 
 QString MainWindowCodeEditor::getFileUri(const QString& localPath) const
