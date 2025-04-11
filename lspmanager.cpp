@@ -435,12 +435,17 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
 {
     // извлекаем URI к которому относится диагностика
     QString fileUri = params["uri"].toString();
+    // ЛОГ: посмотрим на весь объект params, который пришел для этого URI
+    qDebug() << "[LSP_MANAGER_DEBUG] Raw JSON 'params' for publishDiagnostics URI" << fileUri << ":" << QJsonDocument(params).toJson(QJsonDocument::Compact);
     // проврека что даигностикс - массив
     QJsonValue diagnosticsValue = params.value("diagnostics");
+    // ЛОГ: проверим, является ли поле 'diagnostics' массивом
+    qDebug() << "[LSP_MANAGER_DEBUG] Is 'diagnostics' an array?" << diagnosticsValue.isArray();
     if (!diagnosticsValue.isArray()) {
         qWarning() << "LSP < Поле diagnostics не является массивом в publishDiagnostics";
         return;
     }
+
     // извлекаем массив джсон-объекто, которые описывают диагностии
     QJsonArray diagsArray = params["diagnostics"].toArray();
     // создаем список наших структур LspDiagnostic для хранения результата
@@ -448,21 +453,31 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
 
     // проходимя по каждому элементу массива диагностики от сервера
     for (const QJsonValue& val : diagsArray) {
-        if (!val.isObject()) continue; //пропуска не-объекты
+        if (!val.isObject()) {
+            qWarning() << "[LSP_MANAGER_WARNING] Element in 'diagnostics' array is not an object:" << val;
+            continue; //пропуска не-объекты
+        }
         QJsonObject diagObj = val.toObject();
+        qDebug() << "[LSP_MANAGER_DEBUG] Parsing diag object:" << QJsonDocument(diagObj).toJson(QJsonDocument::Compact);
         // проверяем наличие вложенных объектов
         QJsonValue rangeVal = diagObj.value("range");
-        if (!rangeVal.isObject()) continue;
-        QJsonObject range = diagObj["range"].toObject(); // где находится проблема
-        QJsonValue startVal = diagObj.value("start");
-        QJsonValue endVal = diagObj.value("end");
-        if (!startVal.isObject() || !endVal.isObject()) continue;
+        if (!rangeVal.isObject()) {
+            qWarning() << "[LSP_MANAGER_WARNING] 'range' field is missing or not an object in diagnostic:" << QJsonDocument(diagObj).toJson(QJsonDocument::Compact);
+            continue;
+        }
+        QJsonObject range = rangeVal.toObject(); // где находится проблема
+        QJsonValue startVal = range.value("start");
+        QJsonValue endVal = range.value("end");
+        if (!startVal.isObject() || !endVal.isObject()) {
+             qWarning() << "[LSP_MANAGER_WARNING] 'start' or 'end' field is missing or not an object in range:" << QJsonDocument(range).toJson(QJsonDocument::Compact);
+            continue;
+        }
         QJsonObject start = range["start"].toObject(); // начало диапозона
         QJsonObject end = range["end"].toObject(); // конец диапозона
         
         // создаем структуру LspDiagnostic и заполняем данными из джсон
         LspDiagnostic diag;
-        diag.message = diagObj["message"].toString(); // текст ошибки
+        diag.message = diagObj.value("message").toString(); // текст ошибки
         QJsonValue severityVal = diagObj.value("severity");
         diag.severity = severityVal.isDouble() ? severityVal.toInt(3) : 3; // серьезность может отсутствовать, по умолчанию Info (3)
 
@@ -476,10 +491,10 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
             continue;
         }
 
-        diag.startLine = start["line"].toInt(); // строка начала
-        diag.startChar = start["character"].toInt(); // символ начала
-        diag.endLine = end["line"].toInt(); // строка конца
-        diag.endChar = end["character"].toInt(); // символ конца
+        diag.startLine = startLineVal.toInt(); // строка начала
+        diag.startChar = startCharVal.toInt(); // символ начала
+        diag.endLine = endLineVal.toInt(); // строка конца
+        diag.endChar = endCharVal.toInt(); // символ конца
 
         // добавляем заполненную карточку
         diagnosticsList.append(diag);
@@ -833,6 +848,14 @@ int LspManager::lspPosToEditorPos(QTextDocument *doc, int line, int character)
         return qMin(lineStartPosition + posInLine, doc->characterCount() - 1);
     }
     
+    // <<< ЛОГ ВНУТРИ КОНВЕРТЕРА >>>
+    QString blockText = tb.text(); // Получим текст строки для лога
+    qDebug() << "[lspPosToEditorPos] Input line:" << line << "char:" << character
+             << " -> Found block:" << tb.blockNumber() << "startPos:" << lineStartPosition
+             << "length:" << tb.length() << "text: '" << blockText.left(20) << "...'" // Показать начало текста
+             << " -> Calculated EditorPos:" << (lineStartPosition + character);
+    // <<< КОНЕЦ ЛОГА >>>
+
     return lineStartPosition + posInLine;
     // for (int pos = 0; pos < text.length(); ++pos) {
     //     // если мы на нужной строке и на нужном символе

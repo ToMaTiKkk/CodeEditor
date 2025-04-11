@@ -409,7 +409,7 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
                     qDebug() << "[COMPL_FILTER] -> Handled PageDown";
                     break;
                 case Qt::Key_Return:
-                case Qt::Key_Enter:
+                //case Qt::Key_Enter:
                 case Qt::Key_Tab:
                     m_completionWidget->triggerSelection(); // он скроет виджет и вызовет applyCompletion
                     qDebug() << "[COMPL_FILTER] -> Handled Select (Enter/Tab)";
@@ -548,11 +548,16 @@ void MainWindowCodeEditor::onLspServerError(const QString& message)
 void MainWindowCodeEditor::onLspDiagnosticsReceived(const QString& fileUri, const QList<LspDiagnostic>& diagnostics)
 {
     // сохраняем диагностики для данного файла
-    m_diagnostics[fileUri] = diagnostics;
+    //m_diagnostics[fileUri] = diagnostics;
 
     // если диагностики пришла для ТЕКУЩЕГо открытого файла, то обновляем UI
-    if (fileUri == m_currentLspFileUri) {
+    if (QUrl(fileUri) == QUrl(m_currentLspFileUri)) {
+        qDebug() << "[DIAG] Соответствует URI. Обновляем диагностики и их отображения";
+        m_diagnostics[QUrl(m_currentLspFileUri).toString()] = diagnostics;
         updateDiagnosticsView();
+    } else {
+        qDebug() << "[DIAG] URI НЕ соответствует! Получен:" << QUrl(fileUri).toString() << "Ожидаемый:" << QUrl(m_currentLspFileUri).toString();
+        m_diagnostics[QUrl(fileUri).toString()] = diagnostics; // сохраняем на всякий
     }
 }
 
@@ -708,31 +713,53 @@ void MainWindowCodeEditor::triggerDefinitionRequest()
 // обновляет подчеркивания ошибок в редакторе
 void MainWindowCodeEditor::updateDiagnosticsView()
 {
-    if (!m_codeEditor || !m_lspManager) return;
+    if (!m_codeEditor || !m_lspManager) {
+        qDebug() << "[UPDATE_DIAG_VIEW] Aborted: editor or lspManager is null.";
+        return;
+    }
+
+    // Получаем актуальный URI для логов
+    QString currentUriStr = QUrl(m_currentLspFileUri).toString();
+    qDebug() << "[UPDATE_DIAG_VIEW] Called for URI:" << currentUriStr;
 
     QList<QTextEdit::ExtraSelection> extraSelections; // список подчеркивания
     // берем диагностики для ТЕКУЩЕГо файла из хранилища
-    const QList<LspDiagnostic>& currentFileDiagnostics = m_diagnostics.value(m_currentLspFileUri);
+    const QList<LspDiagnostic>& currentFileDiagnostics = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+
+    qDebug() << "[UPDATE_DIAG_VIEW] Diagnostics count found in map:" << currentFileDiagnostics.count();
 
     for (const LspDiagnostic& diag : currentFileDiagnostics) {
+        qDebug() << "[UPDATE_DIAG_VIEW] Processing diag: msg='" << diag.message
+                 << "', line:" << diag.startLine << ", char:" << diag.startChar
+                 << "-> line:" << diag.endLine << ", char:" << diag.endChar
+                 << ", severity:" << diag.severity;
+
         QTextEdit::ExtraSelection selection;
 
         // устанавливаем цвет и стиль подчеркивания
         QColor color;
+        QTextCharFormat::UnderlineStyle style = QTextCharFormat::WaveUnderline; // оставим волнистую или выберем другую
+        QColor backgroundColor = Qt::transparent; // по умолчанию прозрачный
         if (diag.severity == 1){
-            color = Qt::red; // Error
+            color = QColor(255, 80, 80); // Error
+            backgroundColor = QColor(255, 0, 0, 20); // красный с низкой прозрачностью
         } else if (diag.severity == 2) {
-            color = QColor(255, 165, 0); // Warning (оранж)
+            color = QColor(255, 190, 0); // Warning (оранж)
+            backgroundColor = QColor(255, 190, 0, 20);
         } else if (diag.severity == 3) {
-            color = Qt::blue; // Info
+            color = QColor(100, 150, 255); // Info
+            style = QTextCharFormat::DotLine;
         } else {
             color = Qt::gray;
+            style = QTextCharFormat::DotLine;
         }
 
+        selection.format.setBackground(backgroundColor);
         selection.format.setUnderlineColor(color);
-        selection.format.setUnderlineStyle(QTextCharFormat::WaveUnderline); // волнистая линия
+        selection.format.setUnderlineStyle(style);
+        selection.format.setProperty(QTextFormat::FullWidthSelection, true); // Попробуем на всякий случай
 
-        // устанавливаем курсор на диапозон диагностики
+        // КОНВЕРТАЦИЯ устанавливаем курсор на диапозон диагностики
         int startPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), diag.startLine, diag.startChar);
         int endPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), diag.endLine, diag.endChar);
 
@@ -740,17 +767,28 @@ void MainWindowCodeEditor::updateDiagnosticsView()
         if (startPos != -1 && endPos != -1 && startPos <= endPos) {
             QTextCursor cursor(m_codeEditor->document());
             cursor.setPosition(startPos);
+            if (startPos == endPos && endPos < m_codeEditor->document()->characterCount() -1) {
+                qDebug() << "[UPDATE_DIAG_VIEW]   Zero-length range, extending endPos by 1 (tentative).";
+                endPos++; // если сервер дает что начало равно концу для одного символа
+            }
+
             // выделяем текст от начала до конца
             cursor.setPosition(endPos, QTextCursor::KeepAnchor);
-            selection.cursor = cursor;
-            selection.format.setToolTip(QString("[%1] %2").arg(diag.severity).arg(diag.message));
-
-            extraSelections.append(selection);
+            if (cursor.isNull()) {
+                qWarning() << "[UPDATE_DIAG_VIEW]   Failed to create valid cursor for positions:" << startPos << "->" << endPos;
+            } else {
+                selection.cursor = cursor;
+                // добавим само сообщение в тултип
+                selection.format.setToolTip(QString("[%1] %2").arg(diag.severity).arg(diag.message));
+                 qDebug() << "[UPDATE_DIAG_VIEW]   Added ExtraSelection with range:" << selection.cursor.selectionStart() << "->" << selection.cursor.selectionEnd() << "and tooltip:" << selection.format.toolTip();
+                extraSelections.append(selection);
+            }
         } else {
             qWarning() << "Не удалось отобразить диагностику: неверный диапозон" << diag.startLine << diag.startChar << "-" << diag.endLine << diag.endChar;
         }
     }
 
+    qDebug() << "[UPDATE_DIAG_VIEW] Setting" << extraSelections.count() << "extra selections to the editor.";
     // применяем созданный список подчеркиваний к редактору
     m_codeEditor->setExtraSelections(extraSelections);
 }
