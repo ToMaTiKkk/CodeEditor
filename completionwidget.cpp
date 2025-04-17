@@ -202,6 +202,7 @@ CompletionWidget::~CompletionWidget() {
     m_filterCache.clear();
 }
 
+// загружает данные 
 // храним LspCompletionItemd целиком, чтобы иметь доступ ко всем данным при выборе/филтрации
 void CompletionWidget::updateItems(const QList<LspCompletionItem>& items)
 {
@@ -240,10 +241,11 @@ void CompletionWidget::updateItems(const QList<LspCompletionItem>& items)
     adjustSize(); // может помочь с авто-размером
 }
 
-// фильтрация
+// фильтрует и отображение
 void CompletionWidget::filterItems(const QString& prefix)
 {
     qDebug() << "Филтрация по префиксу:" << prefix;
+    m_filterCache.clear();
     
     if (m_originalItems.isEmpty()) {
         hide();
@@ -276,11 +278,12 @@ void CompletionWidget::filterItems(const QString& prefix)
             }
         }
     } else {
+        qDebug() << "-----------------------------FDKJFHKJDSHFKJHDSJFHJDSHFJHDS";
         // выполняем фильтрацию
         QList<FilterResult> results = performFiltering(prefix);
         // кэшируем резы
         m_filterCache.insert(prefix, new QList<FilterResult>(results), results.size());
-
+        qDebug() << "filterItems: Перед циклом по результатам. Количество:" << results.count(); // <-- ДОБАВИТЬ
         // применяем резы
         const QSignalBlocker blocker(this); // блокируем сигналы на время обновы
         clear();
@@ -296,7 +299,8 @@ void CompletionWidget::filterItems(const QString& prefix)
                     tooltip += "\n---\n" + result.lspItem.documentation;
                 }
                 // для отладки показываем балл фильтрации
-                tooltip += QString("\nРелевантность: %1%").arg(result.score);
+                tooltip += QString("\nРелевантность: %1% (%2)").arg(result.score).arg(result.debugInfo);
+                qDebug() << QString("\nРелевантность: %1% (%2)").arg(result.score).arg(result.debugInfo);
                 listItem->setToolTip(tooltip);
 
                 // заполянем данные
@@ -306,11 +310,14 @@ void CompletionWidget::filterItems(const QString& prefix)
         }
     }
 
+    qDebug() << "COUNT COMPLETION WIDGET:" << count();
     // показывем или скрываем виджет в зависимости от реза
     if (count() > 0) {
         setCurrentRow(0);
         scrollToItem(currentItem(), QAbstractItemView::PositionAtTop);
+        qDebug() << "COUNT > 0";
         if (!isVisible()) {
+            qDebug() << "******************* SHOWING COMPLETION WIDGET";
             show();
         }
     } else {
@@ -342,22 +349,77 @@ QList<FilterResult> CompletionWidget::performFiltering(const QString& query) {
         return results;
     }
 
-    // фильтруем с использванием выбранной стратегии
-    for (const auto& item : m_originalItems) {
-        int score = m_currentStrategy->match(query, item);
+    // используем временные хранилища результатов от каждой стратегии
+    // QHash<QString, int> prefixScores;
+    // QHash<QString, int> fuzzyScores;
+    // QHash<QString, int> contextScores;
 
-        if (score >= m_filterThreshold) {
+    // получаем баллы от каждой стретегии для всех эелемнетов
+    for (const auto& item : m_originalItems) {
+        int currentPrefixScore = 0;
+        int currentFuzzyScore = 0;
+        int currentContextScore = 0;
+        // проверяем каждую стратегию
+        for (const auto& strategy : m_filterStrategies) {
+            int score = strategy->match(query, item);
+            qDebug() << "   Item:" << item.label << "Strategy:" << strategy->name() << "Raw Score:" << score;
+
+            // сохраняем резы в соответствующий хеш по имени стратегии
+            if (strategy->name() == "Префикс") {
+               // prefixScores[item.label] = score;
+               currentPrefixScore = score; 
+            } else if (strategy->name() == "Нечеткая фильтрация") {
+                //fuzzyScores[item.label] = score;
+                currentFuzzyScore = score;
+            } else if (strategy->name() == "Контекстный") {
+                //contextScores[item.label] = score;
+                currentContextScore = score;
+            }
+        }
+
+        // вычисляем взвешенный общий балл
+        // float combinedScore = 
+        //     m_prefixWeight * prefixScores.value(item.label, 0) +
+        //     m_fuzzyWeight * fuzzyScores.value(item.label, 0) +
+        //     m_contextWeight * contextScores.value(item.label, 0);
+        // Вычисляем взвешенный общий балл
+        float combinedScore = 
+            m_prefixWeight * currentPrefixScore + // Теперь переменные объявлены
+            m_fuzzyWeight * currentFuzzyScore +   // и им присвоены значения
+            m_contextWeight * currentContextScore;
+        
+        // округляем до целого числа
+        int finalScore = qRound(combinedScore);
+        // Отладка итогового балла
+        qDebug() << "    -> Final Score:" << finalScore 
+        << QString(" (P:%1*%.1f + F:%2*%.1f + C:%3*%.1f)")
+        .arg(currentPrefixScore).arg(m_prefixWeight)
+        .arg(currentFuzzyScore).arg(m_fuzzyWeight)
+        .arg(currentContextScore).arg(m_contextWeight); // <-- ДОБАВИТЬ
+        
+        // если итоговый балл выше порого, то рез добавляем
+        if (finalScore >= m_filterThreshold) {
             FilterResult result;
             result.lspItem = item;
             result.item = nullptr;
-            result.score = score;
+            result.score = finalScore;
+
+            // отладочная инфа с сохранением отдельных баллов
+            //result.debugInfo = QString("П:%1 Н:%2 K:%3").arg(prefixScores.value(item.label, 0)).arg(fuzzyScores.value(item.label, 0)).arg(contextScores.value(item.label, 0));
+            // Отладочная инфа с сохранением отдельных баллов
+            result.debugInfo = QString("П:%1 Н:%2 К:%3")
+                                   .arg(currentPrefixScore) // Используем переменные
+                                   .arg(currentFuzzyScore)
+                                   .arg(currentContextScore);
             results.append(result);
+            qDebug() << "      --> ADDED:" << item.label << "Score:" << finalScore; // <-- ДОБАВИТЬ
         }
     }
 
     // сортируем результуты по убывани баллов
     std::sort(results.begin(), results.end());
-
+    //std::sort(results.begin(), results.end());
+    qDebug() << "performFiltering: Завершено. Найдено результатов:" << results.count() << " для запроса:" << query; // <-- ДОБАВИТЬ
     return results;
 }
 

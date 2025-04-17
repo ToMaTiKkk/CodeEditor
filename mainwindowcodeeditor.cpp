@@ -635,33 +635,50 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
 {
     if (!m_codeEditor) return;
 
-    if (!m_completionWidget || items.isEmpty()) {
-        if (m_completionWidget) {
-            m_completionWidget->hide();
-        }
+    if (!m_completionWidget) {
+        // if (m_completionWidget) {
+        //     m_completionWidget->hide();
+        // }
         return;
     }
 
-    // вычисление позиции
-    QRect currentCursorRect = m_codeEditor->cursorRect(); // получаем актуальную позицию курсора
-    // преобразуем координаты в глобальные координаты экрана
-    QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(currentCursorRect.bottomLeft());
+    // получаем текущей префикс из редактора
+    QTextCursor currentCursor = m_codeEditor->textCursor();
+    QString currentPrefix = getPrefixBeforeCursor(currentCursor);
 
     // заполняем виджет автодополнения данными
     m_completionWidget->updateItems(items);
 
-    // устанавливаем геометрию (позицию и размер виджета)
-    int width = m_completionWidget->sizeHintForColumn(0) + m_codeEditor->verticalScrollBar()->width() + 10; // запа сна скроллбар виджета и отступы
-    width = qMax(300, width); // минимальная ширина
-    int height = m_completionWidget->sizeHintForRow(0) * qMin(10, m_completionWidget->count()) + 5; // высота примерно 10 элементов + рамка
-    height = qMin(300, height); // максимальная высота, что не перекрывать полэкрана
-    m_completionWidget->setGeometry(globalPos.x(), globalPos.y(), width, height);
+    // фильтруем, передаем префикс, по которому фильтровать
+    m_completionWidget->filterItems(currentPrefix);
 
-    m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
-    m_completionWidget->show();
-    m_completionWidget->raise(); //поверх других виджетов
-    //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
-    //qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
+    // adjustSize() внутри filterItems может изменить размер
+    if (m_completionWidget) {
+         // вычисление позиции
+        QRect currentCursorRect = m_codeEditor->cursorRect(); // получаем актуальную позицию курсора
+        // преобразуем координаты в глобальные координаты экрана
+        QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(currentCursorRect.bottomLeft());
+        
+        // используем актуальное колличество строк после фильтрации
+        int visibleItemCount = m_completionWidget->count();
+
+        // устанавливаем геометрию (позицию и размер виджета)
+        int width = m_completionWidget->sizeHintForColumn(0) + m_codeEditor->verticalScrollBar()->sizeHint().width() + 15; // запа сна скроллбар виджета и отступы
+        width = qMax(300, qMin(width, m_codeEditor->viewport()->width() - 20)); // min/max ширина, но не шире редактора
+        int height = m_completionWidget->sizeHintForRow(0) * qMin(10, visibleItemCount) + m_completionWidget->frameWidth() * 2; // высота примерно 10 элементов + рамка
+        height = qMin(qMax(height, m_completionWidget->sizeHintForRow(0) + m_completionWidget->frameWidth() * 2), 300); // min/max высота
+        m_completionWidget->setGeometry(globalPos.x(), globalPos.y(), width, height);
+
+        // подимаем виджет если он видим (чтобы поверх был)
+        if (m_completionWidget->isVisible()) {
+            m_completionWidget->raise(); //поверх других виджетов
+        }
+        
+        m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
+        //m_completionWidget->show();
+        //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
+        //qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
+    }
 }
 
 void MainWindowCodeEditor::onLspHoverReceived(const LspHoverInfo& hoverInfo)
@@ -1009,6 +1026,17 @@ QString MainWindowCodeEditor::getFileUri(const QString& localPath) const
 QString MainWindowCodeEditor::getLocalPath(const QString& fileUri) const
 {
     return QUrl(fileUri).toLocalFile();
+}
+
+QString MainWindowCodeEditor::getPrefixBeforeCursor(const QTextCursor& cursor) {
+    int pos = cursor.positionInBlock();
+    QString text = cursor.block().text();
+    int startPos = pos - 1;
+    while (startPos >= 0 && (text[startPos].isLetterOrNumber() || text[startPos] == '_')) {
+        startPos--;
+    }
+    startPos++;
+    return text.mid(startPos, pos - startPos);
 }
 
 // !!! слоты для обработки сигналов сессий !!!

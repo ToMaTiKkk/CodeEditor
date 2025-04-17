@@ -55,6 +55,7 @@ struct FilterResult {
     QListWidgetItem* item;
     LspCompletionItem lspItem;
     int score; // 0-100
+    QString debugInfo; // для отображения отдельных оценок
 
     bool operator<(const FilterResult& other) const {
         return score > other.score; // для сортировки по убыванию
@@ -84,16 +85,16 @@ public:
     void navigatePageUp();
     void navigatePageDown();
 
-    // // метод для настрйоки весов
-    // void setStrategyWeights(float prefix, float fuzzy, float context) {
-    //     float sum = prefix + fuzzy + context;
-    //     if (sum > 0) {
-    //         // нормализуем веса, чтобы сумма была равна 1
-    //         m_prefixWeight = prefix / sum;
-    //         m_fuzzyWeight = fuzzy / sum;
-    //         m_contextWeight = context / sum;
-    //     }
-    // }
+    // метод для настрйоки весов
+    void setStrategyWeights(float prefix, float fuzzy, float context) {
+        float sum = prefix + fuzzy + context;
+        if (sum > 0) {
+            // нормализуем веса, чтобы сумма была равна 1
+            m_prefixWeight = prefix / sum;
+            m_fuzzyWeight = fuzzy / sum;
+            m_contextWeight = context / sum;
+        }
+    }
 
 signals:
     void completionSelected(const QString& textToInsert); // сигнал о выборе
@@ -125,9 +126,9 @@ private:
     void updateContext();
 
     // веса дял стратегий фильтрации (в сумме 1.0)
-    // float m_prefixWeight = 0.3f; // 30% влияний префиксной фильтрации
-    // float m_fuzzyWeight = 0.4f; // для нечеткйо стратегии
-    // float m_contextWeight = 0.3f; // контекстной стратегии
+    float m_prefixWeight = 0.3f; // 30% влияний префиксной фильтрации
+    float m_fuzzyWeight = 0.4f; // для нечеткйо стратегии
+    float m_contextWeight = 0.3f; // контекстной стратегии
 
     int findNextVisibleRow(int startRow, int step); // найти следующий или предыдущий видимый
 };
