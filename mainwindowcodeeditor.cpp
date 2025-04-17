@@ -673,7 +673,7 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
         if (m_completionWidget->isVisible()) {
             m_completionWidget->raise(); //поверх других виджетов
         }
-        
+
         m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
         //m_completionWidget->show();
         //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
@@ -735,11 +735,44 @@ void MainWindowCodeEditor::applyCompletion(const QString& textToInsert)
     if (!m_codeEditor) return;
 
     QTextCursor cursor = m_codeEditor->textCursor();
-    // TODO: более умная вставка, чтобы может указывался диапозон который нужно заменить и какой текст вставить
-    // просто вставляем как есть
+    // ----- логика удаление префикса
+    int currentPos = cursor.position();
+    // перемещаем куроср назад для анализа символов перед ним
+    cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor); // в начало строки для получения текста блока
+    QString blockText = cursor.block().text();
+    int posInBlock = currentPos - cursor.position(); // позиция внутри блока
+
+    // ищем начало префикса (слова) 
+    int startPosInBlock = posInBlock - 1;
+    while (startPosInBlock >= 0 && (blockText[startPosInBlock].isLetterOrNumber() || blockText[startPosInBlock] == '_')) {
+        startPosInBlock--;
+    }
+    startPosInBlock++; // передвигаемся на первый символ слова
+
+    int prefixLength = posInBlock - startPosInBlock;
+
+    if (prefixLength > 0) {
+        // восстанавливаем исходную позицию
+        cursor.setPosition(currentPos);
+        // выделяем префикс двигаясь назада от текущей позиции
+        cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor, prefixLength);
+        // удаляем префикс
+        cursor.removeSelectedText();
+    } else {
+        // если префикса нет (автодоп на пустом месте), то просто вернем в исодную позицию
+        cursor.setPosition(currentPos);
+    }
+    
+    // вставка текста
     cursor.insertText(textToInsert);
+    m_codeEditor->setTextCursor(cursor); // устанавливаем курсор после текста вставленного
     m_codeEditor->setFocus(); // возвращаем фокус редактору
     qDebug() << "[applyCompletion] Completion applied, focus set to m_codeEditor";
+    
+    // скрываем виджет если он ещё виден
+    if (m_completionWidget && m_completionWidget->isVisible()) {
+        m_completionWidget->hide();
+    }
 }
 
 void MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover()
