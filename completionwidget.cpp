@@ -4,13 +4,13 @@
 #include <QApplication> // для QApplication::sendEvent
 #include <QTextBlock>
 #include <QTimer>
-#include <algorithm>
+#include <algorithm> // std::sort
 #include <functional>
 
 // реализация PrefixFilterStrategy
-int PrefixFilterStrategy::match(const QString& query, const LspCompletionItem& item) const {
+int PrefixFilterStrategy::match(const QString& query, const LspCompletionItem& item, const CompletionScoringConfig& config) const {
     if (query.isEmpty()) {
-        return 100; // если запрос пустой, все элементы подходят
+        return config.prefixExactMatchScore; // если запрос пустой, все элементы подходят
     }
 
     QString label = item.label.toLower();
@@ -19,168 +19,207 @@ int PrefixFilterStrategy::match(const QString& query, const LspCompletionItem& i
     // прямое совпадение с началом строки
     if (label.startsWith(q)) {
         if (label.length() == q.length()) {
-            return 100;
+            return config.prefixExactMatchScore; // 100
         }
-        // чем ближе длина запроса к длине элемента, тем выше балл
-        return 80 + 20 * q.length() / label.length();
+        // начинается с запроса но длинне
+        int score = config.prefixStartMatchBase + config.prefixStartLengthBonusScale * q.length() / label.length();
+        // ограничивает сверху точным совпадением
+        return qMin(config.prefixExactMatchScore, score);
     }
 
     // если не с начала строки, но запрос содержит
     if (label.contains(q)) {
         // чем ближе к началу тем выше балл
         int pos = label.indexOf(q);
-        int score = 50 - (pos * 40 / qMax(1, label.length()));
-        return qMax(10, score); // минимум 10 баллов если содержит
+        // базовый блл минус штраф за позицию
+        int score = config.prefixContainsBase - config.prefixContainsPosPenaltyScale * pos / qMax(1, label.length());
+        return qMax(config.prefixMinScoreIfContains, score); // минимум 10 баллов если содержит
     }
 
     // поиск по словам (CamelCase/snake_case)
     QStringList words;
-    QString word;
-    for (int i = 0; i < label.length(); ++i) {
-        if (label[i].isUpper() || label[i] == '_') {
-            if (!word.isEmpty()) {
-                words.append(word);
-                word.clear();
+    QString currentWord;
+    for (int i = 0; i < label.length(); ++i) { // используем ориг лейбл для CamelCase
+        QChar c = item.label[i];
+        if (c.isUpper() && i > 0) { // нашли заглавную но не первую
+            if (!currentWord.isEmpty()) {
+                words.append(currentWord.toLower());
             }
-            if (label[i] != '_') {
-                word += label[i];
+            currentWord = c;
+        } else if (c == '_') { // нашли разделитель
+            if (!currentWord.isEmpty()) {
+                words.append(currentWord.toLower());
             }
+            currentWord.clear();
         } else {
-            word += label[i];
+            currentWord += c;
         }
     }
-    if (!word.isEmpty()) {
-        words.append(word);
+    if (!currentWord.isEmpty()) {
+        words.append(currentWord.toLower());
     }
 
     // проверяем начинается ли какое либо слово с запроса
     for (const QString& w : words) {
         if (w.startsWith(q)) {
-            return 60; // неплохое совпаени, но не с начала
+            return config.prefixWordStartMatchScore; // неплохое совпаени, но не с начала
         }
     }
 
-    return 0; // не подходит
+    return 0; // не подходит ни по одному критерию
 }
 
 // реализация FuzzyFilterStrategy
-int FuzzyFilterStrategy::match(const QString& query, const LspCompletionItem& item) const {
+int FuzzyFilterStrategy::match(const QString& query, const LspCompletionItem& item, const CompletionScoringConfig& config) const {
     if (query.isEmpty()) {
-        return 100;
+        return config.fuzzyExactMatchScore; //100
     }
 
-    QString label = item.label;
-    int baseScore = calculateFuzzyScore(query.toLower(), label.toLower());
+    int baseScore = calculateFuzzyScore(query.toLower(), item.label.toLower(), config);
 
-    // проверяем документации, но с меньшим весом
-    if (!item.documentation.isEmpty()) {
-        int docScore = calculateFuzzyScore(query.toLower(), item.documentation.toLower()) / 2;
-        baseScore = qMax(baseScore, docScore);
+    // проверяем документации, применяем множитель
+    if (!item.documentation.isEmpty() && config.fuzzyDocMatchMultiplier > 0) {
+        int docScore = calculateFuzzyScore(query.toLower(), item.documentation.toLower(), config);
+        baseScore = qMax(baseScore, static_cast<int>(docScore * config.fuzzyDocMatchMultiplier));
     }
 
-    // проверяем детали с ещё меньшим весом
-    if (!item.detail.isEmpty()) {
-        int detailScore = calculateFuzzyScore(query.toLower(), item.detail.toLower()) / 3;
-        baseScore = qMax(baseScore, detailScore);
+    // проверяем детали, применяем множитель
+    if (!item.detail.isEmpty() && config.fuzzyDetailMatchMultiplier > 0) {
+        int detailScore = calculateFuzzyScore(query.toLower(), item.detail.toLower(), config);
+        baseScore = qMax(baseScore, static_cast<int>(detailScore * config.fuzzyDetailMatchMultiplier));
     }
 
     return baseScore;
 }
 
-int FuzzyFilterStrategy::calculateFuzzyScore(const QString& query, const QString& target) const {
+int FuzzyFilterStrategy::calculateFuzzyScore(const QString& query, const QString& target, const CompletionScoringConfig& config) const {
     if (query.isEmpty()) {
-        return 100;
+        return config.fuzzyExactMatchScore; //100
     }
     if (target.isEmpty()) {
         return 0;
     }
     // точно совпадение
     if (target == query) {
-        return 100;
+        return config.fuzzyExactMatchScore; //100
     }
-    // если содержит как подстановку
+    // содержит как префикс
+    if (target.startsWith(query)) {
+        int score = config.fuzzyPrefixMatchBase + config.fuzzyPrefixLengthBonusScale * query.length() / target.length();
+        return qMin(config.fuzzyExactMatchScore, score); // ограничиваем 100
+    }
+    // если содержит как подстроку (не в начале)
     if (target.contains(query)) {
-        // в начале строки - выше балл
-        if (target.startsWith(query)) {
-            return 90 + 10 * query.length() / target.length();
-        }
-
-        // в середине - средний балл
-        return 70 + 10 * query.length() / target.length();
+        int score = config.fuzzyPrefixMatchBase + config.fuzzyPrefixLengthBonusScale * query.length() / target.length();
+        // ограничиваем баллом чуть ниже префиксного совпадения
+        return qMin(config.fuzzyPrefixMatchBase > 0 ? config.fuzzyPrefixMatchBase - 1 : 0, score);
     }
 
     // АЛГОРИТМ нечеткого соответствия
     // находим все символа запроса в порядке их следование в target
     int targetIndex = 0;
-    int matched = 0;
+    int queryIndex = 0;
+    int firstMatchIndex = -1;
+    int lastMatchIndex = -1;
 
-    for (int i = 0; i < query.length(); ++i) {
-        bool found = false;
-        for (int j = targetIndex; j < target.length(); ++j) {
-            if (query[i].toLower() == target[j].toLower()) {
-                // нашли совпадение
-                targetIndex = j + 1;
-                matched++;
-                found = true;
-                break;
+    while(queryIndex < query.length() && targetIndex < target.length()) {
+        if (query[queryIndex] == target[targetIndex]) {
+            if (firstMatchIndex == -1) {
+                firstMatchIndex = targetIndex;
             }
+            lastMatchIndex = targetIndex;
+            queryIndex++;
         }
-        if (!found) break;
+        targetIndex++;
     }
 
     // все символы найдены в правильном порядке
-    if (matched == query.length()) {
+    if (queryIndex == query.length()) {
         // рассчитываем балл в зависимости от плотности совпадения
-        float density = static_cast<float>(query.length()) / targetIndex;
-        return 50 + static_cast<int>(density * 40);
+        int matchLength = lastMatchIndex - firstMatchIndex + 1;
+        float density = (matchLength > 0) ? static_cast<float>(query.length()) / matchLength : 1.0f;
+        int score = config.fuzzySequentialMatchBase + static_cast<int>(density * config.fuzzySequentialDensityScale);
+        return qMin(config.fuzzyExactMatchScore, score);
     }
 
-    // частичное совпадение
-    float partialMatch = static_cast<float>(matched) / query.length();
-    return static_cast<int>(partialMatch * 40);
+    // частичное совпадение (найдена только часть символов)
+    float partialMatchRatio = static_cast<float>(queryIndex) / query.length();
+    int score = static_cast<int>(partialMatchRatio * config.fuzzyPartialMatchScale);
+    // ограничиваем баллом ниде нечеткого совпадения
+    return qMin(config.fuzzySequentialMatchBase > 0 ? config.fuzzySequentialMatchBase - 1 : 0, score);
 }
 
 // реализация ContextFIlterStrategy
-int ContextFilterStrategy::match(const QString& query, const LspCompletionItem& item) const {
+int ContextFilterStrategy::match(const QString& query, const LspCompletionItem& item, const CompletionScoringConfig& config) const {
     // базовое совпадение с использованием нечеткого поиска
     FuzzyFilterStrategy fuzzy;
-    int baseScore = fuzzy.match(query, item);
+    int baseScore = fuzzy.match(query, item, config);
 
     // учитываем испторию использования
     int usageCount = m_usageCount.value(item.label, 0);
-    int usageBonus = qMin(20, usageCount * 5); // до 20% бонус за частое использование
+    int usageBonus = qMin(config.contextMaxUsageBonus, usageCount * config.contextUsageBonusScale); // до 20% бонус за частое использование
 
     // учитываем тип элемента (kind) (функция, переменная и др)
     int kindBonus = 0;
+    // значение LSP kind (ПРОВЕРИТЬ !!!!)
+    constexpr int LSP_KIND_FUNCTION = 3;
+    constexpr int LSP_KIND_METHOD = 2;
+    constexpr int LSP_KIND_VARIABLE = 6;
+    constexpr int LSP_KIND_FIELD = 5; //поле класса
+    constexpr int LSP_KIND_CLASS = 7;
+    constexpr int LSP_KIND_INTERFACE = 8;
+    constexpr int LSP_KIND_STRUCT = 23;
+    constexpr int LSP_KIND_ENUM = 10;
+    constexpr int LSP_KIND_KEYWORD = 14;
     switch (item.kind) {
-        case 3: // функция
-            kindBonus = 10; 
-            break;
-        case 6: // переменная
-            kindBonus = 5;
-            break;
-        default:
-            kindBonus = 0;
+    case LSP_KIND_FUNCTION:
+    case LSP_KIND_METHOD:
+        kindBonus = config.contextKindBonusFunction;
+        break;
+    case LSP_KIND_VARIABLE:
+    case LSP_KIND_FIELD:
+        kindBonus = config.contextKindBonusVariable;
+        break;
+    case LSP_KIND_CLASS:
+    case LSP_KIND_INTERFACE:
+    case LSP_KIND_STRUCT:
+    case LSP_KIND_ENUM:
+        kindBonus = config.contextKindBonusClass;
+        break;
+    case LSP_KIND_KEYWORD:
+        kindBonus = config.contextKindBonusKeyword;
+        break;
+    default:
+        kindBonus = 0;
     }
 
-    return qMin(100, baseScore + usageBonus + kindBonus);
+    // TODO: анализ m_currentContext сделать и считать для него бонус и добавлять к итогу
+
+    // комбинируем балл и ограничиваем в 100
+    int finalScore =  baseScore + usageBonus + kindBonus;
+    return qMin(100, finalScore);
 }
 
 void ContextFilterStrategy::addToHistory(const LspCompletionItem& item) {
     m_usageCount[item.label] = m_usageCount.value(item.label, 0) + 1;
 }
 
-CompletionWidget::CompletionWidget(QPlainTextEdit* editor, QWidget *parent) 
+CompletionWidget::CompletionWidget(QPlainTextEdit* editor, QWidget *parent)
     : QListWidget(parent)
     , m_editor(editor)
+    , m_config() // по умолчанию
 {
     // setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint); // делаем похожим на всплывашку, стиль без рамки
     setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
     setFocusPolicy(Qt::NoFocus);
-    setAttribute(Qt::WA_ShowWithoutActivating, true);
+    setAttribute(Qt::WA_ShowWithoutActivating, true); // не активировать при показе
     setSelectionMode(QAbstractItemView::SingleSelection); // только один элемент может быть выбран
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // горизонтальный скорлл не нужен
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded); // вертикальный по необходимости
+
+    // TODO: добавить загрузку сохраненных настроек
+
+    m_config.normalizeWeights();
 
     connect(this, &QListWidget::itemDoubleClicked, this, &CompletionWidget::onItemDoubleClicked);
     // сигнал улобне для Enter
@@ -192,18 +231,26 @@ CompletionWidget::CompletionWidget(QPlainTextEdit* editor, QWidget *parent)
     m_filterStrategies.push_back(std::make_shared<ContextFilterStrategy>());
 
     // по умолчанию используем нечеткий поиск
-    m_currentStrategy = m_filterStrategies[1];
+    //m_currentStrategy = m_filterStrategies[1];
 
     // настрйока кжша (макс 50)
+    // TODO: доделать кэш, сейчас не используется
     m_filterCache.setMaxCost(50);
 }
 
 CompletionWidget::~CompletionWidget() {
     m_filterCache.clear();
+    // TODO: при закрытии сохранять настройки
 }
 
-// загружает данные 
-// храним LspCompletionItemd целиком, чтобы иметь доступ ко всем данным при выборе/филтрации
+void CompletionWidget::setScoringConfig(const CompletionScoringConfig& config) {
+    m_config = config;
+    m_config.normalizeWeights();
+    m_filterCache.clear();
+    // TODO: сохранять настройки
+}
+
+// загружает данные
 void CompletionWidget::updateItems(const QList<LspCompletionItem>& items)
 {
     const QSignalBlocker blocker(this); // блок сигналов на время обновления
@@ -214,123 +261,68 @@ void CompletionWidget::updateItems(const QList<LspCompletionItem>& items)
 
     // обновляем контекст для улучшения фильтрации
     updateContext();
-
-    for (const auto& item : m_originalItems) {
-        // TODO: добавить иконки в зависимости от item.kind
-        QListWidgetItem *listItem = new QListWidgetItem(item.label);
-        QString tooltip = item.detail;
-        if (!item.documentation.isEmpty()) {
-            tooltip += "\n---\n" + item.documentation;
-        }
-        listItem->setToolTip(tooltip); // показывае доп инфо в тултипe
-
-        // сохраняем ВСЕ данные элемента
-        m_itemData[listItem] = item;
-        addItem(listItem);
-
-        // убедимя что все элементы изначально видимы
-        listItem->setHidden(false);
-    }
-
-    if (count() > 0) {
-        // устанвливаем текущий элемент на первый после обновы или фильтрации и прокручивем к нему
-        setCurrentRow(0, QItemSelectionModel::SelectCurrent);
-        scrollToItem(currentItem(), QAbstractItemView::PositionAtTop);
-    }
-    // обновляем геометрию
-    adjustSize(); // может помочь с авто-размером
 }
 
 // фильтрует и отображение
-void CompletionWidget::filterItems(const QString& prefix)
+bool CompletionWidget::filterItems(const QString& prefix)
 {
     qDebug() << "Филтрация по префиксу:" << prefix;
     m_filterCache.clear();
-    
+
     if (m_originalItems.isEmpty()) {
         hide();
-        return;
+        return false;
     }
 
-    // проверяем кэш для этого запроса
-    if (m_filterCache.contains(prefix)) {
-        const QList<FilterResult>* cachedResults = m_filterCache.object(prefix);
+    // выполняем фильтрацию СРАЗУ, потому что кэш пока что ненадежен, его нет
+    QList<FilterResult> results = performFiltering(prefix);
 
-        // применяем кэшированные резы
-        const QSignalBlocker blocker(this); // блокируем сигналы на время обновы
-        clear();
-        m_itemData.clear();
+    // очищаем текущее состояние
+    const QSignalBlocker blocker(this);
+    clear();
+    m_itemData.clear();
 
-        for (const FilterResult& result : *cachedResults) {
-            if (result.score >= m_filterThreshold) {
-                QListWidgetItem *listItem = new QListWidgetItem(result.lspItem.label);
+    qDebug() << "filterItems: Перед циклом по результатам. Количество:" << results.count();
 
-                // добавление тултупи
-                QString tooltip = result.lspItem.detail;
-                if (!result.lspItem.documentation.isEmpty()) {
-                    tooltip += "\n---\n" + result.lspItem.documentation;
-                }
-                listItem->setToolTip(tooltip);
+    for (const FilterResult& result : qAsConst(results)) {
+        if (result.score >= m_config.filterThreshold) {
+            QListWidgetItem *listItem = new QListWidgetItem(result.lspItem.label);
 
-                // заполянем данные
-                m_itemData[listItem] = result.lspItem;
-                addItem(listItem);
+            // добавление тултуп
+            QString tooltip = result.lspItem.detail;
+            if (!result.lspItem.documentation.isEmpty()) {
+                tooltip += "\n---\n" + result.lspItem.documentation;
             }
-        }
-    } else {
-        qDebug() << "-----------------------------FDKJFHKJDSHFKJHDSJFHJDSHFJHDS";
-        // выполняем фильтрацию
-        QList<FilterResult> results = performFiltering(prefix);
-        // кэшируем резы
-        m_filterCache.insert(prefix, new QList<FilterResult>(results), results.size());
-        qDebug() << "filterItems: Перед циклом по результатам. Количество:" << results.count(); // <-- ДОБАВИТЬ
-        // применяем резы
-        const QSignalBlocker blocker(this); // блокируем сигналы на время обновы
-        clear();
-        m_itemData.clear();
+            tooltip += QString("\nРелевантность: %1% (%2)").arg(result.score).arg(result.debugInfo);
+            listItem->setToolTip(tooltip);
 
-        for (const FilterResult& result : results) {
-            if (result.score >= m_filterThreshold) {
-                QListWidgetItem *listItem = new QListWidgetItem(result.lspItem.label);
+            // TODO: добавить иконку в зависимости от kind
 
-                // добавление тултупи
-                QString tooltip = result.lspItem.detail;
-                if (!result.lspItem.documentation.isEmpty()) {
-                    tooltip += "\n---\n" + result.lspItem.documentation;
-                }
-                // для отладки показываем балл фильтрации
-                tooltip += QString("\nРелевантность: %1% (%2)").arg(result.score).arg(result.debugInfo);
-                qDebug() << QString("\nРелевантность: %1% (%2)").arg(result.score).arg(result.debugInfo);
-                listItem->setToolTip(tooltip);
-
-                // заполянем данные
-                m_itemData[listItem] = result.lspItem;
-                addItem(listItem);
-            }
+            // заполянем данные
+            m_itemData[listItem] = result.lspItem;
+            addItem(listItem);
         }
     }
 
-    qDebug() << "COUNT COMPLETION WIDGET:" << count();
-    // показывем или скрываем виджет в зависимости от реза
-    if (count() > 0) {
+    // показываем или скрываем виджет
+    bool shouldShow = (count() > 0);
+    if (shouldShow) {
         setCurrentRow(0);
         scrollToItem(currentItem(), QAbstractItemView::PositionAtTop);
-        qDebug() << "COUNT > 0";
         if (!isVisible()) {
-            qDebug() << "******************* SHOWING COMPLETION WIDGET";
             show();
         }
+        adjustSize(); // подгоняем размер после добавления элементов
     } else {
-        hide(); // если пустой
+        hide();
     }
 
-    // обновили геометрию
-    adjustSize();
+    return shouldShow;
 }
 
 void CompletionWidget::focusOutEvent(QFocusEvent *event)
 {
-    hide(); // скрываем, если кликнули мимо
+    //hide(); // скрываем, если кликнули мимо
     QListWidget::focusOutEvent(event);
 }
 
@@ -344,73 +336,59 @@ QList<FilterResult> CompletionWidget::performFiltering(const QString& query) {
             result.lspItem = item;
             result.item = nullptr; // не создаем элемент виджета на этом этапе
             result.score = 100;
+            result.debugInfo = "Пустой запрос";
             results.append(result);
         }
+        std::sort(results.begin(), results.end());
         return results;
     }
 
-    // используем временные хранилища результатов от каждой стратегии
-    // QHash<QString, int> prefixScores;
-    // QHash<QString, int> fuzzyScores;
-    // QHash<QString, int> contextScores;
-
-    // получаем баллы от каждой стретегии для всех эелемнетов
+    // фильтруем с использованием выбранной стратегии
     for (const auto& item : m_originalItems) {
         int currentPrefixScore = 0;
         int currentFuzzyScore = 0;
         int currentContextScore = 0;
+
         // проверяем каждую стратегию
+        // TODO: если одна дала 0, то другие и не проверяем, ОПТИМИЗАЦИЯ
         for (const auto& strategy : m_filterStrategies) {
-            int score = strategy->match(query, item);
+            int score = strategy->match(query, item, m_config);
             qDebug() << "   Item:" << item.label << "Strategy:" << strategy->name() << "Raw Score:" << score;
 
-            // сохраняем резы в соответствующий хеш по имени стратегии
             if (strategy->name() == "Префикс") {
-               // prefixScores[item.label] = score;
-               currentPrefixScore = score; 
+                currentPrefixScore = score;
             } else if (strategy->name() == "Нечеткая фильтрация") {
-                //fuzzyScores[item.label] = score;
                 currentFuzzyScore = score;
             } else if (strategy->name() == "Контекстный") {
-                //contextScores[item.label] = score;
                 currentContextScore = score;
             }
         }
 
         // вычисляем взвешенный общий балл
-        // float combinedScore = 
-        //     m_prefixWeight * prefixScores.value(item.label, 0) +
-        //     m_fuzzyWeight * fuzzyScores.value(item.label, 0) +
-        //     m_contextWeight * contextScores.value(item.label, 0);
-        // Вычисляем взвешенный общий балл
-        float combinedScore = 
-            m_prefixWeight * currentPrefixScore + // Теперь переменные объявлены
-            m_fuzzyWeight * currentFuzzyScore +   // и им присвоены значения
-            m_contextWeight * currentContextScore;
-        
+        float combinedScore =
+            m_config.prefixWeight * currentPrefixScore + // Теперь переменные объявлены
+            m_config.fuzzyWeight * currentFuzzyScore +   // и им присвоены значения
+            m_config.contextWeight * currentContextScore;
+
         // округляем до целого числа
         int finalScore = qRound(combinedScore);
         // Отладка итогового балла
-        qDebug() << "    -> Final Score:" << finalScore 
-        << QString(" (P:%1*%.1f + F:%2*%.1f + C:%3*%.1f)")
-        .arg(currentPrefixScore).arg(m_prefixWeight)
-        .arg(currentFuzzyScore).arg(m_fuzzyWeight)
-        .arg(currentContextScore).arg(m_contextWeight); // <-- ДОБАВИТЬ
-        
+        qDebug() << "    -> Final Score:" << finalScore
+                 << QString(" (P:%1*%.1f + F:%2*%.1f + C:%3*%.1f)")
+                        .arg(currentPrefixScore).arg(m_config.prefixWeight)
+                        .arg(currentFuzzyScore).arg(m_config.fuzzyWeight)
+                        .arg(currentContextScore).arg(m_config.contextWeight);
+
         // если итоговый балл выше порого, то рез добавляем
-        if (finalScore >= m_filterThreshold) {
+        if (finalScore >= m_config.filterThreshold) {
             FilterResult result;
             result.lspItem = item;
             result.item = nullptr;
             result.score = finalScore;
 
             // отладочная инфа с сохранением отдельных баллов
-            //result.debugInfo = QString("П:%1 Н:%2 K:%3").arg(prefixScores.value(item.label, 0)).arg(fuzzyScores.value(item.label, 0)).arg(contextScores.value(item.label, 0));
+            result.debugInfo = QString("П:%1 Н:%2 K:%3").arg(currentPrefixScore).arg(currentFuzzyScore).arg(currentContextScore);
             // Отладочная инфа с сохранением отдельных баллов
-            result.debugInfo = QString("П:%1 Н:%2 К:%3")
-                                   .arg(currentPrefixScore) // Используем переменные
-                                   .arg(currentFuzzyScore)
-                                   .arg(currentContextScore);
             results.append(result);
             qDebug() << "      --> ADDED:" << item.label << "Score:" << finalScore; // <-- ДОБАВИТЬ
         }
@@ -418,7 +396,6 @@ QList<FilterResult> CompletionWidget::performFiltering(const QString& query) {
 
     // сортируем результуты по убывани баллов
     std::sort(results.begin(), results.end());
-    //std::sort(results.begin(), results.end());
     qDebug() << "performFiltering: Завершено. Найдено результатов:" << results.count() << " для запроса:" << query; // <-- ДОБАВИТЬ
     return results;
 }
@@ -438,18 +415,19 @@ void CompletionWidget::updateContext() {
 }
 
 void CompletionWidget::setCurrentFilterStrategy(const QString& strategyName) {
-    for (const auto& strategy : m_filterStrategies) {
-        if (strategy->name() == strategyName) {
-            m_currentStrategy = strategy;
-            // кэш при смене стратгеии очищаем
-            m_filterCache.clear();
-            return;
-        }
-    }
+    // БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ
+    // for (const auto& strategy : m_filterStrategies) {
+    //     if (strategy->name() == strategyName) {
+    //         m_currentStrategy = strategy;
+    //         // кэш при смене стратгеии очищаем
+    //         m_filterCache.clear();
+    //         return;
+    //     }
+    // }
 
-    // если стратегия не найдена, то используем нечеткий поиск по умолчанию
-    qDebug() << "Стратегия не найдена:" << strategyName << ".Используется нечеткий поиск по умолчанию";
-    m_currentStrategy = m_filterStrategies[1];
+    // // если стратегия не найдена, то используем нечеткий поиск по умолчанию
+    // qDebug() << "Стратегия не найдена:" << strategyName << ".Используется нечеткий поиск по умолчанию";
+    // m_currentStrategy = m_filterStrategies[1];
 }
 
 QStringList CompletionWidget::availableFilterStrategies() const {
@@ -543,7 +521,7 @@ void CompletionWidget::navigatePageUp()
     // если не нашли далеко, но хоть что то нашли сверху, то берем
     if (next == current) { // если ничего не изменилось то берем самый верхний
         next = findNextVisibleRow(0, 1); // первый видимый
-    } 
+    }
 
     if (next != -1 && next != current) {
         setCurrentRow(next);
@@ -576,7 +554,7 @@ void CompletionWidget::navigatePageDown()
     // если не нашли далеко, но хоть что то нашли снизу, то берем
     if (next == current) { // если ничего не изменилось то берем самый нижний
         next = findNextVisibleRow(count() - 1, -1); // последний видимый
-    } 
+    }
 
     if (next != -1 && next != current) {
         setCurrentRow(next);
@@ -613,22 +591,21 @@ void CompletionWidget::triggerSelectionFromItem(QListWidgetItem *item)
     qDebug() << "      [COMPLETION WIDGET] triggerSelectionFromItem() called for item:" << (item ? item->text() : "NULL");
     if (item && m_itemData.contains(item)) {
         QString text = m_itemData.value(item).insertText.isEmpty() ? item->text() : m_itemData.value(item).insertText;
-        
+
         // добавляем в историю для контекстной стратегии
         for (const auto& strategy : m_filterStrategies) {
             auto contextStrategy = std::dynamic_pointer_cast<ContextFilterStrategy>(strategy);
             if (contextStrategy) {
                 contextStrategy->addToHistory(m_itemData.value(item));
+                break;
             }
         }
 
-        qDebug() << "      [COMPLETION WIDGET] Emitting completionSelected with text:" << text;
         emit completionSelected(text); // отправляем текст вставки
         hide();
-        qDebug() << "      [COMPLETION WIDGET] Hidden after selection.";
+
     } else {
-        qDebug() << "      [COMPLETION WIDGET] Item invalid or not found in map.";
-        hide(); 
+        hide();
     }
 }
 
