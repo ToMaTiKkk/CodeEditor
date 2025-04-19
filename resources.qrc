@@ -9,5 +9,6 @@
         <file>styles/Dark.colorscheme</file>
         <file>styles/Light.colorscheme</file>
         <file>styles/run.png</file>
+        <file>styles/app_icon.png</file>
     </qresource>
 </RCC>
