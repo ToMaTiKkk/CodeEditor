@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <algorithm> // std::sort
 #include <functional>
+#include <QtGlobal> // qCompareCaseInsensitive
 
 // реализация PrefixFilterStrategy
 int PrefixFilterStrategy::match(const QString& query, const LspCompletionItem& item, const CompletionScoringConfig& config) const {
@@ -188,6 +189,10 @@ int ContextFilterStrategy::match(const QString& query, const LspCompletionItem& 
         break;
     case LSP_KIND_KEYWORD:
         kindBonus = config.contextKindBonusKeyword;
+        // Добавляем дополнительный бонус для ключевых слов при полном совпадении
+        if (item.label.toLower() == query.toLower()) {
+            kindBonus *= 2; // Удваиваем бонус для точного совпадения ключевых слов
+        }
         break;
     default:
         kindBonus = 0;
@@ -343,22 +348,76 @@ QList<FilterResult> CompletionWidget::performFiltering(const QString& query) {
         return results;
     }
 
+    QString lowerQuery = query.toLower();
+
     // фильтруем с использованием выбранной стратегии
     for (const auto& item : m_originalItems) {
+        int bestMatchQuality = 99; //худшее качество по умолчанию
         int currentPrefixScore = 0;
         int currentFuzzyScore = 0;
         int currentContextScore = 0;
+        int qualityBonus = 0; // бонус к баллу за качество
 
-        // проверяем каждую стратегию
+        // ОПРЕДЕЛЕНИЕ КАЧЕСТВА СОВПАДЕНИЯ
+        // сначала проверяем с учетом регистра для более высокого приоритета
+        bool isExactMatch = false;
+        bool isKeyword = (item.kind == 14); // LSP_KIND_KEYWORD = 14
+        
+        if (item.label.compare(query, Qt::CaseSensitive) == 0) { //compare для точности
+            bestMatchQuality = 0;
+            qualityBonus = 30; // max
+            isExactMatch = true;
+        } else if (item.label.startsWith(query, Qt::CaseSensitive)) {
+            bestMatchQuality = 1;
+            qualityBonus = 25;
+        }
+        // без учета регистра
+        else if (item.label.compare(query, Qt::CaseInsensitive) == 0) { // для регистронезависимости
+            bestMatchQuality = 2;
+            qualityBonus = 20;
+            isExactMatch = true;
+        } else if (item.label.startsWith(lowerQuery, Qt::CaseInsensitive)) { // startWith без учета регистра
+            bestMatchQuality = 3;
+            qualityBonus = 15;
+        }
+        // проверка начала слова
+        else if (isWordStartMatch(query, item.label)) {
+            bestMatchQuality = 4;
+            qualityBonus = 10;
+        }
+        
+        // Дополнительный бонус для ключевых слов при точном совпадении
+        if (isKeyword && isExactMatch) {
+            bestMatchQuality = 0; // Высший приоритет для точного совпадения ключевых слов
+            qualityBonus += 30;   // Добавляем дополнительный бонус для ключевых слов
+        }
+        // Бонус для ключевых слов при префиксном совпадении
+        else if (isKeyword && (bestMatchQuality <= 3)) {
+            qualityBonus += 15;   // Добавляем бонус для ключевых слов с префиксным совпадением
+        }
+
+        // получение баллов от стратегий
         // TODO: если одна дала 0, то другие и не проверяем, ОПТИМИЗАЦИЯ
         for (const auto& strategy : m_filterStrategies) {
             int score = strategy->match(query, item, m_config);
-            qDebug() << "   Item:" << item.label << "Strategy:" << strategy->name() << "Raw Score:" << score;
+            // qDebug() << "   Item:" << item.label << "Strategy:" << strategy->name() << "Raw Score:" << score;
 
             if (strategy->name() == "Префикс") {
                 currentPrefixScore = score;
+                // если префиксный балл высокий, но качество не определено как префиксное - то уточняем
+                if (score >= m_config.prefixStartMatchBase && bestMatchQuality > 3) {
+                    bestMatchQuality = 3; // как минимум регистронезависимый префикс
+                } else if (score >= m_config.prefixWordStartMatchScore && bestMatchQuality > 4) {
+                    bestMatchQuality = 4; // как минимум начало слова
+                } else if (score >= m_config.prefixContainsBase && bestMatchQuality > 20) {
+                    bestMatchQuality = 20; // как миниму содержит (низкий приоритет)
+                }
             } else if (strategy->name() == "Нечеткая фильтрация") {
                 currentFuzzyScore = score;
+                // если есть нечеткий балл, а качество дефолт все ещё, то ставим нечеткое качество
+                if (score > 0 && bestMatchQuality > 10) {
+                    bestMatchQuality = 10;
+                }
             } else if (strategy->name() == "Контекстный") {
                 currentContextScore = score;
             }
@@ -370,14 +429,22 @@ QList<FilterResult> CompletionWidget::performFiltering(const QString& query) {
             m_config.fuzzyWeight * currentFuzzyScore +   // и им присвоены значения
             m_config.contextWeight * currentContextScore;
 
-        // округляем до целого числа
-        int finalScore = qRound(combinedScore);
+        // добавляем бонус за определенное раннее качество
+        int finalScore = qMin(100, qRound(combinedScore) + qualityBonus);
+        
+        // Специальная обработка для ключевых слов при близком совпадении
+        if (isKeyword && item.label.length() <= 8 && query.length() >= 2 && 
+            (item.label.startsWith(query, Qt::CaseInsensitive) || 
+             query.length() >= item.label.length() * 0.7)) {
+            finalScore = qMin(100, finalScore + 10); // Дополнительный бонус для коротких ключевых слов
+        }
+        
         // Отладка итогового балла
         qDebug() << "    -> Final Score:" << finalScore
-                 << QString(" (P:%1*%.1f + F:%2*%.1f + C:%3*%.1f)")
+                 << QString(" (P:%1*%.1f + F:%2*%.1f + C:%3*%.1f + QB:%4))")
                         .arg(currentPrefixScore).arg(m_config.prefixWeight)
                         .arg(currentFuzzyScore).arg(m_config.fuzzyWeight)
-                        .arg(currentContextScore).arg(m_config.contextWeight);
+                        .arg(currentContextScore).arg(m_config.contextWeight).arg(qualityBonus);
 
         // если итоговый балл выше порого, то рез добавляем
         if (finalScore >= m_config.filterThreshold) {
@@ -385,19 +452,56 @@ QList<FilterResult> CompletionWidget::performFiltering(const QString& query) {
             result.lspItem = item;
             result.item = nullptr;
             result.score = finalScore;
+            result.matchQuality = bestMatchQuality;
 
             // отладочная инфа с сохранением отдельных баллов
-            result.debugInfo = QString("П:%1 Н:%2 K:%3").arg(currentPrefixScore).arg(currentFuzzyScore).arg(currentContextScore);
+            result.debugInfo = QString("Q:%1 P:%2 N:%3 K:%4 QB:%5").arg(currentPrefixScore).arg(currentFuzzyScore).arg(currentContextScore).arg(qualityBonus);
             // Отладочная инфа с сохранением отдельных баллов
             results.append(result);
-            qDebug() << "      --> ADDED:" << item.label << "Score:" << finalScore; // <-- ДОБАВИТЬ
+            qDebug() << "      --> ADDED:" << item.label << "Score:" << finalScore << "Quality:" << bestMatchQuality;
         }
     }
 
-    // сортируем результуты по убывани баллов
+    // сортируем результуты
     std::sort(results.begin(), results.end());
-    qDebug() << "performFiltering: Завершено. Найдено результатов:" << results.count() << " для запроса:" << query; // <-- ДОБАВИТЬ
+    qDebug() << "performFiltering: Завершено. Найдено результатов:" << results.count() << " для запроса:" << query;
     return results;
+}
+
+// вспомогательная функция для поиска начала слова (Camel/snake)
+bool CompletionWidget::isWordStartMatch(const QString& query, const QString& label) {
+    if (query.isEmpty() || label.isEmpty()) {
+        return false;
+    }
+
+    QString lowerQuery = query.toLower();
+    QStringList words;
+    QString currentWord;
+
+    // разбор label на слова (как в PrefixFilterStrategy)
+    for (int i = 0; i < label.length(); ++i) {
+        QChar c = label[i];
+        if (c.isUpper() && i > 0) {
+            if (!currentWord.isEmpty()) words.append(currentWord);
+            currentWord = c;
+        } else if (c == '_') {
+            if (!currentWord.isEmpty()) words.append(currentWord);
+            currentWord.clear();
+        } else {
+            currentWord += c;
+        }
+    }
+    if (!currentWord.isEmpty()) {
+        words.append(currentWord);
+    }
+
+    // проверка начинается ли какое либо слово (без регистра)
+    for (const QString& w : qAsConst(words)) {
+        if (w.startsWith(lowerQuery, Qt::CaseInsensitive)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void CompletionWidget::updateContext() {
@@ -415,7 +519,7 @@ void CompletionWidget::updateContext() {
 }
 
 void CompletionWidget::setCurrentFilterStrategy(const QString& strategyName) {
-    // БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ
+    // --------------- БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ
     // for (const auto& strategy : m_filterStrategies) {
     //     if (strategy->name() == strategyName) {
     //         m_currentStrategy = strategy;
