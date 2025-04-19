@@ -159,6 +159,7 @@ private:
     void updateDiagnosticsView(); // обновить подчеркивания ошибок в редакторе
     QString getFileUri(const QString& localPath) const; // конвектировать локальный путь в URI
     QString getLocalPath(const QString& fileUri) const; // обратный конвектор
+    QString getPrefixBeforeCursor(const QTextCursor& cursor);
 
     // переопределение событий для hover и хоткеев
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -241,6 +242,8 @@ private:
     // инициализация терминала
     TerminalWidget *m_terminalWidget = nullptr;
     bool m_isTerminalVisible = false;
+
+    QString getCurrentWordBeforeCursor(QTextCursor cursor);
 
 };
 #endif // MAINWINDOWCODEEDITOR_H

@@ -635,33 +635,50 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
 {
     if (!m_codeEditor) return;
 
-    if (!m_completionWidget || items.isEmpty()) {
-        if (m_completionWidget) {
-            m_completionWidget->hide();
-        }
+    if (!m_completionWidget) {
+        // if (m_completionWidget) {
+        //     m_completionWidget->hide();
+        // }
         return;
     }
 
-    // вычисление позиции
-    QRect currentCursorRect = m_codeEditor->cursorRect(); // получаем актуальную позицию курсора
-    // преобразуем координаты в глобальные координаты экрана
-    QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(currentCursorRect.bottomLeft());
+    // получаем текущей префикс из редактора
+    QTextCursor currentCursor = m_codeEditor->textCursor();
+    QString currentPrefix = getPrefixBeforeCursor(currentCursor);
 
     // заполняем виджет автодополнения данными
     m_completionWidget->updateItems(items);
 
-    // устанавливаем геометрию (позицию и размер виджета)
-    int width = m_completionWidget->sizeHintForColumn(0) + m_codeEditor->verticalScrollBar()->width() + 10; // запа сна скроллбар виджета и отступы
-    width = qMax(300, width); // минимальная ширина
-    int height = m_completionWidget->sizeHintForRow(0) * qMin(10, m_completionWidget->count()) + 5; // высота примерно 10 элементов + рамка
-    height = qMin(300, height); // максимальная высота, что не перекрывать полэкрана
-    m_completionWidget->setGeometry(globalPos.x(), globalPos.y(), width, height);
+    // фильтруем, передаем префикс, по которому фильтровать
+    m_completionWidget->filterItems(currentPrefix);
 
-    m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
-    m_completionWidget->show();
-    m_completionWidget->raise(); //поверх других виджетов
-    //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
-    //qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
+    // adjustSize() внутри filterItems может изменить размер
+    if (m_completionWidget) {
+         // вычисление позиции
+        QRect currentCursorRect = m_codeEditor->cursorRect(); // получаем актуальную позицию курсора
+        // преобразуем координаты в глобальные координаты экрана
+        QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(currentCursorRect.bottomLeft());
+        
+        // используем актуальное колличество строк после фильтрации
+        int visibleItemCount = m_completionWidget->count();
+
+        // устанавливаем геометрию (позицию и размер виджета)
+        int width = m_completionWidget->sizeHintForColumn(0) + m_codeEditor->verticalScrollBar()->sizeHint().width() + 15; // запа сна скроллбар виджета и отступы
+        width = qMax(300, qMin(width, m_codeEditor->viewport()->width() - 20)); // min/max ширина, но не шире редактора
+        int height = m_completionWidget->sizeHintForRow(0) * qMin(10, visibleItemCount) + m_completionWidget->frameWidth() * 2; // высота примерно 10 элементов + рамка
+        height = qMin(qMax(height, m_completionWidget->sizeHintForRow(0) + m_completionWidget->frameWidth() * 2), 300); // min/max высота
+        m_completionWidget->setGeometry(globalPos.x(), globalPos.y(), width, height);
+
+        // подимаем виджет если он видим (чтобы поверх был)
+        if (m_completionWidget->isVisible()) {
+            m_completionWidget->raise(); //поверх других виджетов
+        }
+
+        m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
+        //m_completionWidget->show();
+        //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
+        //qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
+    }
 }
 
 void MainWindowCodeEditor::onLspHoverReceived(const LspHoverInfo& hoverInfo)
@@ -718,11 +735,44 @@ void MainWindowCodeEditor::applyCompletion(const QString& textToInsert)
     if (!m_codeEditor) return;
 
     QTextCursor cursor = m_codeEditor->textCursor();
-    // TODO: более умная вставка, чтобы может указывался диапозон который нужно заменить и какой текст вставить
-    // просто вставляем как есть
+    // ----- логика удаление префикса
+    int currentPos = cursor.position();
+    // перемещаем куроср назад для анализа символов перед ним
+    cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor); // в начало строки для получения текста блока
+    QString blockText = cursor.block().text();
+    int posInBlock = currentPos - cursor.position(); // позиция внутри блока
+
+    // ищем начало префикса (слова) 
+    int startPosInBlock = posInBlock - 1;
+    while (startPosInBlock >= 0 && (blockText[startPosInBlock].isLetterOrNumber() || blockText[startPosInBlock] == '_')) {
+        startPosInBlock--;
+    }
+    startPosInBlock++; // передвигаемся на первый символ слова
+
+    int prefixLength = posInBlock - startPosInBlock;
+
+    if (prefixLength > 0) {
+        // восстанавливаем исходную позицию
+        cursor.setPosition(currentPos);
+        // выделяем префикс двигаясь назада от текущей позиции
+        cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor, prefixLength);
+        // удаляем префикс
+        cursor.removeSelectedText();
+    } else {
+        // если префикса нет (автодоп на пустом месте), то просто вернем в исодную позицию
+        cursor.setPosition(currentPos);
+    }
+    
+    // вставка текста
     cursor.insertText(textToInsert);
+    m_codeEditor->setTextCursor(cursor); // устанавливаем курсор после текста вставленного
     m_codeEditor->setFocus(); // возвращаем фокус редактору
     qDebug() << "[applyCompletion] Completion applied, focus set to m_codeEditor";
+    
+    // скрываем виджет если он ещё виден
+    if (m_completionWidget && m_completionWidget->isVisible()) {
+        m_completionWidget->hide();
+    }
 }
 
 void MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover()
@@ -1009,6 +1059,17 @@ QString MainWindowCodeEditor::getFileUri(const QString& localPath) const
 QString MainWindowCodeEditor::getLocalPath(const QString& fileUri) const
 {
     return QUrl(fileUri).toLocalFile();
+}
+
+QString MainWindowCodeEditor::getPrefixBeforeCursor(const QTextCursor& cursor) {
+    int pos = cursor.positionInBlock();
+    QString text = cursor.block().text();
+    int startPos = pos - 1;
+    while (startPos >= 0 && (text[startPos].isLetterOrNumber() || text[startPos] == '_')) {
+        startPos--;
+    }
+    startPos++;
+    return text.mid(startPos, pos - startPos);
 }
 
 // !!! слоты для обработки сигналов сессий !!!
@@ -1616,13 +1677,43 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
                 // TODO: ФИЛЬТРАЦИЮ КЛИЕНТСКУЮ сделать уже существуещего списка
                 }
             }
-        } else if (charsRemoved > 0 && m_completionWidget && m_completionWidget->isVisible()) {
+        } else if (charsRemoved > 0 && m_completionWidget && m_completionWidget->isVisible() && charsAdded == 0) {
             // пользователь удалил символ
-            // TODO: обновляем и перефилтровываем список
-            m_completionWidget->hide();
+            //m_completionWidget->hide();
+            // получение текста для автодополнения
+            QTextCursor cursor = m_codeEditor->textCursor();
+            QString currentWord = getCurrentWordBeforeCursor(cursor);
+
+            // обновляем список автодоп с новым списком
+            if (!currentWord.isEmpty()) {
+                m_completionWidget->filterItems(currentWord);
+            } else if (currentWord.isEmpty() && m_completionWidget->isVisible()) {
+                // если слово полностью удалено, то обновляем с пустым списком
+                m_completionWidget->filterItems("");
+            }
         }
     }
     m_codeEditor->document()->setModified(true);
+}
+
+// вспомогательный метод для для получения текущего слова перед курсором
+QString MainWindowCodeEditor::getCurrentWordBeforeCursor(QTextCursor cursor) {
+    int position = cursor.position();
+    int blockPosition = cursor.block().position();
+    QString text = cursor.block().text();
+    int posInBlock = position - blockPosition;
+
+    // назодим начало слова
+    int wordStart = posInBlock;
+    while (wordStart > 0) {
+        QChar c = text.at(wordStart - 1);
+        if (!c.isLetterOrNumber() && c != '_') {
+            break;
+        }
+        wordStart--;
+    }
+
+    return text.mid(wordStart, posInBlock - wordStart);
 }
 
 void MainWindowCodeEditor::onTextMessageReceived(const QString &message)
@@ -2590,7 +2681,7 @@ void MainWindowCodeEditor::on_actionToDoList_triggered()
 
 void MainWindowCodeEditor::setupTerminalArea()
 {
-    qDebug() << "Setting up Terminal Area (using wrapper)...";
+    qWarning() << "Setting up Terminal Area (using wrapper)...";
     QSplitter *mainVerticalSplitter = new QSplitter(Qt::Vertical, this);
     mainVerticalSplitter->setObjectName("mainVerticalSplitter");
 
