@@ -188,6 +188,9 @@ void MainWindowCodeEditor::setupChatWidget()
     chatWidget = new QWidget(ui->horizontalWidget_2);
     chatWidget->setObjectName("chatWidget");
 
+    // скрываем весь контейнер чтобы в сплиттере место не занимал
+    ui->horizontalWidget_2->setVisible(false);
+
     QVBoxLayout *chatLayout = new QVBoxLayout(chatWidget); // основной layout чата
     chatLayout->setContentsMargins(0, 0, 0, 0);
     chatLayout->setSpacing(5);
@@ -245,7 +248,7 @@ void MainWindowCodeEditor::setupChatWidget()
         ui->horizontalWidget_2->layout()->setContentsMargins(0,0,0,0);
     }
     ui->horizontalWidget_2->layout()->addWidget(chatWidget);
-    chatWidget->hide(); // Скрыть по умолчанию
+    //chatWidget->hide(); // Скрыть по умолчанию
 }
 
 void MainWindowCodeEditor::setupUserFeatures()
@@ -379,10 +382,9 @@ void MainWindowCodeEditor::setupThemeAndNick()
     });
 
     connect(m_chatButton, &QPushButton::clicked, this, [this](bool checked) {
-        Q_UNUSED(checked);
-        chatWidget->setVisible(!chatWidget->isVisible());
-
-        if (chatWidget->isVisible()) {
+        bool show = !ui->horizontalWidget_2->isVisible();
+        ui->horizontalWidget_2->setVisible(show);
+        if (show) {
             chatInput->setFocus();
             scrollToBottom();
         }

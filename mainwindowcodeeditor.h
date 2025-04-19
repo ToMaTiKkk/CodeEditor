@@ -213,9 +213,7 @@ private:
     QPushButton* m_runButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
 
-<<<<<<< HEAD
     bool m_shouldSaveAfterCreation = false;
-=======
     LspManager *m_lspManager = nullptr; // Lsp-менеджер
     CompletionWidget *m_completionWidget = nullptr; // виджет автодоплнения
     QTimer *m_hoverTimer = nullptr; // таймер для отложенного запроса hover
@@ -231,7 +229,6 @@ private:
     QString m_projectRootPath; // путь к корневой папке проекта для LSP
     QMap<QString, QList<LspDiagnostic>> m_diagnostics; // хранение диагностик по файлам
 
->>>>>>> main
     int m_pendingSaveDays = 0;
     //новое разделение окон
     bool isChatVisible = false;    // Флаг видимости чата
