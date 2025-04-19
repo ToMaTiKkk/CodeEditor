@@ -1675,13 +1675,43 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
                 // TODO: ФИЛЬТРАЦИЮ КЛИЕНТСКУЮ сделать уже существуещего списка
                 }
             }
-        } else if (charsRemoved > 0 && m_completionWidget && m_completionWidget->isVisible()) {
+        } else if (charsRemoved > 0 && m_completionWidget && m_completionWidget->isVisible() && charsAdded == 0) {
             // пользователь удалил символ
-            // TODO: обновляем и перефилтровываем список
-            m_completionWidget->hide();
+            //m_completionWidget->hide();
+            // получение текста для автодополнения
+            QTextCursor cursor = m_codeEditor->textCursor();
+            QString currentWord = getCurrentWordBeforeCursor(cursor);
+
+            // обновляем список автодоп с новым списком
+            if (!currentWord.isEmpty()) {
+                m_completionWidget->filterItems(currentWord);
+            } else if (currentWord.isEmpty() && m_completionWidget->isVisible()) {
+                // если слово полностью удалено, то обновляем с пустым списком
+                m_completionWidget->filterItems("");
+            }
         }
     }
     m_codeEditor->document()->setModified(true);
+}
+
+// вспомогательный метод для для получения текущего слова перед курсором
+QString MainWindowCodeEditor::getCurrentWordBeforeCursor(QTextCursor cursor) {
+    int position = cursor.position();
+    int blockPosition = cursor.block().position();
+    QString text = cursor.block().text();
+    int posInBlock = position - blockPosition;
+
+    // назодим начало слова
+    int wordStart = posInBlock;
+    while (wordStart > 0) {
+        QChar c = text.at(wordStart - 1);
+        if (!c.isLetterOrNumber() && c != '_') {
+            break;
+        }
+        wordStart--;
+    }
+
+    return text.mid(wordStart, posInBlock - wordStart);
 }
 
 void MainWindowCodeEditor::onTextMessageReceived(const QString &message)

@@ -239,5 +239,7 @@ private:
     TerminalWidget *m_terminalWidget = nullptr;
     bool m_isTerminalVisible = false;
 
+    QString getCurrentWordBeforeCursor(QTextCursor cursor);
+
 };
 #endif // MAINWINDOWCODEEDITOR_H
