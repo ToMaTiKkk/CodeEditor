@@ -97,6 +97,9 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     m_codeEditor->setFocusPolicy(Qt::StrongFocus); // чтобы мог получать фокус для ввода
     m_codeEditor->setMouseTracking(true);
 
+    m_codeEditor->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_codeEditor->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
     lineNumberArea = new LineNumberArea(m_codeEditor); // передаем наш собственный новый редактор, чтобы у класса было понимание, рядом с чем рисовать номера
 
     // создаем контейнер для редактора и нумерации, объединяем и сливает их в одну единую виджет
