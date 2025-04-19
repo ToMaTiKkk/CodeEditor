@@ -2639,7 +2639,7 @@ void MainWindowCodeEditor::on_actionToDoList_triggered()
 
 void MainWindowCodeEditor::setupTerminalArea()
 {
-    qDebug() << "Setting up Terminal Area (using wrapper)...";
+    qWarning() << "Setting up Terminal Area (using wrapper)...";
     QSplitter *mainVerticalSplitter = new QSplitter(Qt::Vertical, this);
     mainVerticalSplitter->setObjectName("mainVerticalSplitter");
 
