@@ -159,6 +159,7 @@ private:
     void updateDiagnosticsView(); // обновить подчеркивания ошибок в редакторе
     QString getFileUri(const QString& localPath) const; // конвектировать локальный путь в URI
     QString getLocalPath(const QString& fileUri) const; // обратный конвектор
+    QString getPrefixBeforeCursor(const QTextCursor& cursor);
 
     // переопределение событий для hover и хоткеев
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -212,6 +213,7 @@ private:
     QPushButton* m_runButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
 
+    bool m_shouldSaveAfterCreation = false;
     LspManager *m_lspManager = nullptr; // Lsp-менеджер
     CompletionWidget *m_completionWidget = nullptr; // виджет автодоплнения
     QTimer *m_hoverTimer = nullptr; // таймер для отложенного запроса hover
@@ -237,6 +239,8 @@ private:
     // инициализация терминала
     TerminalWidget *m_terminalWidget = nullptr;
     bool m_isTerminalVisible = false;
+
+    QString getCurrentWordBeforeCursor(QTextCursor cursor);
 
 };
 #endif // MAINWINDOWCODEEDITOR_H

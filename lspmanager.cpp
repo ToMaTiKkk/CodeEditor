@@ -355,7 +355,7 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
                 exitMsg["jsonrpc"] = "2.0";
                 exitMsg["method"] = "exit";
                 sendMessage(exitMsg);
-            }
+            } 
         } else {
             QJsonObject errorObj = message["error"].toObject();
             int code = errorObj["code"].toInt(); 

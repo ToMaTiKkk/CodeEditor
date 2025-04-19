@@ -10,6 +10,7 @@
 #include <functional>
 #include <QSettings>
 #include <limits> // для std::numeric_limits
+#include <QStringView> // для CaseSensitive сравнениия
 
 // конфиг оценки
 struct CompletionScoringConfig {
@@ -17,38 +18,38 @@ struct CompletionScoringConfig {
     int filterThreshold = 50; // минимальный порог для показа элемента (0-100)
 
     // веса дял стратегий фильтрации (в сумме 1.0)
-    float prefixWeight = 0.4f; // увеличил с 0.3 до 0.4 - больше влияния префиксной фильтрации
-    float fuzzyWeight = 0.3f; // уменьшил с 0.4 до 0.3
-    float contextWeight = 0.3f; // контекстной стратегии
+    float prefixWeight = 0.5f; // 30% влияний префиксной фильтрации
+    float fuzzyWeight = 0.3f; // для нечеткйо стратегии
+    float contextWeight = 0.2f; // контекстной стратегии
 
     // настройки PrefixFilterStrategy
     int prefixExactMatchScore = 100;
-    int prefixStartMatchBase = 90; // увеличил с 85 до 90 - выше базовый балл за начало
-    int prefixStartLengthBonusScale = 15; // макс бонус = scale * len / target_len
-    int prefixContainsBase = 40; // базовый балл за содержание (не с начала)
-    int prefixContainsPosPenaltyScale = 30; // штраф за позицию = scale * pos / target_len (макс)
-    int prefixWordStartMatchScore = 65; // балл за совпадение с началом слова (camel/snake)
-    int prefixMinScoreIfContains = 10; // минимальный балл если просто содержит
+    int prefixStartMatchBase = 90; // балл за начало + бонус за длину
+    int prefixStartLengthBonusScale = 10; // макс бонус = scale * len / target_len
+    int prefixContainsBase = 30; // базовый балл за содержание (не с начала)
+    int prefixContainsPosPenaltyScale = 25; // штраф за позицию = scale * pos / target_len (макс)
+    int prefixWordStartMatchScore = 75; // балл за совпадение с началом слова (camel/snake)
+    int prefixMinScoreIfContains = 5; // минимальный балл если просто содержит
 
     // настройки FuzzyFilterStrategy
     int fuzzyExactMatchScore = 100;
-    int fuzzyPrefixMatchBase = 90; // балл за начало + бонус за длину
+    int fuzzyPrefixMatchBase = 80; // балл за начало + бонус за длину
     int fuzzyPrefixLengthBonusScale = 10;
-    int fuzzyContainsBase = 75; // балл за содержание (подстрока)
+    int fuzzyContainsBase = 60; // балл за содержание (подстрока)
     int fuzzyContainsLengthBonusScale = 10;
-    int fuzzySequentialMatchBase = 50; // базовый балл за нечеткое последоват совпадение
-    int fuzzySequentialDensityScale = 45; // бонус за плотность = scale * density
-    int fuzzyPartialMatchScale = 40; // балл за частичное нечеткое совпадение = scale * ratio
-    float fuzzyDocMatchMultiplier = 0.5f; // множитель для баллов из документации
-    float fuzzyDetailMatchMultiplier = 0.3f; // множетель для баллов из деталей
+    int fuzzySequentialMatchBase = 40; // базовый балл за нечеткое последоват совпадение
+    int fuzzySequentialDensityScale = 35; // бонус за плотность = scale * density
+    int fuzzyPartialMatchScale = 20; // балл за частичное нечеткое совпадение = scale * ratio
+    float fuzzyDocMatchMultiplier = 0.4f; // множитель для баллов из документации
+    float fuzzyDetailMatchMultiplier = 0.2f; // множетель для баллов из деталей
 
     // настройки ContextFilterStrategy
-    int contextUsageBonusScale = 5; // балл за каждое использование (5 * count)
-    int contextMaxUsageBonus = 25; // максимальный бонус за использование
-    int contextKindBonusFunction = 15; // бонус для функций и методов
+    int contextUsageBonusScale = 4; // балл за каждое использование (5 * count)
+    int contextMaxUsageBonus = 20; // максимальный бонус за использование
+    int contextKindBonusFunction = 10; // бонус для функций и методов
     int contextKindBonusVariable = 5; // бонус для переменных и полей
-    int contextKindBonusClass = 10; // бонус для классов, структур, интерфейсов
-    int contextKindBonusKeyword = 20; // увеличил с 8 до 20 - больший бонус для ключевых слов
+    int contextKindBonusClass = 8; // бонус для классов, структур, интерфейсов
+    int contextKindBonusKeyword = 6; // бонус для ключевых слов
     // TODO: добавить штрафы и бонусы за совпадение типов, область видимости и тп
 
     // метод для нормализации весов чтобы сумма было 1.0
@@ -198,59 +199,28 @@ struct FilterResult {
     LspCompletionItem lspItem;
     int score; // 0-100
     // Качество совпадения (чем НИЖЕ, тем ЛУЧШЕ)
-    // 0: Точное совпадение label == query (case-sensitive)
-    // 1: Точное совпадение префикса (startsWith, case-sensitive)
-    // 2: Точное совпадение label == query (case-insensitive)
-    // 3: Точное совпадение префикса (startsWith, case-insensitive)
-    // 4: Совпадение с началом слова (Camel/snake, case-insensitive)
-    // 10: Нечеткое совпадение (Fuzzy Sequential)
-    // 20: Содержит как подстроку (Contains, case-insensitive) - Низкий приоритет
-    // 99: Другое / Не определено
+    // 0: точное совпадение label == query (case-sensitive)
+    // 1: точное совпадение префикса (startsWith, case-sensitive)
+    // 2: точное совпадение label == query (case-insensitive)
+    // 3: точное совпадение префикса (startsWith, case-insensitive)
+    // 4: совпадение с началом слова (Camel/snake, case-insensitive)
+    // 10: нечеткое совпадение (Fuzzy Sequential)
+    // 20: содержит как подстроку (Contains, case-insensitive) - низкий приоритет
+    // 99: другое / не определено
     int matchQuality;
     QString debugInfo; // для отображения отдельных оценок
 
-    // сортировка: сначала по качеству (возрастание), потом по баллу (убывание)
+    // сортировка: сначала по качеству по возрастанию, потом по баллу по убыванию
     bool operator<(const FilterResult& other) const {
-        // Сначала обрабатываем особые случаи с ключевыми словами
-        // Если текущий элемент - точное совпадение ключевого слова (void == void), а другой нет
-        if (lspItem.kind == 14 && matchQuality <= 2 && 
-            (other.lspItem.kind != 14 || other.matchQuality > 2)) {
-            return true; // Точное совпадение ключевого слова всегда выше
-        }
-        
-        // Если другой элемент - точное совпадение ключевого слова, а текущий нет
-        if (other.lspItem.kind == 14 && other.matchQuality <= 2 && 
-            (lspItem.kind != 14 || matchQuality > 2)) {
-            return false; // Другой элемент имеет преимущество
-        }
-        
-        // Стандартная сортировка по качеству
         if (matchQuality != other.matchQuality) {
-            return matchQuality < other.matchQuality; // лучшее качество идет первым
+            return matchQuality < other.matchQuality; // лучше качество идет первым
         }
-        
-        // Дополнительное сравнение по типу при одинаковом качестве
-        bool thisIsKeyword = (lspItem.kind == 14);
-        bool otherIsKeyword = (other.lspItem.kind == 14);
-        
-        if (thisIsKeyword && !otherIsKeyword) {
-            return true; // ключевые слова имеют приоритет
-        }
-        if (!thisIsKeyword && otherIsKeyword) {
-            return false;
-        }
-        
-        // При одинаковом качестве и типе, больший балл идет первым
+        // при одинаковом качестве, то больший балл идет первым
+        // TODO: добавить, что короткие лучше
         if (score != other.score) {
-            return score > other.score;
+            return score > other.score; // для сортировки по убыванию
         }
-        
-        // Для одинаковых баллов учитываем длину (более короткие имеют преимущество)
-        if (lspItem.label.length() != other.lspItem.label.length()) {
-            return lspItem.label.length() < other.lspItem.label.length();
-        }
-        
-        // если и качество и балл и длина равны, сортируем по label для стабильности
+        // если и качество и баллы равны, то сортируем по полю лейбл для стабильности
         return lspItem.label < other.lspItem.label;
     }
 };
