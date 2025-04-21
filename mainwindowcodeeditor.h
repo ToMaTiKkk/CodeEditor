@@ -9,6 +9,7 @@
 #include "lspmanager.h"
 #include "completionwidget.h"
 #include "diagnostictooltip.h"
+#include "codeplaintextedit.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -176,7 +177,7 @@ private:
     bool m_isDarkTheme;
     bool m_isAdmin;
     LineNumberArea *lineNumberArea;
-    QPlainTextEdit *m_codeEditor;
+    CodePlainTextEdit *m_codeEditor;
     bool maybeSave();
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)

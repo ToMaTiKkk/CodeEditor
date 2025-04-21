@@ -58,7 +58,8 @@ set(PROJECT_SOURCES
         completionwidget.h
         diagnostictooltip.cpp
         diagnostictooltip.h
-
+        codeplaintextedit.cpp
+        codeplaintextedit.h
 )
 
 if(QT_VERSION_MAJOR GREATER_EQUAL 6)

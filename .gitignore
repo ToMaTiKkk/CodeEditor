@@ -103,3 +103,5 @@ CMakeLists.txt.user*
 *.swp
 debug/
 saves/
+.specstory/
+.cursorindexingignore

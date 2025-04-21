@@ -90,7 +90,7 @@ void MainWindowCodeEditor::setupMainWindow()
 void MainWindowCodeEditor::setupCodeEditorArea()
 {
     // создаем наш собственный виджет окна редактирование QPlainTextEditor
-    m_codeEditor = new QPlainTextEdit();
+    m_codeEditor = new CodePlainTextEdit(this);
     m_codeEditor->setObjectName("realCodeEditor"); // отладочное имя
     m_codeEditor->setFont(QFont("Fira Code", 12));
     m_codeEditor->setTabStopDistance(25.0);
@@ -134,13 +134,16 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     connect(m_codeEditor, &QPlainTextEdit::updateRequest, lineNumberArea, &LineNumberArea::updateLineNumberArea); // когда пользователь печатает или прокручивает текст, то перерисовывает, только измненную часть нумерации строк, туже самую, что и была
     connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, lineNumberArea, QOverload<>::of(&LineNumberArea::update)); // перерисовка полностью, чтобы при скролле  синхронно с текстом сдвигалось
 
+    // не перехватывает нажатия KeyPress, а используем для этого класс специальный
+    connect(m_codeEditor, &CodePlainTextEdit::completionShortcut, this, &MainWindowCodeEditor::triggerCompletionRequest);
+    connect(m_codeEditor, &CodePlainTextEdit::definitionnShortcut, this, &MainWindowCodeEditor::triggerDefinitionRequest);
+
     lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
 
     QFileInfo fileInfo(currentFilePath);
     QString suffix = fileInfo.suffix().toLower();//ищем расширение файла
     highlighter = new CppHighlighter(m_codeEditor->document(), currentFilePath); //подсветка только для C++ и C
     m_codeEditor->viewport()->installEventFilter(this);
-
 }
 
 void MainWindowCodeEditor::setupLsp()
@@ -509,14 +512,15 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
     }
 
     if (obj == m_codeEditor->viewport()) {
-        if (event->type() == QEvent::KeyPress && (!m_completionWidget || !m_completionWidget->isVisible())) {
-            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-            // используем обработчики для шорткатов, когда автодоп не видно
-            handleEditorKeyPressEvent(keyEvent);
-            if (keyEvent->isAccepted()) {
-                return true;
-            }
-        } else if (event->type() == QEvent::Resize) {
+        // if (event->type() == QEvent::KeyPress && (!m_completionWidget || !m_completionWidget->isVisible())) {
+        //     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+        //     // используем обработчики для шорткатов, когда автодоп не видно
+        //     handleEditorKeyPressEvent(keyEvent);
+        //     if (keyEvent->isAccepted()) {
+        //         return true;
+        //     }
+        // } else
+        if (event->type() == QEvent::Resize) {
             for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
                 QString senderId = it.key();
                 int position = lastCursorPositions.value(senderId, -1);
