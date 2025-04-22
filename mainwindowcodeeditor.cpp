@@ -93,7 +93,8 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     m_codeEditor = new CodePlainTextEdit(this);
     m_codeEditor->setObjectName("realCodeEditor"); // отладочное имя
     m_codeEditor->setFont(QFont("Fira Code", 12));
-    m_codeEditor->setTabStopDistance(25.0);
+    // QFontMetrics metrics(font());
+    // m_codeEditor->setTabStopDistance(tabStop * metrics.horizontalAdvance(' '));
     m_codeEditor->setFocusPolicy(Qt::StrongFocus); // чтобы мог получать фокус для ввода
     m_codeEditor->setMouseTracking(true);
 
