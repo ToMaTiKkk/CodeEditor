@@ -42,13 +42,13 @@
        </size>
       </property>
       <property name="layoutDirection">
-       <enum>Qt::LayoutDirection::LeftToRight</enum>
+       <enum>Qt::LeftToRight</enum>
       </property>
       <property name="lineWidth">
        <number>0</number>
       </property>
       <property name="orientation">
-       <enum>Qt::Orientation::Horizontal</enum>
+       <enum>Qt::Horizontal</enum>
       </property>
       <property name="opaqueResize">
        <bool>true</bool>
@@ -129,10 +129,10 @@
         </size>
        </property>
        <property name="focusPolicy">
-        <enum>Qt::FocusPolicy::StrongFocus</enum>
+        <enum>Qt::StrongFocus</enum>
        </property>
        <property name="layoutDirection">
-        <enum>Qt::LayoutDirection::LeftToRight</enum>
+        <enum>Qt::LeftToRight</enum>
        </property>
        <property name="tabStopDistance">
         <double>25.000000000000000</double>
@@ -178,7 +178,7 @@
      <x>0</x>
      <y>0</y>
      <width>911</width>
-     <height>23</height>
+     <height>21</height>
     </rect>
    </property>
    <property name="defaultUp">
@@ -219,6 +219,7 @@
     <addaction name="actionToDoList"/>
     <addaction name="actionTerminal"/>
     <addaction name="actionChangeTheme"/>
+    <addaction name="actionLSP"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuSession"/>
@@ -325,6 +326,11 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+`</string>
+   </property>
+  </action>
+  <action name="actionLSP">
+   <property name="text">
+    <string>LSP-серверы...</string>
    </property>
   </action>
  </widget>

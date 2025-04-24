@@ -41,6 +41,27 @@
 #include <QSystemTrayIcon>
 #include <QAction>
 
+// расширение->язык
+const QMap<QString, QString> g_extensionToLanguage = {         // первое расширение файла, второе languageId, который ждет лсп сервер по типу (clangd, pylsp....)
+                                                {"cpp", "cpp"},
+                                                {"cc", "cpp"},
+                                                {"c", "cpp"},
+                                                {"h", "cpp"},
+                                                {"py", "python"},
+                                                {"js", "typescript"},
+                                                {"ts", "typescript"},
+                                                {"java", "java"},
+                                                {"go", "go"},
+                                                };
+// язык->имя сервера LSP
+const QMap<QString, QString> g_defaultLspExecutables = {
+    {"cpp",        "clangd"},
+    {"python",     "pyright"},
+    {"typescript", "typescript-language-server"},
+    {"java",       "jdtls"},
+    {"go",         "gopls"},
+};
+    
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindowCodeEditor;
@@ -153,6 +174,7 @@ private:
     void compileAndRun();         // автозапуск кода
 
     // LSP
+    void extracted(QString &languageId, QString &lspExecutable);
     void setupLsp(); // найстрока и запуска
     void setupLspCompletionAndHover();
     void triggerCompletionRequest(); // инициировать запрос автодополнения
@@ -161,6 +183,10 @@ private:
     QString getFileUri(const QString& localPath) const; // конвектировать локальный путь в URI
     QString getLocalPath(const QString& fileUri) const; // обратный конвектор
     QString getPrefixBeforeCursor(const QTextCursor& cursor);
+    void createAndStartLsp(const QString& languageId);
+    void onLspSettings();
+    bool ensureLspForLanguage(const QString& languageId);
+    void updateLspStatus(const QString& text);
 
     // переопределение событий для hover и хоткеев
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -213,7 +239,9 @@ private:
     QPushButton* m_chatButton;
     QPushButton* m_runButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
-
+    
+    QToolButton *m_lspStatusLabel; // статус индикации
+    QString m_currentLspLanguageId;
     bool m_shouldSaveAfterCreation = false;
     LspManager *m_lspManager = nullptr; // Lsp-менеджер
     CompletionWidget *m_completionWidget = nullptr; // виджет автодоплнения
@@ -223,6 +251,7 @@ private:
     bool m_isDiagnosticTooltipVisible;
     QPair<int, int> m_currentlyShownTooltipPange; // startPos and endPos, храним диапозон информации, что сейчас показывает тултип
     QPoint calculateTooltipPosition(const QPoint& globalMousePos);
+    QSet<QString> m_disableLanguages;
 
     // управление версиями и состоянии LSP для открытого файла
     QString m_currentLspFileUri; // URI текущего файла
@@ -242,6 +271,5 @@ private:
     bool m_isTerminalVisible = false;
 
     QString getCurrentWordBeforeCursor(QTextCursor cursor);
-
 };
 #endif // MAINWINDOWCODEEDITOR_H

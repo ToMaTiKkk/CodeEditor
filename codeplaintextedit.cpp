@@ -134,7 +134,7 @@ void CodePlainTextEdit::keyPressEvent(QKeyEvent *event)
     }
 
     // пропускаем уже введенные элементы
-    if (keyText == ")" || keyText == "]" || keyText == "}" || keyText == "\"" || keyText == "'") {
+    if (keyText == ")" || keyText == "]" || keyText == "}" || keyText == "\"" || keyText == "'" || keyText == '"') {
         QTextCursor cursor = textCursor();
         int pos = cursor.position();
         if (pos < document()->characterCount() && document()->characterAt(pos) == keyText.at(0)) {

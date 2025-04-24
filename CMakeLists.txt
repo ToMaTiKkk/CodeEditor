@@ -60,6 +60,8 @@ set(PROJECT_SOURCES
         diagnostictooltip.h
         codeplaintextedit.cpp
         codeplaintextedit.h
+        lspsettingsdialog.cpp
+        lspsettingsdialog.h
 )
 
 if(QT_VERSION_MAJOR GREATER_EQUAL 6)
