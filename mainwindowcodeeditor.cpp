@@ -305,6 +305,15 @@ void MainWindowCodeEditor::setupMenuBarActions()
     } else {
         qWarning() << "Could not find 'menuView' or 'actionTerminal' in UI file.";
     }
+    
+    // создаем панель диагностик
+    m_diagnosticsDock = new QDockWidget(tr("Диагностика"), this);
+    m_diagnosticsList = new QListWidget(m_diagnosticsDock);
+    m_diagnosticsList->setUniformItemSizes(true);
+    m_diagnosticsList->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_diagnosticsDock->setWidget(m_diagnosticsList);
+    addDockWidget(Qt::RightDockWidgetArea, m_diagnosticsDock);
+    connect(m_diagnosticsList, &QListWidget::itemActivated, this, &MainWindowCodeEditor::onDiagnosticItemActivated);
 }
 
 void MainWindowCodeEditor::setupFileSystemView()
@@ -998,6 +1007,15 @@ void MainWindowCodeEditor::updateDiagnosticsView()
     qDebug() << "[UPDATE_DIAG_VIEW] Setting" << extraSelections.count() << "extra selections to the editor.";
     // применяем созданный список подчеркиваний к редактору
     m_codeEditor->setExtraSelections(extraSelections);
+    
+    m_diagnosticsList->clear();
+    const auto& diags = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+    for (const LspDiagnostic& d : diags) {
+        QString text = QString("%1:%2 [%3] %4").arg(d.startLine + 1).arg(d.startChar + 1).arg(d.severity == 1 ? tr("Error") : d.severity == 2 ? tr("Warning") : tr("Info"));
+        auto *item = new QListWidgetItem(text, m_diagnosticsList);
+        // сохраняем позицию для перехода
+        item->setData(Qt::UserRole, QVariant::fromValue(QPair<int, int>(d.startLine, d.startChar)));
+    }
 }
 
 
@@ -2981,4 +2999,28 @@ void MainWindowCodeEditor::updateLspStatus(const QString& text)
     if (m_lspStatusLabel) {
         m_lspStatusLabel->setText(text);
     }
+}
+
+void MainWindowCodeEditor::onDiagnosticItemActivated(QListWidgetItem* item)
+{
+    auto pos = item->data(Qt::UserRole).value<QPair<int, int>>();
+    int line = pos.first;
+    int col = pos.second;
+    
+    if (!m_codeEditor || !m_codeEditor->document()) {
+        return;
+    }
+    
+    // конвектируем lsp позицию в позицию в документе
+    int editorPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), line, col);
+    if (editorPos < 0) {
+        return;
+    }
+    
+    // устанавливаем куроср и прокурчиваем
+    QTextCursor cursor(m_codeEditor->document());
+    cursor.setPosition(editorPos);
+    m_codeEditor->setTextCursor(cursor);
+    m_codeEditor->ensureCursorVisible();
+    m_codeEditor->setFocus();
 }

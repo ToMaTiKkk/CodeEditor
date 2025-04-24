@@ -10,5 +10,8 @@
         <file>styles/Light.colorscheme</file>
         <file>styles/run.png</file>
         <file>styles/app_icon.png</file>
+        <file>styles/info.svg</file>
+        <file>styles/warning.svg</file>
+        <file>styles/error.png</file>
     </qresource>
 </RCC>

@@ -40,6 +40,8 @@
 #include <QFontMetrics>
 #include <QSystemTrayIcon>
 #include <QAction>
+#include <QDockWidget>
+#include <QListWidget>
 
 // расширение->язык
 const QMap<QString, QString> g_extensionToLanguage = {         // первое расширение файла, второе languageId, который ждет лсп сервер по типу (clangd, pylsp....)
@@ -157,6 +159,7 @@ private slots: // функции, которые будут вызваны в о
     void applyCompletion(const QString& textToInsert);
     // слот дял таймера запроса hover
     void showDiagnoticTooltipOrRequestHover();
+    void onDiagnosticItemActivated(QListWidgetItem* item);
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -252,6 +255,8 @@ private:
     QPair<int, int> m_currentlyShownTooltipPange; // startPos and endPos, храним диапозон информации, что сейчас показывает тултип
     QPoint calculateTooltipPosition(const QPoint& globalMousePos);
     QSet<QString> m_disableLanguages;
+    QDockWidget* m_diagnosticsDock;
+    QListWidget* m_diagnosticsList;
 
     // управление версиями и состоянии LSP для открытого файла
     QString m_currentLspFileUri; // URI текущего файла

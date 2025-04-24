@@ -258,3 +258,16 @@ QCalendarWidget QTableView {
     background-color: black;
     font-weight: bold;
 }
+
+DiagnosticsPanel QTreeWidget {
+    background: rgb(34, 33, 40);
+    alternate-background-color: rgba(255,255,255,0.05);
+}
+
+DiagnosticsPanel QTreeWidget::item {
+    color: rgba(255,255,255,0.8);
+}
+
+DiagnosticsPanel QTreeWidget::item:hover {
+    background: rgba(127, 117, 218, 0.15);
+}
