@@ -1008,13 +1008,29 @@ void MainWindowCodeEditor::updateDiagnosticsView()
     // применяем созданный список подчеркиваний к редактору
     m_codeEditor->setExtraSelections(extraSelections);
     
-    m_diagnosticsList->clear();
+    //m_diagnosticsList->clear();
+    //const auto& diags = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+    //for (const LspDiagnostic& d : diags) {
+      //  QString text = QString("%1:%2 [%3] %4").arg(d.startLine + 1).arg(d.startChar + 1).arg(d.severity == 1 ? tr("Error") : d.severity == 2 ? tr("Warning") : tr("Info"));
+        //auto *item = new QListWidgetItem(text, m_diagnosticsList);
+        // сохраняем позицию для перехода
+        //item->setData(Qt::UserRole, QVariant::fromValue(QPair<int, int>(d.startLine, d.startChar)));
+    //}
+    
+    // формируем номер строки -> максимальная диагностика
+    QMap<int, int> gutterMap;
     const auto& diags = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
     for (const LspDiagnostic& d : diags) {
-        QString text = QString("%1:%2 [%3] %4").arg(d.startLine + 1).arg(d.startChar + 1).arg(d.severity == 1 ? tr("Error") : d.severity == 2 ? tr("Warning") : tr("Info"));
-        auto *item = new QListWidgetItem(text, m_diagnosticsList);
-        // сохраняем позицию для перехода
-        item->setData(Qt::UserRole, QVariant::fromValue(QPair<int, int>(d.startLine, d.startChar)));
+        int line  = d.startLine;
+        // если на строке уже етсь, то берем более критичный (1=error < 2=warning < 3=info)
+        if (!gutterMap.contains(line) || d.severity < gutterMap[line]) {
+            gutterMap[line] = d.severity;
+        }
+    }
+    
+    // шлем в нумерацию и перерисовываем
+    if (lineNumberArea) {
+        lineNumberArea->setDiagnotics(gutterMap);
     }
 }
 
