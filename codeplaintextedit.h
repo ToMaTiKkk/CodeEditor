@@ -14,6 +14,8 @@ public:
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
+    void wheelEvent(QWheelEvent* event) override;
+    void smoothScrollBy(int deltaY);
 
 signals:
     void completionShortcut(); // при crtl+space

@@ -3,11 +3,13 @@
 #include <QTextBlock>
 #include <QPaintEvent>
 #include <QScrollBar>
+#include <QToolTip>
 
 LineNumberArea::LineNumberArea(QPlainTextEdit *editor) : QWidget(editor), codeEditor(editor), m_currentDigits(1) // при пердачи редактора как родителя - значит нумерация будет внутри редактора
 {
     updateLineNumberAreaWidth(); // рассчитать и установить начальную ширину, даже если 0 строк
 
+    setMouseTracking(true);
     connect(codeEditor, &QPlainTextEdit::cursorPositionChanged, this, QOverload<>::of(&LineNumberArea::update)); // подключение к изменению курсора редактора для подствеотки строки
     connect(codeEditor->document(), &QTextDocument::contentsChange, this, QOverload<>::of(&LineNumberArea::update)); // чтобы подсветка обновлялась при вставки или удалении строк
     connect(codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, QOverload<>::of(&LineNumberArea::update)); // обновлении при измнении видимой области
@@ -58,9 +60,10 @@ void LineNumberArea::updateLineNumberArea(const QRect &rect, int dy)
         update(0, rect.y(), width(), rect.height()); // частиное обновление
 }
 
-void LineNumberArea::setDiagnotics(const QMap<int, int>& diagnostics)
+void LineNumberArea::setDiagnotics(const QMap<int, int>& diagnostics, const QMap<int, QStringList>& diagnosticsMessage)
 {
     m_diagnostics = diagnostics;
+    m_diagnosticsMessage = diagnosticsMessage;
     update(); // перерисовываем
 }
 
@@ -129,4 +132,20 @@ void LineNumberArea::paintEvent(QPaintEvent *event)
             break;
         }
     }
+}
+
+void LineNumberArea::mouseMoveEvent(QMouseEvent* event)
+{
+    // вычисляем строку по y
+    QTextCursor cursor = codeEditor->cursorForPosition(QPoint(0, event->pos().y()));
+    int line = cursor.block().blockNumber();
+    
+    if (m_diagnosticsMessage.contains(line)) {
+        QString tooltip = m_diagnosticsMessage.value(line).join("\n");
+        QToolTip::showText(event->globalPos(), tooltip, this);
+    } else {
+        QToolTip::hideText();
+        event->ignore();
+    }
+    QWidget::mouseMoveEvent(event);
 }

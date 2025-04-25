@@ -1,6 +1,9 @@
 #include "codeplaintextedit.h"
 #include <QTextCursor>
 #include <QTextBlock>
+#include <QScrollBar>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
 
 CodePlainTextEdit::CodePlainTextEdit(QWidget *parent)
     : QPlainTextEdit(parent)
@@ -146,4 +149,37 @@ void CodePlainTextEdit::keyPressEvent(QKeyEvent *event)
 
     // остальное в стандартную обработку
     QPlainTextEdit::keyPressEvent(event);
+}
+
+void CodePlainTextEdit::wheelEvent(QWheelEvent* event)
+{
+   auto *vs = verticalScrollBar();
+   // Если есть точная дельта (например, тачпад)
+    if (!event->pixelDelta().isNull()) {
+       vs->setValue(vs->value() - event->pixelDelta().y());
+    } else {
+       // fallback для обычной мышки
+       // angleDelta().y() даёт 120 либо –120 за один «щелчок»
+       vs->setValue(vs->value() - event->angleDelta().y() / 120.0 * fontMetrics().height() / 2);
+       // здесь делится на 2, чтобы получить полустроку, можно варьировать для чувствительности
+    }
+    event->accept();
+}
+
+
+void CodePlainTextEdit::smoothScrollBy(int deltaY)
+{
+    QScrollBar *vs = verticalScrollBar();
+    int start = vs->value();
+    int end   = start - deltaY;
+
+    // Ограничиваем конец допустимым диапазоном
+    end = qBound(vs->minimum(), end, vs->maximum());
+
+    auto *anim = new QPropertyAnimation(vs, "value", this);
+    anim->setDuration(200); // мс — подберите под себя: меньше = быстрее, больше = более «тяжёлая» инерция
+    anim->setStartValue(start);
+    anim->setEndValue(end);
+    anim->setEasingCurve(QEasingCurve::OutCubic); // сглаженная кривая
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
