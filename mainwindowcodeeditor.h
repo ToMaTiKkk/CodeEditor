@@ -63,7 +63,7 @@ const QMap<QString, QString> g_defaultLspExecutables = {
     {"java",       "jdtls"},
     {"go",         "gopls"},
 };
-    
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindowCodeEditor;
