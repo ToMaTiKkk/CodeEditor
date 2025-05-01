@@ -1,0 +1,22 @@
+CompletionWidget {
+    background-color: rgb(45, 44, 60);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgb(92, 84, 165);
+    border-radius: 4px;
+    padding: 2px;
+    outline: 0;
+}
+CompletionWidget::item {
+    background-color: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    padding: 4px 8px;
+    border-radius: 3px;
+    min-height: 20px;
+}
+CompletionWidget::item:hover {
+    background-color: rgba(92, 84, 165, 0.4);
+}
+CompletionWidget::item:selected {
+    background-color: rgb(92, 84, 165);
+    color: white;
+}

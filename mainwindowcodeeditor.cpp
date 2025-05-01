@@ -2292,6 +2292,14 @@ void MainWindowCodeEditor::applyCurrentTheme()
             chatWidget->setStyleSheet(darkStyle);
             darkFile.close();
             qDebug() << "Dark theme applied successfully";
+            QFile styleFile(":/styles/darkcompletionwidget.qss"); // Путь из ресурсов
+            if (styleFile.open(QFile::ReadOnly | QFile::Text)) {
+                QTextStream stream(&styleFile);
+                QString completionStyleSheet = stream.readAll();
+                m_completionWidget->setStyleSheet(completionStyleSheet);
+                styleFile.close();
+                qDebug() << "Direct stylesheet loaded and applied to CompletionWidget from resource.";
+            }
         } else {
             qDebug() << "Failed to open dark.qss";
         }
