@@ -125,7 +125,9 @@ QScrollBar:vertical {
         background: rgb(34, 33, 50);
         width: 12px;
         margin: 0;
+        border: none;
 }
+
 
 QScrollBar::handle:vertical {
         background: rgba(92, 84, 165, 0.7);
@@ -142,9 +144,55 @@ QSplitter::handle {
         width: 3px;
 }
 
-QScrollBar::handle:hover {
-        background: rgb(127, 117, 218);
-        width: 4px;
+QScrollBar::handle:vertical:hover {
+        background: rgba(112, 104, 185, 0.9);
+}
+
+QScrollBar:horizontal {
+    background: rgb(34, 33, 50);
+    height: 12px;
+    margin: 0px 12px 0px 12px;
+    border: none;
+}
+
+QScrollBar::handle:horizontal {
+    background: rgba(92, 84, 165, 0.7);
+    min-width: 20px;
+    height: 10px;
+    margin: 1px 0;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: rgba(112, 104, 185, 0.9);
+}
+
+QScrollBar::add-line:horizontal {
+    background: rgb(34, 33, 50);
+    border: 0.25px solid rgb(92, 84, 165);
+    width: 12px;
+    height: 10px;
+    subcontrol-position: right;
+    subcontrol-origin: margin;
+    image: url(:/styles/l_rightarrow.png);
+}
+
+QScrollBar::sub-line:horizontal {
+    background: rgb(34, 33, 50);
+    border: 0.25px solid rgb(92, 84, 165);
+    width: 12px;
+    height: 10px;
+    subcontrol-position: left;
+    subcontrol-origin: margin;
+    image: url(:/styles/l_leftarrow.png);
+}
+
+QScrollBar::add-line:horizontal:hover, QScrollBar::sub-line:horizontal:hover {
+    background: rgba(80, 80, 100, 50);
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
 }
 
 QPushButton {

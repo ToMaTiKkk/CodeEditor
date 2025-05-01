@@ -157,6 +157,54 @@ QScrollBar::handle:vertical:hover {
     background: rgba(150, 150, 150, 0.9);
 }
 
+QScrollBar:horizontal {
+    background: rgb(240, 240, 240);
+    height: 12px;
+    margin: 0px 12px 0px 12px;
+    border: none;
+}
+
+QScrollBar::handle:horizontal {
+    background: rgba(150, 150, 150, 0.7);
+    min-width: 20px;
+    height: 10px;
+    margin: 1px 0;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: rgba(150, 150, 150, 0.9);
+}
+
+QScrollBar::add-line:horizontal {
+    background: rgb(240, 240, 240);
+    border: 0.25px solid rgb(0,0,0);
+    width: 12px;
+    height: 10px;
+    subcontrol-position: right;
+    subcontrol-origin: margin;
+    image: url(:/styles/d_rightarrow.png);
+}
+
+QScrollBar::sub-line:horizontal {
+    background: rgb(240, 240, 240);
+    border: 0.25px solid rgb(0,0,0);
+    width: 12px;
+    height: 10px;
+    subcontrol-position: left;
+    subcontrol-origin: margin;
+    image: url(:/styles/d_leftarrow.png);
+}
+
+QScrollBar::add-line:horizontal:hover, QScrollBar::sub-line:horizontal:hover {
+    background: rgba(0, 0, 0, 20);
+    border: 0.25px solid rgb(0,0,0);
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+}
+
 QTreeView {
     background-color: white;
     color: rgba(0, 0, 0, 0.8);
