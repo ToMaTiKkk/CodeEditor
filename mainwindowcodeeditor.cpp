@@ -37,6 +37,10 @@
 #include <QStandardPaths>
 #include <QSurfaceFormat>
 
+#include <QKeySequence>
+#include <QTextCursor>
+#include <QTextCharFormat>
+
 // Константы для чата
 const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
 const int HORIZONTAL_MARGIN = 10;      // Боковые отступы от краев ScrollArea
@@ -76,6 +80,9 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     setupNetwork(); // websocket, client id
     setupThemeAndNick(); // тема и никнейм
     setupTerminalArea(); // настройка терминала
+
+    m_findFormat.setBackground(QColor(Qt::blue).lighter(140));// поэксперементировать с цветами надо
+    m_findFormat.setForeground(Qt::white);
 
     qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
     qDebug() << "Splitter widget count:" << ui->splitter->count();
@@ -118,19 +125,61 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     layout->addWidget(lineNumberArea);
     layout->addWidget(m_codeEditor);
 
+    m_findPanel = new QWidget(this);
+    m_findPanel->setObjectName("findPanel");
+    m_findLineEdit = new QLineEdit(m_findPanel);
+    m_findLineEdit->setPlaceholderText(tr("Найти"));
+    m_findNextButton = new QPushButton(tr("↓ Следующий"), m_findPanel);
+    m_findPrevButton = new QPushButton(tr("↑ Предыдущий"), m_findPanel);
+
+    QHBoxLayout* findLayout = new QHBoxLayout(m_findPanel);
+    findLayout->setContentsMargins(2, 2, 2, 2);
+    findLayout->setSpacing(4);
+    findLayout->addWidget(m_findLineEdit);
+    findLayout->addWidget(m_findNextButton);
+    findLayout->addWidget(m_findPrevButton);
+    // для поиска: Добавляем растягивающееся пустое пространство, чтобы прижать кнопку "Закрыть" вправо
+    findLayout->addStretch(1);
+    // для поиска: Добавляем кнопку "Закрыть" в layout
+    findLayout->addWidget(m_findCloseButton);
+
+    m_findPanel->setVisible(false);
+
+    QWidget* editorAndFindWidget = new QWidget();
+    editorAndFindWidget->setObjectName("editorAndFindWidget");
+    editorAndFindWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    QVBoxLayout* finalLayout = new QVBoxLayout(editorAndFindWidget);
+    finalLayout->setContentsMargins(0, 0, 0, 0);
+    finalLayout->setSpacing(0);
+    finalLayout->addWidget(codeEditorContainer);
+    finalLayout->addWidget(m_findPanel);
+
+
     // находим индекс из ui-дизайнера непосредственно codeEditor и заменяем его на созданный контейнер
-    int index = ui->splitter->indexOf(ui->codeEditor);
-    if (index != -1) { // если нашли
-        ui->splitter->replaceWidget(index, codeEditorContainer);
-        codeEditorContainer->setVisible(true); // потому что после замены виджет скрывается
+    int index = -1;
+    if (ui->splitter) {
+        index = ui->splitter->indexOf(ui->codeEditor); // ИСХОДНЫЙ виджет-плейсхолдер из дизайнера (ui->codeEditor)
+    } else {
+        return;
+    }
+
+    if (index != -1) { // если нашли плейсхолдер ui->codeEditor
+        ui->splitter->replaceWidget(index, editorAndFindWidget);
+        editorAndFindWidget->setVisible(true);
 
         // удаляем прошлый редактор из дизайнера, потмоу что он больше не нужен
         delete ui->codeEditor;
         ui->codeEditor = nullptr; // чтобы случайнно не использовать данный указатель
-        qDebug() << "Редактор ui->codeEditor успешно заменен на codeEditorContainer";
     } else {
-        ui->splitter->addWidget(codeEditorContainer);
-        codeEditorContainer->setVisible(true);
+        if (ui->splitter) {
+            ui->splitter->addWidget(editorAndFindWidget);
+            editorAndFindWidget->setVisible(true);
+        } else {
+            delete editorAndFindWidget;
+            m_findPanel = nullptr;
+            codeEditorContainer = nullptr;
+        }
     }
 
     // подключенеие сигналов к нумерации и окну редактирования
@@ -145,16 +194,23 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
 
     QFileInfo fileInfo(currentFilePath);
-    QString suffix = fileInfo.suffix().toLower();//ищем расширение файла
     highlighter = new CppHighlighter(m_codeEditor->document(), currentFilePath); //подсветка только для C++ и C
     m_codeEditor->viewport()->installEventFilter(this);
+
+    connect(m_findLineEdit, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::findNext);
+    connect(m_findLineEdit, &QLineEdit::textChanged, this, &MainWindowCodeEditor::updateFindHighlights);
+    connect(m_findNextButton, &QPushButton::clicked, this, &MainWindowCodeEditor::findNext);
+    connect(m_findPrevButton, &QPushButton::clicked, this, &MainWindowCodeEditor::findPrevious);
+    m_findLineEdit->installEventFilter(this);
 
     // индикатор состояния лсп сервера, какой работает и работает ли он вообще
     QToolButton *lspStatusBtn = new QToolButton(this);
     lspStatusBtn->setText(tr("LSP: -"));
     lspStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
     lspStatusBtn->setAutoRaise(true);
-    statusBar()->addPermanentWidget(lspStatusBtn);
+    if (statusBar()) { // для поиска: Добавляем проверку существования statusBar перед использованием
+        statusBar()->addPermanentWidget(lspStatusBtn);
+    }
     m_lspStatusLabel = lspStatusBtn;
     connect(lspStatusBtn, &QToolButton::clicked, this, &MainWindowCodeEditor::onLspSettings);
 
@@ -162,7 +218,9 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     m_diagnosticsStatusBtn = new QToolButton(this);
     m_diagnosticsStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_diagnosticsStatusBtn->setAutoRaise(true);
-    statusBar()->addPermanentWidget(m_diagnosticsStatusBtn);
+    if (statusBar()) { // для поиска: Добавляем проверку существования statusBar перед использованием
+        statusBar()->addPermanentWidget(m_diagnosticsStatusBtn);
+    }
 
     // перемещение по ошибкам через F2 | Shift + F2
     QAction *actNext = new QAction(tr("Следующая ошибка"), this);
@@ -562,6 +620,8 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
             }
             QToolTip::hideText();
         }
+        // Передаем событие для стандартной обработки базовым классом
+        return QMainWindow::eventFilter(obj, event);
     }
 
     // стандартная обработка для всех остальных объектов
@@ -3157,3 +3217,88 @@ void MainWindowCodeEditor::prevDiagnostic()
         }
     }
 }
+
+void MainWindowCodeEditor::showFindPanel() // по сути она еще и закрывает, не хочу делать отдельную фукнцию)))
+{
+    if (m_findPanel->isVisible()) {
+        m_findPanel->setVisible(false);
+    }
+    else {
+        m_findPanel->setVisible(true);
+        m_findLineEdit->setFocus();
+        m_findLineEdit->selectAll();
+        updateFindHighlights();
+    }
+}
+
+
+void MainWindowCodeEditor::findNext()
+{
+    if (!m_findPanel || !m_findPanel->isVisible() || !m_codeEditor) return;
+    QString searchText = m_findLineEdit->text();
+    if (searchText.isEmpty()) return;
+    QTextDocument::FindFlags flags;
+    if (!m_codeEditor->find(searchText, flags)) {
+        QTextCursor cursor = m_codeEditor->textCursor();
+        cursor.movePosition(QTextCursor::Start);
+        m_codeEditor->setTextCursor(cursor);
+        m_codeEditor->find(searchText, flags);
+        if(statusBar()) statusBar()->showMessage(tr("Поиск достиг начала документа"), 2000);
+    }
+    updateFindHighlights();
+}
+
+void MainWindowCodeEditor::findPrevious()
+{
+    if (!m_findPanel || !m_findPanel->isVisible() || !m_codeEditor) return;
+    QString searchText = m_findLineEdit->text();
+    if (searchText.isEmpty()) return;
+
+    QTextDocument::FindFlags flags = QTextDocument::FindBackward;
+    if (!m_codeEditor->find(searchText, flags)) {
+        QTextCursor cursor = m_codeEditor->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        m_codeEditor->setTextCursor(cursor);
+        m_codeEditor->find(searchText, flags);
+        if(statusBar()) statusBar()->showMessage(tr("Поиск достиг конца документа"), 2000);
+    }
+    updateFindHighlights();
+}
+
+// подсвечивае ВСЕ найденные слова
+void MainWindowCodeEditor::updateFindHighlights()
+{
+    m_findSelections.clear(); // предыдщущие убираем
+
+    // при выходе убюираем
+    if (!m_findPanel || !m_findPanel->isVisible()) {
+        m_codeEditor->setExtraSelections(m_findSelections);
+        return;
+    }
+    QString searchText = m_findLineEdit->text();
+    if (searchText.isEmpty() || searchText.length() < 1) {
+        m_codeEditor->setExtraSelections(m_findSelections);
+        return;
+    }
+
+    QTextDocument *document = m_codeEditor->document();
+    QTextCursor highlightCursor(document);
+    QTextDocument::FindFlags flags;
+
+    while (!highlightCursor.isNull() && !highlightCursor.atEnd()) {
+        highlightCursor = document->find(searchText, highlightCursor, flags);
+        if (!highlightCursor.isNull()) {
+            QTextEdit::ExtraSelection sel;
+            sel.format = m_findFormat;
+            sel.cursor = highlightCursor;
+            m_findSelections.append(sel);
+        }
+    }
+    m_codeEditor->setExtraSelections(m_findSelections);
+}
+
+void MainWindowCodeEditor::on_actionFindPanel_triggered()
+{
+    showFindPanel();
+}
+

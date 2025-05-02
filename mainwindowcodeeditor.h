@@ -40,6 +40,10 @@
 #include <QFontMetrics>
 #include <QSystemTrayIcon>
 #include <QAction>
+
+#include<QList>
+#include <QPlainTextEdit>
+
 // #include <QDockWidget>
 // #include <QListWidget>
 
@@ -67,6 +71,7 @@ const QMap<QString, QString> g_defaultLspExecutables = {
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindowCodeEditor;
+class QAction;
 }
 QT_END_NAMESPACE
 
@@ -162,6 +167,14 @@ private slots: // функции, которые будут вызваны в о
     //void onDiagnosticItemActivated(QListWidgetItem* item);
     void nextDiagnostic();
     void prevDiagnostic();
+
+    void showFindPanel(); // по сути она еще и закрывает, не хочу делать отдельную фукнцию)))
+    void findNext();
+    void findPrevious();
+    void updateFindHighlights(); //.для подсветки всех найденных слов
+
+
+    void on_actionFindPanel_triggered();
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -278,6 +291,16 @@ private:
     TerminalWidget *m_terminalWidget = nullptr;
     bool m_isTerminalVisible = false;
 
+
     QString getCurrentWordBeforeCursor(QTextCursor cursor);
+
+    QWidget*     m_findPanel = nullptr;
+    QLineEdit*   m_findLineEdit = nullptr;
+    QPushButton* m_findNextButton = nullptr;
+    QPushButton* m_findPrevButton = nullptr;
+    QPushButton* m_findCloseButton = nullptr;
+
+    QList<QTextEdit::ExtraSelection> m_findSelections; //ля подсветки результатов поиска
+    QTextCharFormat m_findFormat;
 };
 #endif // MAINWINDOWCODEEDITOR_H
