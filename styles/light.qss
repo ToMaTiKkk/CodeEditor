@@ -8,6 +8,45 @@ QMainWindow {
     min-height: 25px;
 }
 
+CompletionWidget {
+    background-color: rgb(240, 240, 240);
+    color: rgba(0, 0, 0, 0.9);
+    border: 1px solid #007bff;
+    border-radius: 4px;
+    padding: 2px;
+    outline: 0;
+}
+CompletionWidget::item {
+    background-color: transparent;
+    color: rgba(0, 0, 0, 0.9);
+    padding: 4px 8px;
+    border-radius: 3px;
+    min-height: 20px;
+}
+CompletionWidget::item:hover {
+    background-color: rgba(0,123,255,200);
+}
+CompletionWidget::item:selected {
+    background-color: #007bff;
+    color: white;
+}
+QToolTip {
+    background-color: #f5f5f5;
+    color: #333333;
+    border: 1px solid #007bff;
+    border-radius: 5px;
+    padding: 6px;
+    opacity: 240; /* прозрачно вроде прикольно*/
+}
+#DiagnosticTooltipInstance {
+    background-color: #f5f5f5;
+    color: #333333;
+    border: 1px solid #007bff;
+    border-radius: 5px;
+    padding: 6px;
+}
+
+
 #runButton {
     background: transparent;
     border: none;

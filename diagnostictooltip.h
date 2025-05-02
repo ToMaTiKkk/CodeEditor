@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QPainter>
 
 class DiagnosticTooltip : public QWidget
 {
@@ -13,6 +14,7 @@ public:
     explicit DiagnosticTooltip(QWidget *parent = nullptr);
     void setText(const QString &text);
     void setRichText(const QString &richText); // для форматирования
+    void paintEvent(QPaintEvent *event) override;
 
 private:
     QLabel *m_label;

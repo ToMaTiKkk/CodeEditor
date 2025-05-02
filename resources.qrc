@@ -17,6 +17,5 @@
         <file>styles/d_leftarrow.png</file>
         <file>styles/l_rightarrow.png</file>
         <file>styles/l_leftarrow.png</file>
-        <file>styles/darkcompletionwidget.qss</file>
     </qresource>
 </RCC>
