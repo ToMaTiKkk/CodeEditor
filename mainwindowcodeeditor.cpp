@@ -203,6 +203,16 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     connect(m_findPrevButton, &QPushButton::clicked, this, &MainWindowCodeEditor::findPrevious);
     m_findLineEdit->installEventFilter(this);
 
+    QAction *Next = new QAction(tr("Следующий элемент"), this);
+    Next->setShortcut(Qt::Key_Down);
+    connect(Next, &QAction::triggered, this, &MainWindowCodeEditor::findNext);
+    addAction(Next);
+
+    QAction *Previous = new QAction(tr("Предыдущий элемент"), this);
+    Previous->setShortcut(QKeySequence(Qt::Key_Up));
+    connect(Previous, &QAction::triggered, this, &MainWindowCodeEditor::findPrevious);
+    addAction(Previous);
+
     // индикатор состояния лсп сервера, какой работает и работает ли он вообще
     QToolButton *lspStatusBtn = new QToolButton(this);
     lspStatusBtn->setText(tr("LSP: -"));
@@ -3222,6 +3232,8 @@ void MainWindowCodeEditor::showFindPanel() // по сути она еще и з�
 {
     if (m_findPanel->isVisible()) {
         m_findPanel->setVisible(false);
+        m_codeEditor->setFocus();
+        updateFindHighlights();
     }
     else {
         m_findPanel->setVisible(true);
