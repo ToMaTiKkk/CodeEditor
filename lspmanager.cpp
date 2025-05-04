@@ -23,7 +23,7 @@ LspManager::~LspManager()
 // !!! инициализация и управление процессом !!!
 
 // запуск сервера (пример clangd)
-bool LspManager::startServer(const QString& languageId, const QString& projectRootPath)
+bool LspManager::startServer(const QString& languageId, const QString& projectRootPath, const QStringList& arguments)
 {
     // проверка а не запущен ли сервер
     if (m_lspProcess && m_lspProcess->state() != QProcess::NotRunning) {
@@ -40,18 +40,26 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     m_languageId = languageId; // запоминаем язык
     m_rootUri = QUrl::fromLocalFile(projectRootPath).toString(); // конвектируем формат пути из "/home/user/project" в "file:///home/user/project", который требует ЛСП
 
-    qInfo() << "Запускаем LSP сервер:" << m_serverExecutablePath << "для проекта" << m_rootUri;
+    qInfo() << "Запускаем LSP сервер:" << m_serverExecutablePath << "для проекта" << m_rootUri << "с аргументами:" << arguments;
 
-    m_lspProcess = new QProcess(this); // создаем объект, который будет управлять внешним процессом, удаляется вместе с родителем, то есть с LspManager
+    if (!m_lspProcess) {
+        m_lspProcess = new QProcess(this); // создаем объект, который будет управлять внешним процессом, удаляется вместе с родителем, то есть с LspManager
 
-    // настройках уведов, когда процесс напишет в stdout, то вызываем функцию
-    connect(m_lspProcess, &QProcess::readyReadStandardOutput, this, &LspManager::onReadyReadStandardOutput);
-    connect(m_lspProcess, &QProcess::readyReadStandardError, this, &LspManager::onReadyReadStandardError);
-    connect(m_lspProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &LspManager::onProcessFinished);
-    connect(m_lspProcess, &QProcess::errorOccurred, this, &LspManager::onProcessError); // ошибки при запуске или работе
+        // настройках уведов, когда процесс напишет в stdout, то вызываем функцию
+        connect(m_lspProcess, &QProcess::readyReadStandardOutput, this, &LspManager::onReadyReadStandardOutput);
+        connect(m_lspProcess, &QProcess::readyReadStandardError, this, &LspManager::onReadyReadStandardError);
+        connect(m_lspProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &LspManager::onProcessFinished);
+        connect(m_lspProcess, &QProcess::errorOccurred, this, &LspManager::onProcessError); // ошибки при запуске или работе
+    }
 
+    m_lspProcess->setProgram(m_serverExecutablePath); // устанавливаем программу
+    if (!arguments.isEmpty()) {
+        m_lspProcess->setArguments(arguments);
+    } else {
+        m_lspProcess->setArguments({});
+    }
     // запускаем процесс и qt найдет m_serverExecutable с системных путях в PATH
-    m_lspProcess->start(m_serverExecutablePath);
+    m_lspProcess->start();
 
     // задержка в 5 сек, чтобы точно убедиться, что процесс запустился
     if (!m_lspProcess->waitForStarted(5000)) {
@@ -847,14 +855,12 @@ int LspManager::lspPosToEditorPos(QTextDocument *doc, int line, int character)
     if (posInLine >= tb.length()) {
         return qMin(lineStartPosition + posInLine, doc->characterCount() - 1);
     }
-    
-    // <<< ЛОГ ВНУТРИ КОНВЕРТЕРА >>>
+
     QString blockText = tb.text(); // Получим текст строки для лога
     qDebug() << "[lspPosToEditorPos] Input line:" << line << "char:" << character
              << " -> Found block:" << tb.blockNumber() << "startPos:" << lineStartPosition
              << "length:" << tb.length() << "text: '" << blockText.left(20) << "...'" // Показать начало текста
              << " -> Calculated EditorPos:" << (lineStartPosition + character);
-    // <<< КОНЕЦ ЛОГА >>>
 
     return lineStartPosition + posInLine;
     // for (int pos = 0; pos < text.length(); ++pos) {

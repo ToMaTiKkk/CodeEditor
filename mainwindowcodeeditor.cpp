@@ -246,8 +246,46 @@ void MainWindowCodeEditor::setupCodeEditorArea()
 
 void MainWindowCodeEditor::setupLsp()
 {
+    qDebug() << "Выполняется первоначальный поиск и настройка LSp серверов...";
     // создаем системные настройки (хранятся в системе, в реестре)
     QSettings settings("ToMaTiK", "BAM_IDE");
+
+    // проходим по всем языкам
+    for (auto it = langs.constBegin(); it != langs.constEnd(); ++it) {
+        QString langId = it.key();
+        QString settingKey = QString("LSP/Servers/%1").arg(langId);
+        QString savedPath = settings.value(settingKey).toString().trimmed();
+
+        // ищем автоматисески, если путь не сохранен или не валиден
+        bool needesChechOrSearch = true;
+        if (!savedPath.isEmpty()) {
+            QFileInfo checkFile(savedPath);
+            // сущестсвует ли файл посохраненному пути
+            if (checkFile.exists() && checkFile.isFile()) {
+                qDebug() << "LSP для [" << langId << "] уже настроен (найден в настройках):" << savedPath;
+                needesChechOrSearch = false; // путь есть и валиден - не ищем новый
+            } else {
+                qWarning() << "Сохраненный путь для LSP [" << langId << "] недействителен:" << savedPath << ". Будет выполнен поиск.";
+                settings.remove(settingKey); // удаляем невалидный путь из настроек
+            }
+        }
+
+        // если путь не валиден или если не сохранен
+        if (needesChechOrSearch) {
+            qDebug() << "Поиск LSP для [" << langId << "] в системе...";
+            QStringList potentialNames = g_defaultLspExecutables.value(langId);
+            QString foundPath = findFirstExecutable(potentialNames);
+
+            if (!foundPath.isEmpty()) {
+                qInfo() << "Автоматически найден LSP для [" << langId << "]:" << foundPath << ". Сохраняем в настройках.";
+                settings.setValue(settingKey, foundPath);
+            } else {
+                qDebug() << "Автоматический поиск LSP для [" << langId << "] не дал результатов.";
+            }
+        }
+    }
+    qDebug() << "Первоначальная настройка LSP завершена.";
+
     // считываем предпочитаемый язык из настроек (по ключу "LSP/PrefferedLanguage") или по умолчанию cpp
     QString languageId = settings.value("LSP/PrefferedLanguage", "cpp").toString();
     createAndStartLsp(languageId);
@@ -2959,69 +2997,79 @@ void MainWindowCodeEditor::compileAndRun()
     m_terminalWidget->setInputFocus();
 }
 
+// показывает что в настройках сохранено (в том числе и авто поиском) и позволяет это изменить
 void MainWindowCodeEditor::onLspSettings()
 {
-    // доступные языки id->имя
-    QMap <QString, QString> langs;
-    langs["cpp"] = "C/C++";
-    langs["python"] = "Python";
-    langs["typescript"] = "TypeScript/JavaScript";
-    langs["java"] = "Java";
-    langs["go"] = "Go";
-
     // читаем из настроек текущие пути к LSP серверам
     QSettings settings("ToMaTiK", "BAM_IDE");
-    QMap<QString, QString> paths;
+    QMap<QString, QString> pathsToShowDialog;
     for (auto it = langs.constBegin(); it != langs.constEnd(); ++it) {
         QString langId = it.key(); // "cpp", "python"
         QString settingKey = QString("LSP/Servers/%1").arg(langId);
-
         // пробуем взять путь из настрое если он был
-        QString saved = settings.value(settingKey).toString().trimmed();
-
-        // если в настройках нет ничего, но при это сервер уже работает под этот язык, то подставляем текущий executablePath()
-        if (saved.isEmpty() && m_lspManager && langId == m_currentLspLanguageId) {
-            saved = m_lspManager->executablePath();
-        }
-
-        // в остальных или имеющийся путь, или рабочий из saved или пустой
-        paths[langId] = saved;
+        QString savedPath = settings.value(settingKey).toString().trimmed();
+        pathsToShowDialog[langId] = savedPath; // просто читаем сохраненный путь или же пустую строку
     }
 
-    LspSettingsDialog dlg(this, langs, paths);
+    LspSettingsDialog dlg(this, langs, pathsToShowDialog);
     if (dlg.exec() != QDialog::Accepted) {
         return; // если отмену нажали, то оставляем по умолчанию, как было
     }
 
     // получаем новые пути из диалога
-    auto newPaths =dlg.selectedPaths();
+    auto newPaths = dlg.selectedPaths();
+    bool restartNeeded = false; // нужно перезапускать севрер или нет
+    QString currentActiveLang = m_currentLspLanguageId; // запомним текущий язык до цикла
+    QString oldPathForCurrentLang = pathsToShowDialog.value(currentActiveLang);
+
     for (auto it = newPaths.constBegin(); it != newPaths.constEnd(); ++it) {
-        QString settingKey = QString("LSP/Servers/%1").arg(it.key());
+        QString langId = it.key();
+        QString settingKey = QString("LSP/Servers/%1").arg(langId);
         //QString val = it.value().isEmpty() ? "clangd" : it.value();
-        QString val = it.value().trimmed();
+        QString newVal = it.value().trimmed();
+        QString oldValue = pathsToShowDialog.value(langId); // старое значение из диалога
         //settings.setValue(settingKey, val);
-        if (val.isEmpty()) {
-            // если пути нет
-            settings.remove(settingKey);
-        } else {
-            // сохраняем указанный пользователм путь
-            settings.setValue(settingKey, val);
+
+        if (newVal != oldValue) { // сохраняем только если изменилось
+            if (newVal.isEmpty()) {
+                // если пути нет
+                settings.remove(settingKey);
+                qDebug() << "Удален путь для LSP [" << langId << "]";
+            } else {
+                // сохраняем указанный пользователм путь
+                settings.setValue(settingKey, newVal);
+                qDebug() << "Сохранен новый путь для LSP [" << langId << "]:" << newVal;
+            }
+
+            // проверяем изменился ли путь для ТЕКУЩЕГО активного языка
+            if (langId == currentActiveLang) {
+                restartNeeded = true;
+            }
         }
     }
 
-    // если сервер уже работает с languageId - то просто для нового пути перезапускаем
-    if (!m_currentLspLanguageId.isEmpty()) {
-        QString currentLang = m_currentLspLanguageId;
-        m_currentLspLanguageId.clear();
-        createAndStartLsp(currentLang);
+    // если изменился путь для текущего языка, то перезапуск
+    if (restartNeeded && !m_currentLspLanguageId.isEmpty()) {
+        qDebug() << "Путь для текущего LSP" << m_currentLspLanguageId << "изменился, перезапуск...";
+        m_currentLspLanguageId.clear(); // очищаем чтобы точно запустился createAndStartLsp
+        createAndStartLsp(currentActiveLang); // запуск с новым путем или же пустой строкой
     }
 }
 
+// берем путь из настроек и запускает сервак
 void MainWindowCodeEditor::createAndStartLsp(const QString& languageId)
 {
-    // если язык тот же, то сервер не меняем
+    // проверка если сервер уже есть и для этого языка
     if (!m_currentLspLanguageId.isEmpty() && m_lspManager && m_currentLspLanguageId == languageId) {
-        return;
+        // путь изменился но сервер не перезапущен
+        QString settingsKeyCheck = QString("LSP/Servers/%`").arg(languageId);
+        QSettings settingsCheck("ToMaTiK", "BAM_IDE");
+        QString currentSettingPath = settingsCheck.value(settingsKeyCheck).toString().trimmed();
+        if (m_lspManager->executablePath() == currentSettingPath) {
+            qDebug() << "LSP для" << languageId << "уже запущен с правильным путем";
+            return;
+        }
+        qDebug() << "Путь для LSP" << languageId << "изменился в настройках, перезапускаем...";
     }
 
     m_currentLspLanguageId = languageId;
@@ -3039,28 +3087,11 @@ void MainWindowCodeEditor::createAndStartLsp(const QString& languageId)
     // читаем путь к серверу для данного языка
     QString execPath = settings.value(settingsKey).toString().trimmed();
 
-    if (execPath.isEmpty()) {
-        // даем путь выбрать пользователю самому
-        // QString sel = QFileDialog::getOpenFileName(this, tr("Выберите LSP-сервер для %1").arg(languageId), QDir::homePath(), tr("Исполняемые файлы (*)"));
-
-        // // выбрал - сохранили
-        // if (!sel.isEmpty()) {
-        //     execPath = sel;
-        //} else {
-            // ищем в PATH, если пользователь не выбрал
-            QString defaultName = g_defaultLspExecutables.value(languageId);
-            QString found = QStandardPaths::findExecutable(defaultName);
-            qDebug() << "PATH:" << found;
-            execPath = found.isEmpty() ? defaultName : found;
-        //}
-        settings.setValue(settingsKey, execPath);
-        //qWarning() << "LSP: путь для" << languageId << "не настроен!";
-        //updateLspStatus(tr("LSP[%1]: %2").arg(languageId, tr("Не настроен")));
-        return;
-    }
-
+    // запускаем сервер
+    qInfo() << "Запускаем LSP сервер [" << languageId << "]:" << execPath << "для проекта" << m_projectRootPath;
     updateLspStatus(tr("LSP[%1]: Старт %2").arg(languageId, execPath));
     m_lspManager = new LspManager(execPath, this);
+
     // подключаем сигналы от ЛСП к клиентским слотам
     connect(m_lspManager, &LspManager::serverReady, this, &MainWindowCodeEditor::onLspServerReady);
     connect(m_lspManager, &LspManager::serverStopped, this, &MainWindowCodeEditor::onLspServerStopped);
@@ -3070,21 +3101,40 @@ void MainWindowCodeEditor::createAndStartLsp(const QString& languageId)
     connect(m_lspManager, &LspManager::hoverReceived, this, &MainWindowCodeEditor::onLspHoverReceived);
     connect(m_lspManager, &LspManager::definitionReceived, this, &MainWindowCodeEditor::onLspDefinitionReceived);
 
-    settings.setValue("LSP/PrefferedLanguage", languageId);
+    QStringList arguments;
+    QString fileName = QFileInfo(execPath).fileName();
+    if (fileName.contains("pyright-langserver")) {
+        arguments << "--stdio";
+        qDebug() << "Добавлен аргумент --stdio для pyright-langserver";
+    } else if (fileName.contains("typescript-language-server")) {
+        arguments << "--stdio";
+        qDebug() << "Добавлен аргумент --stdio для typescript-language-server";
+    }
 
     // запускаем сервер для текущего корневого пути проекта, async
-    if (!m_lspManager->startServer(languageId, m_projectRootPath)) {
-        qWarning() << "Не удалось запустить LSP сервер для" << m_projectRootPath;
+    if (!m_lspManager->startServer(languageId, m_projectRootPath, arguments)) {
+        qWarning() << "Не удалось запустить LSP сервер [" << languageId << "] по пути:" << execPath << "с аргументами:" << arguments << "для проекта" << m_projectRootPath;
         // TODO: показывать QMessageBox
         //statusBar()->showMessage(tr("Не удалось запустить LSP сервер (%1)").arg(languageId), 5000);
         updateLspStatus(tr("LSP[%1]: Ошибка старта").arg(languageId));
+        if (m_lspManager) {
+            m_lspManager->deleteLater();
+            m_lspManager = nullptr;
+        }
+        m_currentLspLanguageId.clear(); // текущий язык сбрасываем
+    } else {
+        // успешный старт
+        settings.setValue("LSP/PrefferedLanguage", languageId);
     }
 }
 
+// определяет и записывает пути к исполняемым файлам для анализаторов, динамически находит новые пути при уже запущеной программе, когда открывается какой либо файл, допустим не было анализатора, пользователь установил его и далее заново открывает файл и у него анализатор через автопоиск работает, а так бы пришлось илл руками писать путь или заново весь редактор открывать
 bool MainWindowCodeEditor::ensureLspForLanguage(const QString& languageId)
 {
     // если пользователь ранее уже отказался от этого языка
     if (m_disableLanguages.contains(languageId)) {
+        qDebug() << "LSP для" << languageId << "отключен пользователем";
+        updateLspStatus(tr("LSP[%1]: Отключен").arg(languageId));
         return false;
     }
 
@@ -3092,25 +3142,37 @@ bool MainWindowCodeEditor::ensureLspForLanguage(const QString& languageId)
     QString key = QString("LSP/Servers/%1").arg(languageId);
     QString path = settings.value(key).toString().trimmed();
 
-    // если есть файл и такой путь существует
-    if (!path.isEmpty() && QFile::exists(path)) {
-        updateLspStatus(tr("LSP[%1]: %2").arg(languageId, path));
-        return true;
+    // проверяем сохраненный путь
+    if (!path.isEmpty()) {
+        QFileInfo fileInfo(path);
+        if (fileInfo.exists() && fileInfo.isFile()) { // проверяем что есть такой путь и что это файл
+            qDebug() << "LSP для" << languageId << "исползуется сохраненный путь" << path;
+            return true; // путь валиден, статус обновится в createAndStartLsp
+        } else {
+            qWarning() << "Сохраненный путь для LSP" << languageId << "не валиден:" << path << "Пробуем найти автоматические";
+            settings.remove(key);
+            path.clear(); // чтобы перейти к автопоиску
+        }
     }
 
+    if (path.isEmpty()) {
+        qDebug() << "Путь для LSP [" << languageId << "] не найден в настройках, ищем автоматически...";
+        QStringList potentialNames = g_defaultLspExecutables.value(languageId);
+        QString foundPath = findFirstExecutable(potentialNames);
+
+        if (!foundPath.isEmpty()) {
+            qInfo() << "Автоматически найден LSP для [" << languageId << "]:" << foundPath << ". Сохраняем";
+            settings.setValue(key, foundPath);
+            return true; // сохранили, статус при запуске обновится
+        }
+    }
+
+    // если ничего не нашли, ни автоматом, ни в сохранках
+    qWarning() << "LSP для [" << languageId << "] не найден ни в настройках, ни автоматически. Настройте путь вручную.";
+    updateLspStatus(tr("LSP[%1]: Не найден").arg(languageId));
     QMessageBox::warning(this, tr("LSP"), tr("Анализатор для %1 не найден, работа без анализа").arg(languageId));
-    QString sel = QFileDialog::getOpenFileName(this, tr("Выберите LSP-сервер для %1").arg(languageId), QDir::homePath(), tr("Исполняемые файлы (*)"));
 
-    if (sel.isEmpty()) {
-        m_disableLanguages.insert(languageId);
-        updateLspStatus(tr("LSP[%1]: Отключен").arg(languageId));
-        QMessageBox::information(this, tr("LSP"), tr("Анализатор не выбран - анализ кода отключен"));
-        return false;
-    }
-
-    settings.setValue(key, sel); // пользователь указа путь к бинарнику
-    updateLspStatus(tr("LSP[%1]: %2").arg(languageId, sel));
-    return true;
+    return false;
 }
 
 void MainWindowCodeEditor::updateLspStatus(const QString& text)
@@ -3119,30 +3181,6 @@ void MainWindowCodeEditor::updateLspStatus(const QString& text)
         m_lspStatusLabel->setText(text);
     }
 }
-
-// void MainWindowCodeEditor::onDiagnosticItemActivated(QListWidgetItem* item)
-// {
-//     auto pos = item->data(Qt::UserRole).value<QPair<int, int>>();
-//     int line = pos.first;
-//     int col = pos.second;
-
-//     if (!m_codeEditor || !m_codeEditor->document()) {
-//         return;
-//     }
-
-//     // конвектируем lsp позицию в позицию в документе
-//     int editorPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), line, col);
-//     if (editorPos < 0) {
-//         return;
-//     }
-
-//     // устанавливаем куроср и прокурчиваем
-//     QTextCursor cursor(m_codeEditor->document());
-//     cursor.setPosition(editorPos);
-//     m_codeEditor->setTextCursor(cursor);
-//     m_codeEditor->ensureCursorVisible();
-//     m_codeEditor->setFocus();
-// }
 
 void MainWindowCodeEditor::nextDiagnostic()
 {
@@ -3226,6 +3264,19 @@ void MainWindowCodeEditor::prevDiagnostic()
              QToolTip::showText(m_codeEditor->viewport()->mapToGlobal(m_codeEditor->cursorRect().topLeft()), msg, m_codeEditor);
         }
     }
+}
+
+QString MainWindowCodeEditor::findFirstExecutable(const QStringList& names)
+{
+    for (const QString& name : names) {
+        QString path = QStandardPaths::findExecutable(name);
+        if (!path.isEmpty()) {
+            qDebug() << "Найден LSP '" << name << "' по пути:" << path;
+            return path;
+        }
+    }
+    qDebug() << "Не найдены исполняемые файлы для:" << names;
+    return QString();
 }
 
 void MainWindowCodeEditor::showFindPanel() // по сути она еще и закрывает, не хочу делать отдельную фукнцию)))
@@ -3313,4 +3364,3 @@ void MainWindowCodeEditor::on_actionFindPanel_triggered()
 {
     showFindPanel();
 }
-

@@ -60,12 +60,20 @@ const QMap<QString, QString> g_extensionToLanguage = {         // первое �
                                                 {"go", "go"},
                                                 };
 // язык->имя сервера LSP
-const QMap<QString, QString> g_defaultLspExecutables = {
-    {"cpp",        "clangd"},
-    {"python",     "pyright"},
-    {"typescript", "typescript-language-server"},
-    {"java",       "jdtls"},
-    {"go",         "gopls"},
+const QMap<QString, QStringList> g_defaultLspExecutables = {
+    {"cpp", {"clangd"}},
+    {"python", {"pylsp", "python-lsp-server", "pyright-langserver"}}, // Возможные варианты для Python
+    {"typescript", {"typescript-language-server", "tsserver"}}, // Для TS/JS
+    {"java", {"jdtls"}},
+    {"go", {"gopls"}}
+};
+
+const QMap<QString, QString> langs = {
+    {"cpp", "C/C++"},
+    {"python", "Python"},
+    {"typescript", "TypeScript/JavaScript"},
+    {"java", "Java"},
+    {"go", "Go"}
 };
 
 QT_BEGIN_NAMESPACE
@@ -205,6 +213,7 @@ private:
     void onLspSettings();
     bool ensureLspForLanguage(const QString& languageId);
     void updateLspStatus(const QString& text);
+    QString findFirstExecutable(const QStringList& names);
 
     // переопределение событий для hover и хоткеев
     bool eventFilter(QObject *obj, QEvent *event) override;

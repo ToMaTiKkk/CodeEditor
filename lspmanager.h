@@ -8,6 +8,7 @@
 #include <QMap>
 #include <QPoint>
 #include <QTextDocument>
+#include <QStringList>
 
 // !!! структуры ъранения данных !!!
 // описания ошибок или предупреждений в коде
@@ -48,7 +49,7 @@ public:
 
     // !!! управление сервером !!!
     // запускает сервер для указанного языка и папки проекта
-    bool startServer(const QString& languageId, const QString& projectRootPath);
+    bool startServer(const QString& languageId, const QString& projectRootPath, const QStringList& arguments = QStringList());
     void stopServer();
     bool isReady() const; // проверка, готов ли сервер к общению, успешно ли прошла инициализация
 
