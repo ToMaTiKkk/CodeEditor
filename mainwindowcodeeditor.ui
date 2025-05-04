@@ -219,6 +219,9 @@
     <addaction name="actionToDoList"/>
     <addaction name="actionTerminal"/>
     <addaction name="actionChangeTheme"/>
+    <addaction name="actionFindPanel"/>
+    <addaction name="actionLSP"/>
+    <addaction name="separator"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuSession"/>
@@ -325,6 +328,19 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+`</string>
+   </property>
+  </action>
+  <action name="actionLSP">
+   <property name="text">
+    <string>LSP-серверы...</string>
+   </property>
+  </action>
+  <action name="actionFindPanel">
+   <property name="text">
+    <string>Поиск по коду</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+F</string>
    </property>
   </action>
  </widget>

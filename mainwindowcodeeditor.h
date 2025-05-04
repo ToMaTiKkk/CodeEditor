@@ -9,6 +9,7 @@
 #include "lspmanager.h"
 #include "completionwidget.h"
 #include "diagnostictooltip.h"
+#include "codeplaintextedit.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -40,9 +41,37 @@
 #include <QSystemTrayIcon>
 #include <QAction>
 
+#include<QList>
+#include <QPlainTextEdit>
+
+// #include <QDockWidget>
+// #include <QListWidget>
+
+// расширение->язык
+const QMap<QString, QString> g_extensionToLanguage = {         // первое расширение файла, второе languageId, который ждет лсп сервер по типу (clangd, pylsp....)
+                                                {"cpp", "cpp"},
+                                                {"cc", "cpp"},
+                                                {"c", "cpp"},
+                                                {"h", "cpp"},
+                                                {"py", "python"},
+                                                {"js", "typescript"},
+                                                {"ts", "typescript"},
+                                                {"java", "java"},
+                                                {"go", "go"},
+                                                };
+// язык->имя сервера LSP
+const QMap<QString, QString> g_defaultLspExecutables = {
+    {"cpp",        "clangd"},
+    {"python",     "pyright"},
+    {"typescript", "typescript-language-server"},
+    {"java",       "jdtls"},
+    {"go",         "gopls"},
+};
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindowCodeEditor;
+class QAction;
 }
 QT_END_NAMESPACE
 
@@ -135,6 +164,17 @@ private slots: // функции, которые будут вызваны в о
     void applyCompletion(const QString& textToInsert);
     // слот дял таймера запроса hover
     void showDiagnoticTooltipOrRequestHover();
+    //void onDiagnosticItemActivated(QListWidgetItem* item);
+    void nextDiagnostic();
+    void prevDiagnostic();
+
+    void showFindPanel(); // по сути она еще и закрывает, не хочу делать отдельную фукнцию)))
+    void findNext();
+    void findPrevious();
+    void updateFindHighlights(); //.для подсветки всех найденных слов
+
+
+    void on_actionFindPanel_triggered();
 
 private:
     Ui::MainWindowCodeEditor *ui; // доступ к элементами интерфейса .ui
@@ -152,6 +192,7 @@ private:
     void compileAndRun();         // автозапуск кода
 
     // LSP
+    void extracted(QString &languageId, QString &lspExecutable);
     void setupLsp(); // найстрока и запуска
     void setupLspCompletionAndHover();
     void triggerCompletionRequest(); // инициировать запрос автодополнения
@@ -160,6 +201,10 @@ private:
     QString getFileUri(const QString& localPath) const; // конвектировать локальный путь в URI
     QString getLocalPath(const QString& fileUri) const; // обратный конвектор
     QString getPrefixBeforeCursor(const QTextCursor& cursor);
+    void createAndStartLsp(const QString& languageId);
+    void onLspSettings();
+    bool ensureLspForLanguage(const QString& languageId);
+    void updateLspStatus(const QString& text);
 
     // переопределение событий для hover и хоткеев
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -176,7 +221,7 @@ private:
     bool m_isDarkTheme;
     bool m_isAdmin;
     LineNumberArea *lineNumberArea;
-    QPlainTextEdit *m_codeEditor;
+    CodePlainTextEdit *m_codeEditor;
     bool maybeSave();
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)
@@ -212,7 +257,9 @@ private:
     QPushButton* m_chatButton;
     QPushButton* m_runButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
-
+    
+    QToolButton *m_lspStatusLabel; // статус индикации
+    QString m_currentLspLanguageId;
     bool m_shouldSaveAfterCreation = false;
     LspManager *m_lspManager = nullptr; // Lsp-менеджер
     CompletionWidget *m_completionWidget = nullptr; // виджет автодоплнения
@@ -222,6 +269,10 @@ private:
     bool m_isDiagnosticTooltipVisible;
     QPair<int, int> m_currentlyShownTooltipPange; // startPos and endPos, храним диапозон информации, что сейчас показывает тултип
     QPoint calculateTooltipPosition(const QPoint& globalMousePos);
+    QSet<QString> m_disableLanguages;
+    //QDockWidget* m_diagnosticsDock;
+    //QListWidget* m_diagnosticsList;
+    QToolButton* m_diagnosticsStatusBtn;
 
     // управление версиями и состоянии LSP для открытого файла
     QString m_currentLspFileUri; // URI текущего файла
@@ -240,7 +291,16 @@ private:
     TerminalWidget *m_terminalWidget = nullptr;
     bool m_isTerminalVisible = false;
 
+
     QString getCurrentWordBeforeCursor(QTextCursor cursor);
 
+    QWidget*     m_findPanel = nullptr;
+    QLineEdit*   m_findLineEdit = nullptr;
+    QPushButton* m_findNextButton = nullptr;
+    QPushButton* m_findPrevButton = nullptr;
+    QPushButton* m_findCloseButton = nullptr;
+
+    QList<QTextEdit::ExtraSelection> m_findSelections; //ля подсветки результатов поиска
+    QTextCharFormat m_findFormat;
 };
 #endif // MAINWINDOWCODEEDITOR_H

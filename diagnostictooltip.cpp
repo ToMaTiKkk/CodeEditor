@@ -1,12 +1,15 @@
 #include "diagnostictooltip.h"
 #include <QDebug>
 #include <QTextDocument>
+#include <QStyleOption>
 
 DiagnosticTooltip::DiagnosticTooltip(QWidget *parent) : QWidget(parent)
 {
     // флаги для поведения всплывашки без рамки и активации
+    setObjectName("DiagnosticTooltipInstance");
     setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_ShowWithoutActivating);
+    setAttribute(Qt::WA_TranslucentBackground, true); // для отрисовки
     //setAttribute(Qt::WA_DeleteOnClose); // атвоматом удалять при скрытии
 
     // QLabel для текста
@@ -14,28 +17,13 @@ DiagnosticTooltip::DiagnosticTooltip(QWidget *parent) : QWidget(parent)
     m_label->setWordWrap(true); // для перенос по словам
     m_label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     m_label->setTextInteractionFlags(Qt::TextSelectableByMouse); // можно мышкой выделять текст
+    m_label->setStyleSheet("background: transparent; padding: 0; margin: 0;"); // просто через qss не подключалось
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(5, 5, 5, 5); // отступы внутри виджета
     layout->addWidget(m_label);
     setLayout(layout);
 
-    // стилизацию ПЕРЕДЕЛАТЬ ОНА ЗАГЛУШКА
-    setStyleSheet(R"(
-        DiagnosticTooltip {
-            background-color: #44475a;
-            color: #f8f8f2;
-            border: 1px solid #6272a4;
-            border-radius: 4px;
-            padding: 4px;
-        }
-        QLabel {
-            background-color: transparent;
-            border: none;
-            padding: 0px;
-            color: #f8f8f2;
-        }
-    )");
 
     // началььный размер будет подстраиваться под текст
     adjustSize();
@@ -56,4 +44,12 @@ void DiagnosticTooltip::setRichText(const QString &richText)
     m_label->setTextFormat(Qt::RichText);
     m_label->setText(richText);
     adjustSize();
+}
+void DiagnosticTooltip::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+    QStyleOption opt;
+    opt.initFrom(this);
+    QPainter p(this);
+    style()->drawPrimitive(QStyle::PE_Widget, &opt, &p, this); //учитывая qss рисуем
 }

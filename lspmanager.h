@@ -70,6 +70,8 @@ public:
     // функции для перевода координат между форматом редактор (номер символа) на формат сервера (строка, символ)
     QPoint editorPosToLspPos(QTextDocument *doc, int editorPos);
     int lspPosToEditorPos(QTextDocument *doc, int line, int character);
+    
+    QString executablePath() const { return m_serverExecutablePath; } // путь по которому запущено LSP-ядро
 
 // сервер сообщает MainWindow что что-то произошло
 signals:

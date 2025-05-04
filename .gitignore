@@ -103,3 +103,7 @@ CMakeLists.txt.user*
 *.swp
 debug/
 saves/
+.specstory/
+.cursorindexingignore
+# SpecStory explanation file
+.specstory/.what-is-this.md

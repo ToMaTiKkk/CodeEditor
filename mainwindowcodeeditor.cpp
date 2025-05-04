@@ -5,6 +5,7 @@
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include "sessionparamswindow.h"
+#include "lspsettingsdialog.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -33,6 +34,12 @@
 #include <QToolTip>
 #include <QScreen>
 #include <QGuiApplication>
+#include <QStandardPaths>
+#include <QSurfaceFormat>
+
+#include <QKeySequence>
+#include <QTextCursor>
+#include <QTextCharFormat>
 
 // Константы для чата
 const qreal MESSAGE_WIDTH_PERCENT = 75; // Макс. ширина сообщения в % от доступной ширины
@@ -74,6 +81,9 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     setupThemeAndNick(); // тема и никнейм
     setupTerminalArea(); // настройка терминала
 
+    m_findFormat.setBackground(QColor(Qt::blue).lighter(140));// поэксперементировать с цветами надо
+    m_findFormat.setForeground(Qt::white);
+
     qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
     qDebug() << "Splitter widget count:" << ui->splitter->count();
     qDebug() << "Splitter sizes:" << ui->splitter->sizes();
@@ -90,10 +100,11 @@ void MainWindowCodeEditor::setupMainWindow()
 void MainWindowCodeEditor::setupCodeEditorArea()
 {
     // создаем наш собственный виджет окна редактирование QPlainTextEditor
-    m_codeEditor = new QPlainTextEdit();
+    m_codeEditor = new CodePlainTextEdit(this);
     m_codeEditor->setObjectName("realCodeEditor"); // отладочное имя
     m_codeEditor->setFont(QFont("Fira Code", 12));
-    m_codeEditor->setTabStopDistance(25.0);
+    // QFontMetrics metrics(font());
+    // m_codeEditor->setTabStopDistance(tabStop * metrics.horizontalAdvance(' '));
     m_codeEditor->setFocusPolicy(Qt::StrongFocus); // чтобы мог получать фокус для ввода
     m_codeEditor->setMouseTracking(true);
 
@@ -114,19 +125,61 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     layout->addWidget(lineNumberArea);
     layout->addWidget(m_codeEditor);
 
+    m_findPanel = new QWidget(this);
+    m_findPanel->setObjectName("findPanel");
+    m_findLineEdit = new QLineEdit(m_findPanel);
+    m_findLineEdit->setPlaceholderText(tr("Найти"));
+    m_findNextButton = new QPushButton(tr("↓ Следующий"), m_findPanel);
+    m_findPrevButton = new QPushButton(tr("↑ Предыдущий"), m_findPanel);
+
+    QHBoxLayout* findLayout = new QHBoxLayout(m_findPanel);
+    findLayout->setContentsMargins(2, 2, 2, 2);
+    findLayout->setSpacing(4);
+    findLayout->addWidget(m_findLineEdit);
+    findLayout->addWidget(m_findNextButton);
+    findLayout->addWidget(m_findPrevButton);
+    // для поиска: Добавляем растягивающееся пустое пространство, чтобы прижать кнопку "Закрыть" вправо
+    findLayout->addStretch(1);
+    // для поиска: Добавляем кнопку "Закрыть" в layout
+    findLayout->addWidget(m_findCloseButton);
+
+    m_findPanel->setVisible(false);
+
+    QWidget* editorAndFindWidget = new QWidget();
+    editorAndFindWidget->setObjectName("editorAndFindWidget");
+    editorAndFindWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    QVBoxLayout* finalLayout = new QVBoxLayout(editorAndFindWidget);
+    finalLayout->setContentsMargins(0, 0, 0, 0);
+    finalLayout->setSpacing(0);
+    finalLayout->addWidget(codeEditorContainer);
+    finalLayout->addWidget(m_findPanel);
+
+
     // находим индекс из ui-дизайнера непосредственно codeEditor и заменяем его на созданный контейнер
-    int index = ui->splitter->indexOf(ui->codeEditor);
-    if (index != -1) { // если нашли
-        ui->splitter->replaceWidget(index, codeEditorContainer);
-        codeEditorContainer->setVisible(true); // потому что после замены виджет скрывается
+    int index = -1;
+    if (ui->splitter) {
+        index = ui->splitter->indexOf(ui->codeEditor); // ИСХОДНЫЙ виджет-плейсхолдер из дизайнера (ui->codeEditor)
+    } else {
+        return;
+    }
+
+    if (index != -1) { // если нашли плейсхолдер ui->codeEditor
+        ui->splitter->replaceWidget(index, editorAndFindWidget);
+        editorAndFindWidget->setVisible(true);
 
         // удаляем прошлый редактор из дизайнера, потмоу что он больше не нужен
         delete ui->codeEditor;
         ui->codeEditor = nullptr; // чтобы случайнно не использовать данный указатель
-        qDebug() << "Редактор ui->codeEditor успешно заменен на codeEditorContainer";
     } else {
-        ui->splitter->addWidget(codeEditorContainer);
-        codeEditorContainer->setVisible(true);
+        if (ui->splitter) {
+            ui->splitter->addWidget(editorAndFindWidget);
+            editorAndFindWidget->setVisible(true);
+        } else {
+            delete editorAndFindWidget;
+            m_findPanel = nullptr;
+            codeEditorContainer = nullptr;
+        }
     }
 
     // подключенеие сигналов к нумерации и окну редактирования
@@ -134,40 +187,70 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     connect(m_codeEditor, &QPlainTextEdit::updateRequest, lineNumberArea, &LineNumberArea::updateLineNumberArea); // когда пользователь печатает или прокручивает текст, то перерисовывает, только измненную часть нумерации строк, туже самую, что и была
     connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, lineNumberArea, QOverload<>::of(&LineNumberArea::update)); // перерисовка полностью, чтобы при скролле  синхронно с текстом сдвигалось
 
+    // не перехватывает нажатия KeyPress, а используем для этого класс специальный
+    connect(m_codeEditor, &CodePlainTextEdit::completionShortcut, this, &MainWindowCodeEditor::triggerCompletionRequest);
+    connect(m_codeEditor, &CodePlainTextEdit::definitionnShortcut, this, &MainWindowCodeEditor::triggerDefinitionRequest);
+
     lineNumberArea->updateLineNumberAreaWidth(); // начальная ширина
 
     QFileInfo fileInfo(currentFilePath);
-    QString suffix = fileInfo.suffix().toLower();//ищем расширение файла
     highlighter = new CppHighlighter(m_codeEditor->document(), currentFilePath); //подсветка только для C++ и C
     m_codeEditor->viewport()->installEventFilter(this);
 
+    connect(m_findLineEdit, &QLineEdit::returnPressed, this, &MainWindowCodeEditor::findNext);
+    connect(m_findLineEdit, &QLineEdit::textChanged, this, &MainWindowCodeEditor::updateFindHighlights);
+    connect(m_findNextButton, &QPushButton::clicked, this, &MainWindowCodeEditor::findNext);
+    connect(m_findPrevButton, &QPushButton::clicked, this, &MainWindowCodeEditor::findPrevious);
+    m_findLineEdit->installEventFilter(this);
+
+    QAction *Next = new QAction(tr("Следующий элемент"), this);
+    Next->setShortcut(Qt::Key_Down);
+    connect(Next, &QAction::triggered, this, &MainWindowCodeEditor::findNext);
+    addAction(Next);
+
+    QAction *Previous = new QAction(tr("Предыдущий элемент"), this);
+    Previous->setShortcut(QKeySequence(Qt::Key_Up));
+    connect(Previous, &QAction::triggered, this, &MainWindowCodeEditor::findPrevious);
+    addAction(Previous);
+
+    // индикатор состояния лсп сервера, какой работает и работает ли он вообще
+    QToolButton *lspStatusBtn = new QToolButton(this);
+    lspStatusBtn->setText(tr("LSP: -"));
+    lspStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    lspStatusBtn->setAutoRaise(true);
+    if (statusBar()) { // для поиска: Добавляем проверку существования statusBar перед использованием
+        statusBar()->addPermanentWidget(lspStatusBtn);
+    }
+    m_lspStatusLabel = lspStatusBtn;
+    connect(lspStatusBtn, &QToolButton::clicked, this, &MainWindowCodeEditor::onLspSettings);
+
+    // индикатор количества ошибок и предупреждений в файле
+    m_diagnosticsStatusBtn = new QToolButton(this);
+    m_diagnosticsStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_diagnosticsStatusBtn->setAutoRaise(true);
+    if (statusBar()) { // для поиска: Добавляем проверку существования statusBar перед использованием
+        statusBar()->addPermanentWidget(m_diagnosticsStatusBtn);
+    }
+
+    // перемещение по ошибкам через F2 | Shift + F2
+    QAction *actNext = new QAction(tr("Следующая ошибка"), this);
+    actNext->setShortcut(Qt::Key_F2);
+    connect(actNext, &QAction::triggered, this, &MainWindowCodeEditor::nextDiagnostic);
+    addAction(actNext);
+
+    QAction *actPrev = new QAction(tr("Предыдущая ошибка"), this);
+    actPrev->setShortcut(QKeySequence(Qt::ShiftModifier | Qt::Key_F2));
+    connect(actPrev, &QAction::triggered, this, &MainWindowCodeEditor::prevDiagnostic);
+    addAction(actPrev);
 }
 
 void MainWindowCodeEditor::setupLsp()
 {
-    // TODO: сделать путь к серверу и язык настраиваемыми
-    QString lspExecutable = "clangd";
-    QString languageId = "cpp";
-
-    m_lspManager = new LspManager(lspExecutable, this);
-
-    // подключаем сигналы от ЛСП к клиентским слотам
-    connect(m_lspManager, &LspManager::serverReady, this, &MainWindowCodeEditor::onLspServerReady);
-    connect(m_lspManager, &LspManager::serverStopped, this, &MainWindowCodeEditor::onLspServerStopped);
-    connect(m_lspManager, &LspManager::serverError, this, &MainWindowCodeEditor::onLspServerError);
-    connect(m_lspManager, &LspManager::diagnosticsReceived, this, &MainWindowCodeEditor::onLspDiagnosticsReceived);
-    connect(m_lspManager, &LspManager::completionReceived, this, &MainWindowCodeEditor::onLspCompletionReceived);
-    connect(m_lspManager, &LspManager::hoverReceived, this, &MainWindowCodeEditor::onLspHoverReceived);
-    connect(m_lspManager, &LspManager::definitionReceived, this, &MainWindowCodeEditor::onLspDefinitionReceived);
-
-    // запускаем сервер для текущего корневого пути проекта
-    if (!m_lspManager->startServer(languageId, m_projectRootPath)) {
-        qWarning() << "Не удалось запустить LSP сервер для" << m_projectRootPath;
-        // TODO: показывать QMessageBox
-        statusBar()->showMessage(tr("Не удалось запустить LSP сервер (%1)").arg(lspExecutable), 5000);
-    } else {
-        statusBar()->showMessage(tr("LSP сервер (%1) запускается").arg(lspExecutable), 3000);
-    }
+    // создаем системные настройки (хранятся в системе, в реестре)
+    QSettings settings("ToMaTiK", "BAM_IDE");
+    // считываем предпочитаемый язык из настроек (по ключу "LSP/PrefferedLanguage") или по умолчанию cpp
+    QString languageId = settings.value("LSP/PrefferedLanguage", "cpp").toString();
+    createAndStartLsp(languageId);
 }
 
 void MainWindowCodeEditor::setupLspCompletionAndHover()
@@ -291,6 +374,7 @@ void MainWindowCodeEditor::setupMenuBarActions()
     // connect для Parameters меню
     //connect(ui->actionToDoList, &QAction::triggered, this, &MainWindowCodeEditor::on_actionToDoList_triggered);
     //connect(ui->actionChangeTheme, &QAction::triggered, this, &MainWindowCodeEditor::on_actionChangeTheme_triggered);
+    connect(ui->actionLSP, &QAction::triggered, this, &MainWindowCodeEditor::onLspSettings);
 
     // подключение сигнала измнения значения вертикального скроллбара
     connect(m_codeEditor->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindowCodeEditor::onVerticalScrollBarValueChanged);
@@ -308,6 +392,15 @@ void MainWindowCodeEditor::setupMenuBarActions()
     } else {
         qWarning() << "Could not find 'menuView' or 'actionTerminal' in UI file.";
     }
+
+    // создаем панель диагностик
+    // m_diagnosticsDock = new QDockWidget(tr("Диагностика"), this);
+    // m_diagnosticsList = new QListWidget(m_diagnosticsDock);
+    // m_diagnosticsList->setUniformItemSizes(true);
+    // m_diagnosticsList->setSelectionMode(QAbstractItemView::SingleSelection);
+    // m_diagnosticsDock->setWidget(m_diagnosticsList);
+    // addDockWidget(Qt::RightDockWidgetArea, m_diagnosticsDock);
+    // connect(m_diagnosticsList, &QListWidget::itemActivated, this, &MainWindowCodeEditor::onDiagnosticItemActivated);
 }
 
 void MainWindowCodeEditor::setupFileSystemView()
@@ -480,7 +573,7 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
                     break;
                 default:
                     // пересылаем текстовый ввод и другие символы в редактор
-                    if (!keyEvent->text().isEmpty() || 
+                    if (!keyEvent->text().isEmpty() ||
                         keyEvent->key() == Qt::Key_Backspace ||
                         keyEvent->key() == Qt::Key_Delete ||
                         keyEvent->key() == Qt::Key_Space ||
@@ -496,7 +589,7 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
                     consumedCompletionFilter = true;
                     break;
             }
-            // всегда возвращаем тру, если событие пришло от виджета автодополнения, чтобы не обрабатывалось стандартным образом самим QListWidget 
+            // всегда возвращаем тру, если событие пришло от виджета автодополнения, чтобы не обрабатывалось стандартным образом самим QListWidget
             return true;
         } else if (event->type() == QEvent::Hide) {
             // перехватываем событие Hide самого виджета
@@ -509,14 +602,15 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
     }
 
     if (obj == m_codeEditor->viewport()) {
-        if (event->type() == QEvent::KeyPress && (!m_completionWidget || !m_completionWidget->isVisible())) {
-            QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-            // используем обработчики для шорткатов, когда автодоп не видно
-            handleEditorKeyPressEvent(keyEvent);
-            if (keyEvent->isAccepted()) {
-                return true;
-            }
-        } else if (event->type() == QEvent::Resize) {
+        // if (event->type() == QEvent::KeyPress && (!m_completionWidget || !m_completionWidget->isVisible())) {
+        //     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+        //     // используем обработчики для шорткатов, когда автодоп не видно
+        //     handleEditorKeyPressEvent(keyEvent);
+        //     if (keyEvent->isAccepted()) {
+        //         return true;
+        //     }
+        // } else
+        if (event->type() == QEvent::Resize) {
             for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
                 QString senderId = it.key();
                 int position = lastCursorPositions.value(senderId, -1);
@@ -536,6 +630,8 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
             }
             QToolTip::hideText();
         }
+        // Передаем событие для стандартной обработки базовым классом
+        return QMainWindow::eventFilter(obj, event);
     }
 
     // стандартная обработка для всех остальных объектов
@@ -592,7 +688,8 @@ void MainWindowCodeEditor::handleEditorMouseMoveEvent(QMouseEvent *event)
 void MainWindowCodeEditor::onLspServerReady()
 {
     qInfo() << "LSP сервер готов к работе";
-    statusBar()->showMessage(tr("LSP сервер готов"), 3000);
+    //statusBar()->showMessage(tr("LSP сервер готов %1").arg(m_currentLspLanguageId), 3000);
+    updateLspStatus(tr("LSP[%1]: %2").arg(m_currentLspLanguageId, m_lspManager->executablePath()));
     // если файл уже открыт при старте сервера, то отправляем didOpen
     if (!currentFilePath.isEmpty()) {
         m_currentLspFileUri = getFileUri(currentFilePath);
@@ -617,7 +714,8 @@ void MainWindowCodeEditor::onLspServerError(const QString& message)
     qWarning() << "Ошибка LSP сервера:" << message;
     // TODO: выводить окно QMessageBox АСИНХРОННО
     QMessageBox::warning(this, tr("Ошибка LSP"), tr("Произошла ошибка LSP сервера: \n%1").arg(message));
-    statusBar()->showMessage(tr("Ошибка LSP сервера!"), 5000);
+    //statusBar()->showMessage(tr("Ошибка LSP сервера!"), 5000);
+    updateLspStatus(tr("LSP[%1]: Ошибка").arg(m_currentLspLanguageId));
 }
 
 void MainWindowCodeEditor::onLspDiagnosticsReceived(const QString& fileUri, const QList<LspDiagnostic>& diagnostics)
@@ -663,7 +761,7 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
         QRect currentCursorRect = m_codeEditor->cursorRect(); // получаем актуальную позицию курсора
         // преобразуем координаты в глобальные координаты экрана
         QPoint globalPos = m_codeEditor->viewport()->mapToGlobal(currentCursorRect.bottomLeft());
-        
+
         // используем актуальное колличество строк после фильтрации
         int visibleItemCount = m_completionWidget->count();
 
@@ -747,7 +845,7 @@ void MainWindowCodeEditor::applyCompletion(const QString& textToInsert)
     QString blockText = cursor.block().text();
     int posInBlock = currentPos - cursor.position(); // позиция внутри блока
 
-    // ищем начало префикса (слова) 
+    // ищем начало префикса (слова)
     int startPosInBlock = posInBlock - 1;
     while (startPosInBlock >= 0 && (blockText[startPosInBlock].isLetterOrNumber() || blockText[startPosInBlock] == '_')) {
         startPosInBlock--;
@@ -767,13 +865,13 @@ void MainWindowCodeEditor::applyCompletion(const QString& textToInsert)
         // если префикса нет (автодоп на пустом месте), то просто вернем в исодную позицию
         cursor.setPosition(currentPos);
     }
-    
+
     // вставка текста
     cursor.insertText(textToInsert);
     m_codeEditor->setTextCursor(cursor); // устанавливаем курсор после текста вставленного
     m_codeEditor->setFocus(); // возвращаем фокус редактору
     qDebug() << "[applyCompletion] Completion applied, focus set to m_codeEditor";
-    
+
     // скрываем виджет если он ещё виден
     if (m_completionWidget && m_completionWidget->isVisible()) {
         m_completionWidget->hide();
@@ -998,6 +1096,43 @@ void MainWindowCodeEditor::updateDiagnosticsView()
     qDebug() << "[UPDATE_DIAG_VIEW] Setting" << extraSelections.count() << "extra selections to the editor.";
     // применяем созданный список подчеркиваний к редактору
     m_codeEditor->setExtraSelections(extraSelections);
+
+    //m_diagnosticsList->clear();
+    //const auto& diags = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+    //for (const LspDiagnostic& d : diags) {
+      //  QString text = QString("%1:%2 [%3] %4").arg(d.startLine + 1).arg(d.startChar + 1).arg(d.severity == 1 ? tr("Error") : d.severity == 2 ? tr("Warning") : tr("Info"));
+        //auto *item = new QListWidgetItem(text, m_diagnosticsList);
+        // сохраняем позицию для перехода
+        //item->setData(Qt::UserRole, QVariant::fromValue(QPair<int, int>(d.startLine, d.startChar)));
+    //}
+
+    // формируем номер строки -> максимальная диагностика
+    QMap<int, int> gutterMap;
+    QMap<int, QStringList> messageDiagnostics;
+    const auto& diags = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+    for (const LspDiagnostic& d : diags) {
+        int line  = d.startLine;
+        // если на строке уже етсь, то берем более критичный (1=error < 2=warning < 3=info)
+        if (!gutterMap.contains(line) || d.severity < gutterMap[line]) {
+            gutterMap[line] = d.severity;
+            messageDiagnostics[line].append(d.message);
+        }
+    }
+
+    // шлем в нумерацию и перерисовываем
+    if (lineNumberArea) {
+        lineNumberArea->setDiagnotics(gutterMap, messageDiagnostics);
+    }
+
+    // считаем колво ошибок и предупред
+    int errCount = 0, warnCount = 0;
+    for (const LspDiagnostic& d : diags) {
+        if (d.severity == 1) ++errCount;
+        else if (d.severity == 2) ++warnCount;
+    }
+    // обновляем кнопку индикатора
+    m_diagnosticsStatusBtn->setText(tr("Ошибок: %1 Предупр.: %2").arg(errCount).arg(warnCount));
+    m_diagnosticsStatusBtn->setEnabled(errCount + warnCount > 0);
 }
 
 
@@ -1317,12 +1452,22 @@ void MainWindowCodeEditor::onOpenFileClicked()
             }
             highlighter->rehighlight();
 
-            // LSP открываем новый файл
-            m_currentLspFileUri = getFileUri(currentFilePath);
-            m_currentDocumentVersion = 1;
-            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
-                qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
-                m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
+            // переопределяем язык по расширени и перезапускаем севрер
+            QSettings settings("ToMaTiK_Inc", "BAM_IDE");
+            QString ext = QFileInfo(currentFilePath).suffix().toLower();
+            // если в мэпе нет, то по умолчанию предпочтительный используем PrefferedLanguageID
+            QString languageId = g_extensionToLanguage.value(ext, settings.value("LSP/PrefferedLanguage", "cpp").toString());
+
+            if (ensureLspForLanguage(languageId)) {
+                createAndStartLsp(languageId);
+
+                // LSP открываем новый файл
+                m_currentLspFileUri = getFileUri(currentFilePath);
+                m_currentDocumentVersion = 1;
+                if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                    qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
+                    m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
+                }
             }
 
             // ОТправка соо на сервер с полным содержимым файла
@@ -1566,12 +1711,28 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
             }
             highlighter->rehighlight();
 
-            // LSP открываем новый файл
-            m_currentLspFileUri = getFileUri(currentFilePath);
-            m_currentDocumentVersion = 1;
-            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
-                qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
-                m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
+            // переопределяем язык по расширени и перезапускаем севрер
+            QSettings settings("ToMaTiK_Inc", "BAM_IDE");
+            QString ext = QFileInfo(currentFilePath).suffix().toLower(); // расширение файла берем
+            // если в мэпе нет, то по умолчанию предпочтительный используем PrefferedLanguageID
+            QString languageId = g_extensionToLanguage.value(ext, settings.value("LSP/PrefferedLanguage", "cpp").toString());
+
+            if (ensureLspForLanguage(languageId)) {
+                createAndStartLsp(languageId);
+
+                // LSP открываем новый файл
+                m_currentLspFileUri = getFileUri(currentFilePath);
+                m_currentDocumentVersion = 1;
+                if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+                    qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
+                    m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
+                }
+            }
+
+            if (m_currentLspLanguageId == languageId && m_lspManager) {
+                updateLspStatus(tr("LSP[%1]: %2").arg(languageId, m_lspManager->executablePath()));
+            } else {
+                updateLspStatus(tr("LSP[%1]: %2").arg(languageId, tr("Отключён")));
             }
 
             // ОТправка соо на сервер с полным содержимым файла
@@ -2188,6 +2349,7 @@ void MainWindowCodeEditor::applyCurrentTheme()
             QString lightStyle = lightFile.readAll();
             qApp->setStyleSheet(lightStyle);
             chatWidget->setStyleSheet(lightStyle);
+            m_completionWidget->setStyleSheet(lightStyle);
             lightFile.close();
             qDebug() << "Light theme applied successfully";
         } else {
@@ -2199,6 +2361,7 @@ void MainWindowCodeEditor::applyCurrentTheme()
             QString darkStyle = darkFile.readAll();
             qApp->setStyleSheet(darkStyle);
             chatWidget->setStyleSheet(darkStyle);
+            m_completionWidget->setStyleSheet(darkStyle);
             darkFile.close();
             qDebug() << "Dark theme applied successfully";
         } else {
@@ -2795,3 +2958,359 @@ void MainWindowCodeEditor::compileAndRun()
     m_terminalWidget->sendCommand(command);
     m_terminalWidget->setInputFocus();
 }
+
+void MainWindowCodeEditor::onLspSettings()
+{
+    // доступные языки id->имя
+    QMap <QString, QString> langs;
+    langs["cpp"] = "C/C++";
+    langs["python"] = "Python";
+    langs["typescript"] = "TypeScript/JavaScript";
+    langs["java"] = "Java";
+    langs["go"] = "Go";
+
+    // читаем из настроек текущие пути к LSP серверам
+    QSettings settings("ToMaTiK", "BAM_IDE");
+    QMap<QString, QString> paths;
+    for (auto it = langs.constBegin(); it != langs.constEnd(); ++it) {
+        QString langId = it.key(); // "cpp", "python"
+        QString settingKey = QString("LSP/Servers/%1").arg(langId);
+
+        // пробуем взять путь из настрое если он был
+        QString saved = settings.value(settingKey).toString().trimmed();
+
+        // если в настройках нет ничего, но при это сервер уже работает под этот язык, то подставляем текущий executablePath()
+        if (saved.isEmpty() && m_lspManager && langId == m_currentLspLanguageId) {
+            saved = m_lspManager->executablePath();
+        }
+
+        // в остальных или имеющийся путь, или рабочий из saved или пустой
+        paths[langId] = saved;
+    }
+
+    LspSettingsDialog dlg(this, langs, paths);
+    if (dlg.exec() != QDialog::Accepted) {
+        return; // если отмену нажали, то оставляем по умолчанию, как было
+    }
+
+    // получаем новые пути из диалога
+    auto newPaths =dlg.selectedPaths();
+    for (auto it = newPaths.constBegin(); it != newPaths.constEnd(); ++it) {
+        QString settingKey = QString("LSP/Servers/%1").arg(it.key());
+        //QString val = it.value().isEmpty() ? "clangd" : it.value();
+        QString val = it.value().trimmed();
+        //settings.setValue(settingKey, val);
+        if (val.isEmpty()) {
+            // если пути нет
+            settings.remove(settingKey);
+        } else {
+            // сохраняем указанный пользователм путь
+            settings.setValue(settingKey, val);
+        }
+    }
+
+    // если сервер уже работает с languageId - то просто для нового пути перезапускаем
+    if (!m_currentLspLanguageId.isEmpty()) {
+        QString currentLang = m_currentLspLanguageId;
+        m_currentLspLanguageId.clear();
+        createAndStartLsp(currentLang);
+    }
+}
+
+void MainWindowCodeEditor::createAndStartLsp(const QString& languageId)
+{
+    // если язык тот же, то сервер не меняем
+    if (!m_currentLspLanguageId.isEmpty() && m_lspManager && m_currentLspLanguageId == languageId) {
+        return;
+    }
+
+    m_currentLspLanguageId = languageId;
+
+    // останавливаем если был
+    if (m_lspManager) {
+        m_lspManager->stopServer();
+        m_lspManager->deleteLater();
+        m_lspManager = nullptr;
+    }
+
+    QString settingsKey = QString("LSP/Servers/%1").arg(languageId);
+    // создаем системные настройки (хранятся в системе, в реестре)
+    QSettings settings("ToMaTiK", "BAM_IDE");
+    // читаем путь к серверу для данного языка
+    QString execPath = settings.value(settingsKey).toString().trimmed();
+
+    if (execPath.isEmpty()) {
+        // даем путь выбрать пользователю самому
+        // QString sel = QFileDialog::getOpenFileName(this, tr("Выберите LSP-сервер для %1").arg(languageId), QDir::homePath(), tr("Исполняемые файлы (*)"));
+
+        // // выбрал - сохранили
+        // if (!sel.isEmpty()) {
+        //     execPath = sel;
+        //} else {
+            // ищем в PATH, если пользователь не выбрал
+            QString defaultName = g_defaultLspExecutables.value(languageId);
+            QString found = QStandardPaths::findExecutable(defaultName);
+            qDebug() << "PATH:" << found;
+            execPath = found.isEmpty() ? defaultName : found;
+        //}
+        settings.setValue(settingsKey, execPath);
+        //qWarning() << "LSP: путь для" << languageId << "не настроен!";
+        //updateLspStatus(tr("LSP[%1]: %2").arg(languageId, tr("Не настроен")));
+        return;
+    }
+
+    updateLspStatus(tr("LSP[%1]: Старт %2").arg(languageId, execPath));
+    m_lspManager = new LspManager(execPath, this);
+    // подключаем сигналы от ЛСП к клиентским слотам
+    connect(m_lspManager, &LspManager::serverReady, this, &MainWindowCodeEditor::onLspServerReady);
+    connect(m_lspManager, &LspManager::serverStopped, this, &MainWindowCodeEditor::onLspServerStopped);
+    connect(m_lspManager, &LspManager::serverError, this, &MainWindowCodeEditor::onLspServerError);
+    connect(m_lspManager, &LspManager::diagnosticsReceived, this, &MainWindowCodeEditor::onLspDiagnosticsReceived);
+    connect(m_lspManager, &LspManager::completionReceived, this, &MainWindowCodeEditor::onLspCompletionReceived);
+    connect(m_lspManager, &LspManager::hoverReceived, this, &MainWindowCodeEditor::onLspHoverReceived);
+    connect(m_lspManager, &LspManager::definitionReceived, this, &MainWindowCodeEditor::onLspDefinitionReceived);
+
+    settings.setValue("LSP/PrefferedLanguage", languageId);
+
+    // запускаем сервер для текущего корневого пути проекта, async
+    if (!m_lspManager->startServer(languageId, m_projectRootPath)) {
+        qWarning() << "Не удалось запустить LSP сервер для" << m_projectRootPath;
+        // TODO: показывать QMessageBox
+        //statusBar()->showMessage(tr("Не удалось запустить LSP сервер (%1)").arg(languageId), 5000);
+        updateLspStatus(tr("LSP[%1]: Ошибка старта").arg(languageId));
+    }
+}
+
+bool MainWindowCodeEditor::ensureLspForLanguage(const QString& languageId)
+{
+    // если пользователь ранее уже отказался от этого языка
+    if (m_disableLanguages.contains(languageId)) {
+        return false;
+    }
+
+    QSettings settings("ToMaTiK", "BAM_IDE");
+    QString key = QString("LSP/Servers/%1").arg(languageId);
+    QString path = settings.value(key).toString().trimmed();
+
+    // если есть файл и такой путь существует
+    if (!path.isEmpty() && QFile::exists(path)) {
+        updateLspStatus(tr("LSP[%1]: %2").arg(languageId, path));
+        return true;
+    }
+
+    QMessageBox::warning(this, tr("LSP"), tr("Анализатор для %1 не найден, работа без анализа").arg(languageId));
+    QString sel = QFileDialog::getOpenFileName(this, tr("Выберите LSP-сервер для %1").arg(languageId), QDir::homePath(), tr("Исполняемые файлы (*)"));
+
+    if (sel.isEmpty()) {
+        m_disableLanguages.insert(languageId);
+        updateLspStatus(tr("LSP[%1]: Отключен").arg(languageId));
+        QMessageBox::information(this, tr("LSP"), tr("Анализатор не выбран - анализ кода отключен"));
+        return false;
+    }
+
+    settings.setValue(key, sel); // пользователь указа путь к бинарнику
+    updateLspStatus(tr("LSP[%1]: %2").arg(languageId, sel));
+    return true;
+}
+
+void MainWindowCodeEditor::updateLspStatus(const QString& text)
+{
+    if (m_lspStatusLabel) {
+        m_lspStatusLabel->setText(text);
+    }
+}
+
+// void MainWindowCodeEditor::onDiagnosticItemActivated(QListWidgetItem* item)
+// {
+//     auto pos = item->data(Qt::UserRole).value<QPair<int, int>>();
+//     int line = pos.first;
+//     int col = pos.second;
+
+//     if (!m_codeEditor || !m_codeEditor->document()) {
+//         return;
+//     }
+
+//     // конвектируем lsp позицию в позицию в документе
+//     int editorPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), line, col);
+//     if (editorPos < 0) {
+//         return;
+//     }
+
+//     // устанавливаем куроср и прокурчиваем
+//     QTextCursor cursor(m_codeEditor->document());
+//     cursor.setPosition(editorPos);
+//     m_codeEditor->setTextCursor(cursor);
+//     m_codeEditor->ensureCursorVisible();
+//     m_codeEditor->setFocus();
+// }
+
+void MainWindowCodeEditor::nextDiagnostic()
+{
+    if (!m_codeEditor || m_diagnostics.isEmpty()) {
+        return;
+    }
+
+    auto diagsList = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+    int currentLine = m_codeEditor->textCursor().blockNumber();
+    // ищем первую диагностику, где номер строки > currentLine
+    int targetLine = INT_MAX;
+    for (auto &d : diagsList) {
+        if (d.startLine > currentLine && d.startLine < targetLine) {
+            targetLine = d.startLine;
+        }
+    }
+
+    if (targetLine == INT_MAX && !diagsList.empty()) {
+        // зацикливаем на первую диагностику, если
+        targetLine = diagsList.first().startLine;
+    }
+    
+    if (targetLine != INT_MAX) {
+        // переходим на строку и показываем тултип
+        auto pos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), targetLine, 0);
+        if (pos >= 0) {
+            QTextCursor cursor(m_codeEditor->document());
+            cursor.setPosition(pos);
+            m_codeEditor->setTextCursor(cursor);
+            m_codeEditor->ensureCursorVisible();
+            // тултип ошибки, собираем все диагностики для которых startLine == targetLine
+            QStringList msgs;
+            for (const auto& d : diagsList) {
+                if (d.startLine == targetLine) {
+                    msgs << d.message;
+                }
+            }
+             QString msg = msgs.join("\n");
+             QToolTip::showText(m_codeEditor->viewport()->mapToGlobal(m_codeEditor->cursorRect().topLeft()), msg, m_codeEditor);
+        }
+    }
+}
+
+void MainWindowCodeEditor::prevDiagnostic()
+{
+    if (!m_codeEditor || m_diagnostics.isEmpty()) {
+        return;
+    }
+
+    auto diagsList = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+    int currentLine = m_codeEditor->textCursor().blockNumber();
+    // ищем первую диагностику, где номер строки < currentLine
+    int targetLine = -1;
+    for (auto &d : diagsList) {
+        if (d.startLine < currentLine && d.startLine > targetLine) {
+            targetLine = d.startLine;
+        }
+    }
+
+    if (targetLine == -1 && !diagsList.empty()) {
+        // зацикливаем на последней диагностику, если
+        targetLine = diagsList.last().startLine;
+    }
+    
+    if (targetLine >= 0) {
+        // переходим на строку и показываем тултип
+        auto pos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), targetLine, 0);
+        if (pos >= 0) {
+            QTextCursor cursor(m_codeEditor->document());
+            cursor.setPosition(pos);
+            m_codeEditor->setTextCursor(cursor);
+            m_codeEditor->ensureCursorVisible();
+            // тултип ошибки, собираем все диагностики для которых startLine == targetLine
+            QStringList msgs;
+            for (const auto& d : diagsList) {
+                if (d.startLine == targetLine) {
+                    msgs << d.message;
+                }
+            }
+             QString msg = msgs.join("\n");
+             QToolTip::showText(m_codeEditor->viewport()->mapToGlobal(m_codeEditor->cursorRect().topLeft()), msg, m_codeEditor);
+        }
+    }
+}
+
+void MainWindowCodeEditor::showFindPanel() // по сути она еще и закрывает, не хочу делать отдельную фукнцию)))
+{
+    if (m_findPanel->isVisible()) {
+        m_findPanel->setVisible(false);
+        m_codeEditor->setFocus();
+        updateFindHighlights();
+    }
+    else {
+        m_findPanel->setVisible(true);
+        m_findLineEdit->setFocus();
+        m_findLineEdit->selectAll();
+        updateFindHighlights();
+    }
+}
+
+
+void MainWindowCodeEditor::findNext()
+{
+    if (!m_findPanel || !m_findPanel->isVisible() || !m_codeEditor) return;
+    QString searchText = m_findLineEdit->text();
+    if (searchText.isEmpty()) return;
+    QTextDocument::FindFlags flags;
+    if (!m_codeEditor->find(searchText, flags)) {
+        QTextCursor cursor = m_codeEditor->textCursor();
+        cursor.movePosition(QTextCursor::Start);
+        m_codeEditor->setTextCursor(cursor);
+        m_codeEditor->find(searchText, flags);
+        if(statusBar()) statusBar()->showMessage(tr("Поиск достиг начала документа"), 2000);
+    }
+    updateFindHighlights();
+}
+
+void MainWindowCodeEditor::findPrevious()
+{
+    if (!m_findPanel || !m_findPanel->isVisible() || !m_codeEditor) return;
+    QString searchText = m_findLineEdit->text();
+    if (searchText.isEmpty()) return;
+
+    QTextDocument::FindFlags flags = QTextDocument::FindBackward;
+    if (!m_codeEditor->find(searchText, flags)) {
+        QTextCursor cursor = m_codeEditor->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        m_codeEditor->setTextCursor(cursor);
+        m_codeEditor->find(searchText, flags);
+        if(statusBar()) statusBar()->showMessage(tr("Поиск достиг конца документа"), 2000);
+    }
+    updateFindHighlights();
+}
+
+// подсвечивае ВСЕ найденные слова
+void MainWindowCodeEditor::updateFindHighlights()
+{
+    m_findSelections.clear(); // предыдщущие убираем
+
+    // при выходе убюираем
+    if (!m_findPanel || !m_findPanel->isVisible()) {
+        m_codeEditor->setExtraSelections(m_findSelections);
+        return;
+    }
+    QString searchText = m_findLineEdit->text();
+    if (searchText.isEmpty() || searchText.length() < 1) {
+        m_codeEditor->setExtraSelections(m_findSelections);
+        return;
+    }
+
+    QTextDocument *document = m_codeEditor->document();
+    QTextCursor highlightCursor(document);
+    QTextDocument::FindFlags flags;
+
+    while (!highlightCursor.isNull() && !highlightCursor.atEnd()) {
+        highlightCursor = document->find(searchText, highlightCursor, flags);
+        if (!highlightCursor.isNull()) {
+            QTextEdit::ExtraSelection sel;
+            sel.format = m_findFormat;
+            sel.cursor = highlightCursor;
+            m_findSelections.append(sel);
+        }
+    }
+    m_codeEditor->setExtraSelections(m_findSelections);
+}
+
+void MainWindowCodeEditor::on_actionFindPanel_triggered()
+{
+    showFindPanel();
+}
+

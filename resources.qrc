@@ -10,5 +10,12 @@
         <file>styles/Light.colorscheme</file>
         <file>styles/run.png</file>
         <file>styles/app_icon.png</file>
+        <file>styles/info.svg</file>
+        <file>styles/warning.svg</file>
+        <file>styles/error.png</file>
+        <file>styles/d_rightarrow.png</file>
+        <file>styles/d_leftarrow.png</file>
+        <file>styles/l_rightarrow.png</file>
+        <file>styles/l_leftarrow.png</file>
     </qresource>
 </RCC>
