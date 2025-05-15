@@ -47,17 +47,12 @@ CppHighlighter::CppHighlighter(QTextDocument *document, const QString &filePath,
     //singleLineCommentFormat.setForeground(Qt::gray);
     //singleLineCommentFormat.setForeground(QColor("#969696"));
     //singleLineCommentFormat.setForeground(QColor(255, 255, 255, 128));
-    singleLineCommentFormat.setForeground(QColor(150, 150, 150));
-    singleLineCommentFormat.setFontItalic(true);
-    rule.pattern = QRegularExpression(QStringLiteral("//[^\n]*"));
-    rule.format = singleLineCommentFormat;
-    highlightingRules.append(rule);
+
 
     //multiLineCommentFormat.setForeground(Qt::gray);
     //multiLineCommentFormat.setForeground(QColor("#969696"));
     //multiLineCommentFormat.setForeground(QColor(255, 255, 255, 128));
-    multiLineCommentFormat.setForeground(QColor(150, 150, 150));
-    multiLineCommentFormat.setFontItalic(true);
+
 
     //quolationFormat.setForeground(Qt::darkGreen);
     //quolationFormat.setForeground(QColor("#E6DB74"));
@@ -65,6 +60,7 @@ CppHighlighter::CppHighlighter(QTextDocument *document, const QString &filePath,
 
     //quolationFormat.setForeground(QColor(152, 229, 121));
     quolationFormat.setForeground(QColor(80, 150, 50));
+
 
     rule.pattern = QRegularExpression(QStringLiteral("\".*\""));
     rule.format = quolationFormat;
@@ -97,6 +93,15 @@ CppHighlighter::CppHighlighter(QTextDocument *document, const QString &filePath,
 
     commentStartExpression = QRegularExpression(QStringLiteral("/\\*"));
     commentEndExpression = QRegularExpression(QStringLiteral("\\*/"));
+
+    singleLineCommentFormat.setForeground(QColor(150, 150, 150));
+    singleLineCommentFormat.setFontItalic(true);
+    rule.pattern = QRegularExpression(QStringLiteral("//[^\n]*"));
+    rule.format = singleLineCommentFormat;
+    highlightingRules.append(rule);
+
+    multiLineCommentFormat.setForeground(QColor(150, 150, 150));
+    multiLineCommentFormat.setFontItalic(true);
 }
 
 bool CppHighlighter::isSupportedFileSuffix(const QString &fileName) const
