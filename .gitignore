@@ -68,6 +68,11 @@ object_script.*.Debug
 collab-server/ 
 backend/      
 saves/         
+codeeditor-website/
+deploy/website/
+deploy/scripts/
+utilities_xlam/
+scripts/
 
 # --- OS Generated Files ---
 .DS_Store
@@ -105,5 +110,23 @@ debug/
 saves/
 .specstory/
 .cursorindexingignore
-# SpecStory explanation file
-.specstory/.what-is-this.md
+
+test.cpp
+appimagetool
+bam-ide-nginx.conf
+bam-ide-x86_64.AppImage 
+check-updates.sh
+deploy-docs.sh 
+deploy-log.txt 
+download-linuxdeployqt.sh 
+fix-appimage.sh 
+fix-docs.sh 
+fix-docs-final.sh 
+fix-nginx.sh 
+fix-nginx-cache.sh 
+fix-appimage.sh 
+linuxdeployqt 
+quick-update.sh 
+myapp.desktop 
+update-info.json 
+version.txt

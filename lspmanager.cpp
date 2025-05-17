@@ -813,22 +813,6 @@ QPoint LspManager::editorPosToLspPos(QTextDocument *doc, int editorPos)
 
     int line = tb.blockNumber(); // номер строки
     int character = editorPos - tb.position(); // позиция символа нутри строки
-    // // проходимся посимвольно по тексту до нужной позиции
-    // for (int i = 0; i < text.length() && currentPos < editorPos; ++i) {
-    //     if (text[i] == '\n') { // если встретился перевод строки
-    //         line++;
-    //         character = 0;
-    //     } else {
-    //         // -------- TODO усложнить и уточнить логику, потмоу что табуляция занимает больше 1 места, так же многобайтные символа в utf-8 могут занимат больше 1 места и быть одним символом
-    //         character++;
-    //     }
-    //     currentPos++;
-    // }
-    // // если позиция указывает на '\n'
-    // if (currentPos == editorPos && editorPos > 0 && text.at(editorPos-1) == QChar('\n')) {
-    //     // мы стоим на символе перевода строки, значит это позиция 0 следующей строки
-    //     character = 0;
-    // }
 
     // ------- TODO табы пока что не учитываются
     return QPoint(line, character);
@@ -863,26 +847,4 @@ int LspManager::lspPosToEditorPos(QTextDocument *doc, int line, int character)
              << " -> Calculated EditorPos:" << (lineStartPosition + character);
 
     return lineStartPosition + posInLine;
-    // for (int pos = 0; pos < text.length(); ++pos) {
-    //     // если мы на нужной строке и на нужном символе
-    //     if (currentLine == line && currentCharacter == character) {
-    //         return pos;
-    //     }
-
-    //     if (text[pos] == '\n') {
-    //         currentLine++;
-    //         currentCharacter = 0;
-    //     } else {
-    //         currentCharacter++;
-    //         // ----- TODO tabs and utf-8
-    //     }
-    // }
-
-    // // если весь текст пройден и искомая позиция совпадает с концом файла
-    // if (currentLine == line && currentCharacter == character) {
-    //     return text.length();
-    // }
-
-    // // например запросили строку 100 в файла с 50 строками
-    // return -1;
 }

@@ -272,7 +272,6 @@ public:
     void triggerSelectionFromItem(QListWidgetItem *item); // ывбрать конкретный
 
     bool filterItems(const QString& prefix); // метод для фильтрации
-    void setCurrentFilterStrategy(const QString& strategyName);
     QStringList availableFilterStrategies() const;
 
     // методы внешнего управления

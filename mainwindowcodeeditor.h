@@ -146,10 +146,6 @@ private slots: // функции, которые будут вызваны в о
     // чатик
     //void toggleChat(); // Переключение видимости чата
     void sendMessage(); // Отправка сообщения
-    //void onTextMessagesReceived(const QString &message);
-    //void handleIncomingMessage(const QJsonObject &json);
-    //void on_toolButton_clicked();
-    //void keyPressEvent(QKeyEvent *event) override;
     void scrollToBottom(); // Новый слот для прокрутки
 
     void on_actionChangeTheme_triggered();

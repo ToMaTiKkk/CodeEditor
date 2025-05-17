@@ -518,22 +518,6 @@ void CompletionWidget::updateContext() {
     qDebug() << "Обновлен контекст:" << m_currentContext;
 }
 
-void CompletionWidget::setCurrentFilterStrategy(const QString& strategyName) {
-    // --------------- БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ
-    // for (const auto& strategy : m_filterStrategies) {
-    //     if (strategy->name() == strategyName) {
-    //         m_currentStrategy = strategy;
-    //         // кэш при смене стратгеии очищаем
-    //         m_filterCache.clear();
-    //         return;
-    //     }
-    // }
-
-    // // если стратегия не найдена, то используем нечеткий поиск по умолчанию
-    // qDebug() << "Стратегия не найдена:" << strategyName << ".Используется нечеткий поиск по умолчанию";
-    // m_currentStrategy = m_filterStrategies[1];
-}
-
 QStringList CompletionWidget::availableFilterStrategies() const {
     QStringList result;
     for (const auto& strategy : m_filterStrategies) {

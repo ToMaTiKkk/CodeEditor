@@ -153,33 +153,45 @@ void CodePlainTextEdit::keyPressEvent(QKeyEvent *event)
 
 void CodePlainTextEdit::wheelEvent(QWheelEvent* event)
 {
-   auto *vs = verticalScrollBar();
-   // Если есть точная дельта (например, тачпад)
+    int deltaY_pixels = 0;
+
+    // Для высокоточных устройств (тачпады)
     if (!event->pixelDelta().isNull()) {
-       vs->setValue(vs->value() - event->pixelDelta().y());
-    } else {
-       // fallback для обычной мышки
-       // angleDelta().y() даёт 120 либо –120 за один «щелчок»
-       vs->setValue(vs->value() - event->angleDelta().y() / 120.0 * fontMetrics().height() / 2);
-       // здесь делится на 2, чтобы получить полустроку, можно варьировать для чувствительности
+        // если pixelDelta().y() > 0 (скролл вверх), то scrollbar->value() должен уменьшиться
+        deltaY_pixels = event->pixelDelta().y();
     }
+    // Для обычной мыши
+    else if (!event->angleDelta().isNull()) {
+        // angleDelta().y() > 0 (колесико от себя) означает скролл контента ВВЕРХ
+        double numTicks = event->angleDelta().y() / 120.0;
+
+        // количество строк на один "тик" колеса
+        double linesPerTick = 1.1; // Полстроки за тик
+
+        deltaY_pixels = static_cast<int>(numTicks * linesPerTick * fontMetrics().height());
+    }
+
+    if (deltaY_pixels != 0) {
+        // (положительное значение -> скролл вверх).
+        smoothScrollBy(deltaY_pixels);
+    }
+
     event->accept();
 }
 
-
-void CodePlainTextEdit::smoothScrollBy(int deltaY)
+void CodePlainTextEdit::smoothScrollBy(int deltaY_pixels)
 {
     QScrollBar *vs = verticalScrollBar();
-    int start = vs->value();
-    int end   = start - deltaY;
+    int startValue = vs->value();
+    int endValue = startValue - deltaY_pixels;
 
     // Ограничиваем конец допустимым диапазоном
-    end = qBound(vs->minimum(), end, vs->maximum());
+    endValue = qBound(vs->minimum(), endValue, vs->maximum());
 
     auto *anim = new QPropertyAnimation(vs, "value", this);
-    anim->setDuration(200); // мс — подберите под себя: меньше = быстрее, больше = более «тяжёлая» инерция
-    anim->setStartValue(start);
-    anim->setEndValue(end);
+    anim->setDuration(150); // чем меньше, тем быстрее, а иначе = более тяжелая инерция
+    anim->setStartValue(startValue); // начинаем с текущего реального значения
+    anim->setEndValue(endValue);
     anim->setEasingCurve(QEasingCurve::OutCubic); // сглаженная кривая
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 }

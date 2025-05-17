@@ -430,15 +430,6 @@ void MainWindowCodeEditor::setupMenuBarActions()
     } else {
         qWarning() << "Could not find 'menuView' or 'actionTerminal' in UI file.";
     }
-
-    // создаем панель диагностик
-    // m_diagnosticsDock = new QDockWidget(tr("Диагностика"), this);
-    // m_diagnosticsList = new QListWidget(m_diagnosticsDock);
-    // m_diagnosticsList->setUniformItemSizes(true);
-    // m_diagnosticsList->setSelectionMode(QAbstractItemView::SingleSelection);
-    // m_diagnosticsDock->setWidget(m_diagnosticsList);
-    // addDockWidget(Qt::RightDockWidgetArea, m_diagnosticsDock);
-    // connect(m_diagnosticsList, &QListWidget::itemActivated, this, &MainWindowCodeEditor::onDiagnosticItemActivated);
 }
 
 void MainWindowCodeEditor::setupFileSystemView()
@@ -640,14 +631,6 @@ bool MainWindowCodeEditor::eventFilter(QObject *obj, QEvent *event)
     }
 
     if (obj == m_codeEditor->viewport()) {
-        // if (event->type() == QEvent::KeyPress && (!m_completionWidget || !m_completionWidget->isVisible())) {
-        //     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-        //     // используем обработчики для шорткатов, когда автодоп не видно
-        //     handleEditorKeyPressEvent(keyEvent);
-        //     if (keyEvent->isAccepted()) {
-        //         return true;
-        //     }
-        // } else
         if (event->type() == QEvent::Resize) {
             for (auto it = remoteLineHighlights.begin(); it != remoteLineHighlights.end(); ++it) {
                 QString senderId = it.key();
@@ -777,9 +760,6 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
     if (!m_codeEditor) return;
 
     if (!m_completionWidget) {
-        // if (m_completionWidget) {
-        //     m_completionWidget->hide();
-        // }
         return;
     }
 
@@ -816,9 +796,6 @@ void MainWindowCodeEditor::onLspCompletionReceived(const QList<LspCompletionItem
         }
 
         m_completionWidget->installEventFilter(this); // все события сначала будут проверять MainWIndowCOdeEditor, а потом уже нужные будут отправляться в виджет
-        //m_completionWidget->show();
-        //m_completionWidget->setFocus(); // передаем фокус при навигаации клавиатурой
-        //qDebug() << "[onLspCompletionReceived] Completion shown. Filter installed.";
     }
 }
 
@@ -1134,15 +1111,6 @@ void MainWindowCodeEditor::updateDiagnosticsView()
     qDebug() << "[UPDATE_DIAG_VIEW] Setting" << extraSelections.count() << "extra selections to the editor.";
     // применяем созданный список подчеркиваний к редактору
     m_codeEditor->setExtraSelections(extraSelections);
-
-    //m_diagnosticsList->clear();
-    //const auto& diags = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
-    //for (const LspDiagnostic& d : diags) {
-      //  QString text = QString("%1:%2 [%3] %4").arg(d.startLine + 1).arg(d.startChar + 1).arg(d.severity == 1 ? tr("Error") : d.severity == 2 ? tr("Warning") : tr("Info"));
-        //auto *item = new QListWidgetItem(text, m_diagnosticsList);
-        // сохраняем позицию для перехода
-        //item->setData(Qt::UserRole, QVariant::fromValue(QPair<int, int>(d.startLine, d.startChar)));
-    //}
 
     // формируем номер строки -> максимальная диагностика
     QMap<int, int> gutterMap;
@@ -1877,8 +1845,6 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
                 // если ввели символ который не должен тригерить запро, пока что просто скроем (условно после пробела, точки с запятой)
                 if (!lastChar.isLetterOrNumber() && lastChar != QLatin1Char('_') && !triggerChars.contains(lastChar)) {
                     m_completionWidget->hide();
-                } else {
-                // TODO: ФИЛЬТРАЦИЮ КЛИЕНТСКУЮ сделать уже существуещего списка
                 }
             }
         } else if (charsRemoved > 0 && m_completionWidget && m_completionWidget->isVisible() && charsAdded == 0) {
@@ -2465,12 +2431,6 @@ void MainWindowCodeEditor::onMutedStatusUpdate(const QString &clientId, bool isM
     }
     if (clientId == m_clientId) {
         updateMutedStatus(); // обновляем статус, когда мьют накладывается на самого пользователя
-        // if (wasMuted != isMuted) {
-        //     // QMessageBox *msgBox = new QMessageBox(this);
-        //     // msgBox->information(this, tr("Размьют"), "Вы разблокированы, можете редактировать текст!");
-        //     // msgBox->show();
-        //     QMessageBox::information(this, tr("Размьют"), tr("Вы разблокированы, можете редактировать текст!"));
-        // }
     }
     updateUserListUI(); // обновляем статус пользователя в списке
 }
