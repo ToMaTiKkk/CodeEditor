@@ -307,6 +307,5 @@ private:
 
     QList<QTextEdit::ExtraSelection> m_findSelections; //ля подсветки результатов поиска
     QTextCharFormat m_findFormat;
-    QLabel* m_findStatusLabel; //совпадения
 };
 #endif // MAINWINDOWCODEEDITOR_H
