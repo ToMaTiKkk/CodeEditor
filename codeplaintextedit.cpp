@@ -175,7 +175,6 @@ void CodePlainTextEdit::wheelEvent(QWheelEvent* event)
         // (положительное значение -> скролл вверх).
         smoothScrollBy(deltaY_pixels);
     }
-
     event->accept();
 }
 

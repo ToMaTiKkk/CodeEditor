@@ -132,6 +132,7 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     m_findNextButton = new QPushButton(tr("↓ Следующий"), m_findPanel);
     m_findPrevButton = new QPushButton(tr("↑ Предыдущий"), m_findPanel);
 
+
     QHBoxLayout* findLayout = new QHBoxLayout(m_findPanel);
     findLayout->setContentsMargins(2, 2, 2, 2);
     findLayout->setSpacing(4);
@@ -155,22 +156,18 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     finalLayout->addWidget(codeEditorContainer);
     finalLayout->addWidget(m_findPanel);
 
-
-    // находим индекс из ui-дизайнера непосредственно codeEditor и заменяем его на созданный контейнер
     int index = -1;
     if (ui->splitter) {
-        index = ui->splitter->indexOf(ui->codeEditor); // ИСХОДНЫЙ виджет-плейсхолдер из дизайнера (ui->codeEditor)
+        index = ui->splitter->indexOf(ui->codeEditor);
     } else {
         return;
     }
-
-    if (index != -1) { // если нашли плейсхолдер ui->codeEditor
+    if (index != -1) {
         ui->splitter->replaceWidget(index, editorAndFindWidget);
         editorAndFindWidget->setVisible(true);
 
-        // удаляем прошлый редактор из дизайнера, потмоу что он больше не нужен
         delete ui->codeEditor;
-        ui->codeEditor = nullptr; // чтобы случайнно не использовать данный указатель
+        ui->codeEditor = nullptr;
     } else {
         if (ui->splitter) {
             ui->splitter->addWidget(editorAndFindWidget);
@@ -3261,30 +3258,38 @@ void MainWindowCodeEditor::findNext()
     QString searchText = m_findLineEdit->text();
     if (searchText.isEmpty()) return;
     QTextDocument::FindFlags flags;
-    if (!m_codeEditor->find(searchText, flags)) {
+    bool found = m_codeEditor->find(searchText, flags);
+    if (!found) {
         QTextCursor cursor = m_codeEditor->textCursor();
         cursor.movePosition(QTextCursor::Start);
         m_codeEditor->setTextCursor(cursor);
-        m_codeEditor->find(searchText, flags);
-        if(statusBar()) statusBar()->showMessage(tr("Поиск достиг начала документа"), 2000);
+        found = m_codeEditor->find(searchText, flags);
+        m_codeEditor->setTextCursor(cursor);
+        found = m_codeEditor->find(searchText, flags);
+        QMessageBox::warning(this, tr("Ошибка поиска"), tr("Совпадений не найдено"));
+        if(statusBar()) statusBar()->showMessage(tr("Поиск достиг конца документа"), 2000);
+        return;
     }
     updateFindHighlights();
 }
+
 
 void MainWindowCodeEditor::findPrevious()
 {
     if (!m_findPanel || !m_findPanel->isVisible() || !m_codeEditor) return;
     QString searchText = m_findLineEdit->text();
     if (searchText.isEmpty()) return;
-
     QTextDocument::FindFlags flags = QTextDocument::FindBackward;
-    if (!m_codeEditor->find(searchText, flags)) {
+    bool found = m_codeEditor->find(searchText, flags);
+    if (!found) {
         QTextCursor cursor = m_codeEditor->textCursor();
         cursor.movePosition(QTextCursor::End);
         m_codeEditor->setTextCursor(cursor);
-        m_codeEditor->find(searchText, flags);
+        found = m_codeEditor->find(searchText, flags);
+        QMessageBox::warning(this, tr("Ошибка поиска"), tr("Совпадений не найдено"));
         if(statusBar()) statusBar()->showMessage(tr("Поиск достиг конца документа"), 2000);
-    }
+            return;
+        }
     updateFindHighlights();
 }
 

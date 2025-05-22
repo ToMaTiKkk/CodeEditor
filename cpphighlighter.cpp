@@ -41,7 +41,7 @@ CppHighlighter::CppHighlighter(QTextDocument *document, const QString &filePath,
     quolationFormat.setForeground(QColor(80, 150, 50));
 
 
-    rule.pattern = QRegularExpression(QStringLiteral("\".*\""));
+    rule.pattern = QRegularExpression(QStringLiteral("([\"'])(.*?)\\1"));
     rule.format = quolationFormat;
     highlightingRules.append(rule);
 
