@@ -57,22 +57,25 @@
 ### Главный интерфейс
 *Элегантный и функциональный дизайн, созданный для продуктивности*
 
-<!-- ![CodeEditor Main Interface](screenshots/main_interface.png) -->
+![image](https://github.com/user-attachments/assets/5cfa80fe-185a-430b-bde7-8aa7b8f3c88a)
+
 
 ### Совместная работа в действии
 *Несколько разработчиков, один код, бесконечные возможности*
 
-<!-- ![Real-time Collaboration](screenshots/collaboration.png) -->
+![image](https://github.com/user-attachments/assets/58b36ab1-1ce1-468c-9317-36cf03a82657)
 
 ### LSP интеграция
 *Интеллектуальные подсказки и диагностика кода*
 
-<!-- ![LSP Features](screenshots/lsp_features.png) -->
+![image](https://github.com/user-attachments/assets/66fd1142-f2c4-4537-95da-c029e7602e0f)
+![image](https://github.com/user-attachments/assets/f489cdbe-f760-48e8-bcd9-ee3679410b1e)
 
 ### Встроенный терминал
 *Вся мощь командной строки под рукой*
 
-<!-- ![Integrated Terminal](screenshots/terminal.png) -->
+![image](https://github.com/user-attachments/assets/c3db84cc-c644-4540-bd46-7436af671cad)
+
 
 </div>
 
@@ -87,6 +90,7 @@
 
 **Обязательные компоненты:**
 - **Qt 6 Framework**: Версия 6.2+ с модулями Core, Gui, Widgets, Network, Websockets, Concurrent
+> **Примечани:** Совместимо и с Qt5, но воизбежание багов рекомендуется Qt6
 - **C++ Compiler**: Поддержка C++17 (GCC 7+, Clang 5+, MSVC 2017+)
 - **CMake**: Версия 3.16+
 
@@ -126,7 +130,7 @@ cmake --build . --config Release  # Windows
 ```bash
 # Установка зависимостей
 sudo apt update
-sudo apt install qt6-base-dev qt6-websockets-dev cmake build-essential
+sudo apt install qt6-base-dev qt6-websockets-dev cmake build-essential qtermwidget 
 
 # Сборка проекта
 git clone https://github.com/ToMaTiKkk/CodeEditor.git
@@ -154,7 +158,7 @@ cmake --build . --config Release
 #### macOS
 ```bash
 # Установка через Homebrew
-brew install qt6 cmake
+brew install qt6 cmake qtermwidget
 
 # Сборка проекта
 git clone https://github.com/ToMaTiKkk/CodeEditor.git
@@ -235,7 +239,7 @@ $ javac Main.java && java Main
 
 | Светлая тема | Темная тема |
 |--------------|-------------|
-| ![Light Theme](https://via.placeholder.com/300x200/ffffff/000000?text=Light+Theme) | ![Dark Theme](https://via.placeholder.com/300x200/2d3748/ffffff?text=Dark+Theme) |
+| ![Light Theme](https://github.com/user-attachments/assets/4c2efbe2-5c1a-43e3-ba5f-09b00c9d5437) | ![Dark Theme](https://github.com/user-attachments/assets/4220bd43-9a2a-4be0-95fa-e93c1d0b7742) |
 | *Классическая элегантность* | *Современный стиль* |
 
 </div>
@@ -331,7 +335,6 @@ graph TD
 - [ ] **🧭 Code Navigation** - Переход к определению и поиск ссылок (LSP)
 - [ ] **📊 Code Analytics** - Метрики и статистика
 - [ ] **🤖 AI Code Assistant** - ИИ помощник разработчика
-- [ ] **📱 Mobile Companion** - Мобильное приложение
 - [ ] **☁️ Cloud Sync** - Синхронизация в облаке
 - [ ] **🎮 Gamification** - Геймификация процесса разработки
 
@@ -343,8 +346,8 @@ graph TD
 
 | Документ | Описание | Аудитория |
 |----------|----------|-----------|
-| 📖 [**Руководство пользователя**](doc_for_user.md) | Полное руководство по использованию | Пользователи |
-| 🔧 [**Документация разработчика**](doc.md) | Техническая документация и API | Разработчики |
+| 📖 [**Руководство пользователя**](./doc_for_user.md) | Полное руководство по использованию | Пользователи |
+| 🔧 [**Документация разработчика**](./doc.md) | Техническая документация и API | Разработчики |
 | ⚖️ [**Лицензия**](LICENSE) | GNU GPLv3 - Свобода для всех | Все |
 | 🐛 [**Issue Tracker**](https://github.com/ToMaTiKkk/CodeEditor/issues) | Сообщения об ошибках и предложения | Все |
 
@@ -433,6 +436,6 @@ graph TD
 
 *Сделано с ❤️ и бесконечными чашками кофе ☕*
 
-**CodeEditor © 2024 - Будущее разработки уже здесь**
+**CodeEditor © 2025 - Будущее разработки уже здесь**
 
 </div>
