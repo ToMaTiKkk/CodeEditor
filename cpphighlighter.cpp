@@ -1,3 +1,7 @@
+// CodeEditor - A collaborative C++ IDE with LSP, chat, and terminal integration.
+// Copyright (C) 2025 ToMaTiKkk
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "cpphighlighter.h"
 #include <utility> // добавил для использования std::as_const() из C++17
 #include <QFileInfo>
