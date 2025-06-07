@@ -196,6 +196,7 @@ private:
     void setupTerminalArea();     // терминал
     void compileAndRun();         // автозапуск кода
     void initializeApplication();
+    void setupStatusBarWidgets();
 
     // LSP
     void performLspStart(const QString& languageId);
