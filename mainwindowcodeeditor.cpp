@@ -132,6 +132,12 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     m_findLineEdit->setPlaceholderText(tr("Найти"));
     m_findNextButton = new QPushButton(tr("↓ Следующий"), m_findPanel);
     m_findPrevButton = new QPushButton(tr("↑ Предыдущий"), m_findPanel);
+    m_findCloseButton = new QPushButton(m_findPanel);
+    m_findCloseButton->setText("X");
+    m_findCloseButton->setToolTip(tr("Закрыть панель поиска"));
+    // плоская и маленькая
+    m_findCloseButton->setFixedSize(24, 24);
+    m_findCloseButton->setFlat(true);
 
 
     QHBoxLayout* findLayout = new QHBoxLayout(m_findPanel);
@@ -199,6 +205,7 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     connect(m_findLineEdit, &QLineEdit::textChanged, this, &MainWindowCodeEditor::updateFindHighlights);
     connect(m_findNextButton, &QPushButton::clicked, this, &MainWindowCodeEditor::findNext);
     connect(m_findPrevButton, &QPushButton::clicked, this, &MainWindowCodeEditor::findPrevious);
+    connect(m_findCloseButton, &QPushButton::clicked, m_findPanel, &QWidget::hide);
     m_findLineEdit->installEventFilter(this);
 
     QAction *Next = new QAction(tr("Следующий элемент"), this);
@@ -515,7 +522,7 @@ void MainWindowCodeEditor::initializeApplication()
 
 void MainWindowCodeEditor::setupStatusBarWidgets()
 {
-    qDebug() << "Настройка виджетов StatuBar...";
+    qDebug() << "Настройка виджетовё StatuBar...";
 
     if (!statusBar()) {
         qWarning() << "Status Bar не существует. Виджеты не будут добавлены";
