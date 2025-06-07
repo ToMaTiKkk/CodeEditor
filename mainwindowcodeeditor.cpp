@@ -211,25 +211,6 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     connect(Previous, &QAction::triggered, this, &MainWindowCodeEditor::findPrevious);
     addAction(Previous);
 
-    // индикатор состояния лсп сервера, какой работает и работает ли он вообще
-    QToolButton *lspStatusBtn = new QToolButton(this);
-    lspStatusBtn->setText(tr("LSP: -"));
-    lspStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    lspStatusBtn->setAutoRaise(true);
-    if (statusBar()) { // для поиска: Добавляем проверку существования statusBar перед использованием
-        statusBar()->addPermanentWidget(lspStatusBtn);
-    }
-    m_lspStatusLabel = lspStatusBtn;
-    connect(lspStatusBtn, &QToolButton::clicked, this, &MainWindowCodeEditor::onLspSettings);
-
-    // индикатор количества ошибок и предупреждений в файле
-    m_diagnosticsStatusBtn = new QToolButton(this);
-    m_diagnosticsStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    m_diagnosticsStatusBtn->setAutoRaise(true);
-    if (statusBar()) { // для поиска: Добавляем проверку существования statusBar перед использованием
-        statusBar()->addPermanentWidget(m_diagnosticsStatusBtn);
-    }
-
     // перемещение по ошибкам через F2 | Shift + F2
     QAction *actNext = new QAction(tr("Следующая ошибка"), this);
     actNext->setShortcut(Qt::Key_F2);
@@ -518,6 +499,9 @@ void MainWindowCodeEditor::setupThemeAndNick()
 
 void MainWindowCodeEditor::initializeApplication()
 {
+    setupStatusBarWidgets();
+
+    // потом ник, потому что он все заблокирует
     bool ok;
     m_username = QInputDialog::getText(this, tr("Введите никнейм"), tr("Никнейм:"), QLineEdit::Normal, QDir::home().dirName(), &ok);
     if (!ok || m_username.isEmpty()) {
@@ -527,6 +511,31 @@ void MainWindowCodeEditor::initializeApplication()
 
     setupLsp(); // настраиваем и запускаем LSP
     setupNetwork(); // websocket, client id
+}
+
+void MainWindowCodeEditor::setupStatusBarWidgets()
+{
+    qDebug() << "Настройка виджетов StatuBar...";
+
+    if (!statusBar()) {
+        qWarning() << "Status Bar не существует. Виджеты не будут добавлены";
+        return;
+    }
+
+    // индикатор состояния лсп сервера, какой работает и работает ли он вообще
+    QToolButton *lspStatusBtn = new QToolButton();
+    lspStatusBtn->setText(tr("LSP: -"));
+    lspStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    lspStatusBtn->setAutoRaise(true);
+    statusBar()->addPermanentWidget(lspStatusBtn);
+    m_lspStatusLabel = lspStatusBtn;
+    connect(lspStatusBtn, &QToolButton::clicked, this, &MainWindowCodeEditor::onLspSettings);
+
+    // индикатор количества ошибок и предупреждений в файле
+    m_diagnosticsStatusBtn = new QToolButton();
+    m_diagnosticsStatusBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_diagnosticsStatusBtn->setAutoRaise(true);
+    statusBar()->addPermanentWidget(m_diagnosticsStatusBtn);
 }
 
 MainWindowCodeEditor::~MainWindowCodeEditor()
