@@ -399,16 +399,6 @@ void MainWindowCodeEditor::setupMenuBarActions()
     // Сигнал изменения документа клиентом и
     connect(m_codeEditor->document(), &QTextDocument::contentsChange, this, &MainWindowCodeEditor::onContentsChange);
     connect(m_codeEditor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindowCodeEditor::onCursorPositionChanged);
-
-    // подключение меню терминала
-    if (ui->menufd && ui->actionTerminal) {
-        ui->actionTerminal->setCheckable(true);
-        ui->actionTerminal->setChecked(m_isTerminalVisible);
-        connect(ui->actionTerminal, &QAction::triggered, this, &MainWindowCodeEditor::on_actionTerminal_triggered);
-        qDebug() << "Terminal menu action connected.";
-    } else {
-        qWarning() << "Could not find 'menuView' or 'actionTerminal' in UI file.";
-    }
 }
 
 void MainWindowCodeEditor::setupFileSystemView()
@@ -511,6 +501,37 @@ void MainWindowCodeEditor::initializeApplication()
         m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
     }
 
+    if (!m_terminalWidget) {
+        qWarning() << "Setting up Terminal Area (using wrapper)...";
+        QSplitter *mainVerticalSplitter = new QSplitter(Qt::Vertical, this);
+        mainVerticalSplitter->setObjectName("mainVerticalSplitter");
+
+        if (!ui->splitter) {
+            return;
+        }
+
+        mainVerticalSplitter->addWidget(ui->splitter);
+
+        m_terminalWidget = new TerminalWidget(mainVerticalSplitter);
+        if (!m_terminalWidget) {
+            qFatal("Failed to create TerminalWidget wrapper!");
+            return;
+        }
+
+        m_terminalWidget->setObjectName("terminalWidgetWrapper");
+
+        int minTerminalHeight = 50;
+        m_terminalWidget->setMinimumHeight(minTerminalHeight);
+
+        mainVerticalSplitter->addWidget(m_terminalWidget);
+        mainVerticalSplitter->setChildrenCollapsible(false);
+
+        delete this->centralWidget();
+        this->setCentralWidget(mainVerticalSplitter);
+
+        m_terminalWidget->setVisible(m_isTerminalVisible);
+        qDebug() << "Terminal Area setup complete.";
+    }
 
     // потом ник, потому что он все заблокирует
     bool ok;
@@ -2877,30 +2898,15 @@ void MainWindowCodeEditor::on_actionToDoList_triggered()
 
 void MainWindowCodeEditor::setupTerminalArea()
 {
-    qWarning() << "Setting up Terminal Area (using wrapper)...";
-    QSplitter *mainVerticalSplitter = new QSplitter(Qt::Vertical, this);
-    mainVerticalSplitter->setObjectName("mainVerticalSplitter");
-
-    if (!ui->splitter) { return; }
-    mainVerticalSplitter->addWidget(ui->splitter);
-
-    m_terminalWidget = new TerminalWidget(mainVerticalSplitter);
-    if (!m_terminalWidget) { qFatal("Failed to create TerminalWidget wrapper!"); return; }
-    m_terminalWidget->setObjectName("terminalWidgetWrapper");
-
-    int minTerminalHeight = 50;
-    m_terminalWidget->setMinimumHeight(minTerminalHeight);
-
-    mainVerticalSplitter->addWidget(m_terminalWidget);
-
-    mainVerticalSplitter->setChildrenCollapsible(false);
-
-    delete this->centralWidget();
-    this->setCentralWidget(mainVerticalSplitter);
-
-    m_terminalWidget->setVisible(m_isTerminalVisible);
-
-    qDebug() << "Terminal Area setup complete.";
+    // подключение меню терминала
+    if (ui->menufd && ui->actionTerminal) {
+        ui->actionTerminal->setCheckable(true);
+        ui->actionTerminal->setChecked(m_isTerminalVisible);
+        connect(ui->actionTerminal, &QAction::triggered, this, &MainWindowCodeEditor::on_actionTerminal_triggered);
+        qDebug() << "Terminal menu action connected.";
+    } else {
+        qWarning() << "Could not find 'menuView' or 'actionTerminal' in UI file.";
+    }
 }
 
 void MainWindowCodeEditor::on_actionTerminal_triggered()
