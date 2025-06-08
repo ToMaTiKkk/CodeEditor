@@ -2,6 +2,19 @@ cmake_minimum_required(VERSION 3.16)
 
 project(BAM_IDE VERSION 0.1 LANGUAGES CXX)
 
+if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANG)
+    # Включаем AddressSanitizer для отладочных сборок
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -g")
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -g")
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -fsanitize=address")
+    set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address")
+endif()
+
+# -O3 - максимальная оптимизация
+# -DNDEBUG - отключает assert'ы
+# -g - добавляет отладочные символы, которые нужны perf!
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -g")
+
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
