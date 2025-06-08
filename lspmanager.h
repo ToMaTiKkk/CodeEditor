@@ -1,7 +1,3 @@
-// CodeEditor - A collaborative C++ IDE with LSP, chat, and terminal integration.
-// Copyright (C) 2025 ToMaTiKkk
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 #ifndef LSPMANAGER_H
 #define LSPMANAGER_H
 
@@ -46,7 +42,7 @@ class LspManager : public QObject
 {
     Q_OBJECT
 
-// будет доступно в MainWindowCodeEditor
+    // будет доступно в MainWindowCodeEditor
 public:
     explicit LspManager(QString serverExecutablePath = "clangd", QObject *parent = nullptr);
     ~LspManager();
@@ -75,10 +71,10 @@ public:
     // функции для перевода координат между форматом редактор (номер символа) на формат сервера (строка, символ)
     QPoint editorPosToLspPos(QTextDocument *doc, int editorPos);
     int lspPosToEditorPos(QTextDocument *doc, int line, int character);
-    
+
     QString executablePath() const { return m_serverExecutablePath; } // путь по которому запущено LSP-ядро
 
-// сервер сообщает MainWindow что что-то произошло
+    // сервер сообщает MainWindow что что-то произошло
 signals:
     // сигналы состояния сервера
     void serverReady();
@@ -95,7 +91,7 @@ signals:
     // список место где объявлен символ
     void definitionReceived(const QList<LspDefinitionLocation>& locations);
 
-// функции автоматом будут вызываться от других обхектов от QProcess
+    // функции автоматом будут вызываться от других обхектов от QProcess
 private slots:
     // когда сервер написал в свой вывод (stdout), когда прислал ответ или уведомление
     void onReadyReadStandardOutput();
@@ -105,10 +101,11 @@ private slots:
     void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     // произошла ошибка при запуске или работе сервака
     void onProcessError(QProcess::ProcessError error);
+    void onServerProcessStarted();
 
-// внутренние детали сервака, скрытые от основнго приложения
+    // внутренние детали сервака, скрытые от основнго приложения
 private:
-    QMap<qint64, QString> m_pendingRequests; // ID запроса - имя метода 
+    QMap<qint64, QString> m_pendingRequests; // ID запроса - имя метода
     QProcess *m_lspProcess = nullptr; // нулевой - процесс не запущен
     QString m_serverExecutablePath; // имя или полный путь к анализатору, например для cpp clangd "/usr/bin/clangd"
     QString m_languageId; // короткое имя языка, например cpp
