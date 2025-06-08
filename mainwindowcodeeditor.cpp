@@ -71,7 +71,11 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
 
     setupMainWindow(); // окно и шрифт
     setupCodeEditorArea(); // редактор и нумерация
-    setupLspCompletionAndHover();
+
+    m_hoverTimer = new QTimer(this);
+    m_hoverTimer->setSingleShot(true); // срабатывает один раз
+    m_hoverTimer->setInterval(700); // задержка в мс перед запросом hover
+
     setupChatWidget(); // чат
     setupUserFeatures(); // меню пользователей, мьют, таймер и тп
     setupMenuBarActions(); // подключение сигналов
@@ -279,17 +283,6 @@ void MainWindowCodeEditor::setupLsp()
 
 void MainWindowCodeEditor::setupLspCompletionAndHover()
 {
-    m_completionWidget = new CompletionWidget(m_codeEditor, this); // создаем виджет автодополнения
-    m_completionWidget->hide();
-    connect(m_completionWidget, &CompletionWidget::completionSelected, this, &MainWindowCodeEditor::applyCompletion);
-
-    if (!m_diagnosticTooltip) {
-        m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
-    }
-
-    m_hoverTimer = new QTimer(this);
-    m_hoverTimer->setSingleShot(true); // срабатывает один раз
-    m_hoverTimer->setInterval(700); // задержка в мс перед запросом hover
     connect(m_hoverTimer, &QTimer::timeout, this, &MainWindowCodeEditor::showDiagnoticTooltipOrRequestHover);
 }
 
@@ -507,6 +500,17 @@ void MainWindowCodeEditor::setupThemeAndNick()
 void MainWindowCodeEditor::initializeApplication()
 {
     setupStatusBarWidgets();
+
+    if (!m_completionWidget) {
+        m_completionWidget = new CompletionWidget(m_codeEditor, this); // создаем виджет автодополнения
+        m_completionWidget->hide();
+        connect(m_completionWidget, &CompletionWidget::completionSelected, this, &MainWindowCodeEditor::applyCompletion);
+        applyCurrentTheme();
+    }
+    if (!m_diagnosticTooltip) {
+        m_diagnosticTooltip = new DiagnosticTooltip(m_codeEditor->viewport());
+    }
+
 
     // потом ник, потому что он все заблокирует
     bool ok;
@@ -2368,38 +2372,43 @@ void MainWindowCodeEditor::onVerticalScrollBarValueChanged(int value)
 
 void MainWindowCodeEditor::applyCurrentTheme()
 {
+    QString styleSheet;
+
     if (!m_isDarkTheme) {
         QFile lightFile(":/styles/light.qss");
         if (lightFile.open(QFile::ReadOnly)) {
-            QString lightStyle = lightFile.readAll();
-            qApp->setStyleSheet(lightStyle);
-            chatWidget->setStyleSheet(lightStyle);
-            m_completionWidget->setStyleSheet(lightStyle);
+            styleSheet = lightFile.readAll();
             lightFile.close();
-            qDebug() << "Light theme applied successfully";
+            qDebug() << "Light theme loaded successfully";
         } else {
             qDebug() << "Failed to open light.qss";
         }
     } else {
         QFile darkFile(":/styles/dark.qss");
         if (darkFile.open(QFile::ReadOnly)) {
-            QString darkStyle = darkFile.readAll();
-            qApp->setStyleSheet(darkStyle);
-            chatWidget->setStyleSheet(darkStyle);
-            m_completionWidget->setStyleSheet(darkStyle);
+            styleSheet = darkFile.readAll();
             darkFile.close();
-            qDebug() << "Dark theme applied successfully";
+            qDebug() << "Dark theme loaded successfully";
         } else {
             qDebug() << "Failed to open dark.qss";
         }
     }
-    if (!m_terminalWidget) {
-        return;
+
+    qApp->setStyleSheet(styleSheet);
+    qDebug() << "Global theme succes apply";
+
+    if (chatWidget) {
+        chatWidget->setStyleSheet(styleSheet);
     }
 
-    QString terminalSchemePath = m_isDarkTheme ? ":/styles/Dark.colorscheme" : ":/styles/Light.colorscheme";
+    if (m_completionWidget) {
+        m_completionWidget->setStyleSheet(styleSheet);
+    }
 
-    m_terminalWidget->applyColorScheme(terminalSchemePath);
+    if (m_terminalWidget) {
+        QString terminalSchemePath = m_isDarkTheme ? ":/styles/Dark.colorscheme" : ":/styles/Light.colorscheme";
+        m_terminalWidget->applyColorScheme(terminalSchemePath);
+    }
 }
 
 void MainWindowCodeEditor::onToolButtonClicked()
