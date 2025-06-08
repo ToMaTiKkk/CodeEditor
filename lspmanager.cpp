@@ -1,7 +1,3 @@
-// CodeEditor - A collaborative C++ IDE with LSP, chat, and terminal integration.
-// Copyright (C) 2025 ToMaTiKkk
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 #include "lspmanager.h"
 #include <QDebug>
 #include <QJsonParseError>
@@ -49,6 +45,7 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     if (!m_lspProcess) {
         m_lspProcess = new QProcess(this); // создаем объект, который будет управлять внешним процессом, удаляется вместе с родителем, то есть с LspManager
 
+        connect(m_lspProcess, &QProcess::started, this, &LspManager::onServerProcessStarted);
         // настройках уведов, когда процесс напишет в stdout, то вызываем функцию
         connect(m_lspProcess, &QProcess::readyReadStandardOutput, this, &LspManager::onReadyReadStandardOutput);
         connect(m_lspProcess, &QProcess::readyReadStandardError, this, &LspManager::onReadyReadStandardError);
@@ -65,15 +62,11 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     // запускаем процесс и qt найдет m_serverExecutable с системных путях в PATH
     m_lspProcess->start();
 
-    // задержка в 5 сек, чтобы точно убедиться, что процесс запустился
-    if (!m_lspProcess->waitForStarted(5000)) {
-        qCritical() << "Не удалось запустить процсс LSP сервера:" << m_lspProcess->errorString();
-        m_lspProcess->deleteLater(); // так как не запустился
-        m_lspProcess = nullptr;
-        emit serverError("Не удалось запустить LSP сервер: " + m_serverExecutablePath); // посылаем в mainwindow сигнал об ошибке
-        return false; // запуск не удался
-    }
+    return true; // команда на запуск принята, просто принята
+}
 
+void LspManager::onServerProcessStarted()
+{
     qInfo() << "Процесс LSP сервера запущен";
     m_isServerReady = false; // сервер запущен, но не готов к работе, соединение не установлено с клиентом
 
@@ -91,18 +84,18 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
     QJsonObject textDocumentCap;
     // синхра: сообщаем, что будем слать полный текст при изменении (SyncKind.Full)
     textDocumentCap["synchronization"] = QJsonObject {
-      {"dynamicRegistration", false}, // пока что нет поддержки динамической регистрации
-      {"willSave", false}, // не уведомляем перед сохранением
-      {"willSaveWaitUntil", false}, // не ждем ответа перед сохранением
-      {"didSave", true}, // уведомляем ПОСЛЕ сохранения   
+        {"dynamicRegistration", false}, // пока что нет поддержки динамической регистрации
+        {"willSave", false}, // не уведомляем перед сохранением
+        {"willSaveWaitUntil", false}, // не ждем ответа перед сохранением
+        {"didSave", true}, // уведомляем ПОСЛЕ сохранения
     };
     // автодополнение: сообщаем, что поддерживается бащовое автодополнение
     textDocumentCap["completion"] = QJsonObject {
         {"dynamicRegistration", false},
         {"completionItem", QJsonObject{
-            {"snippetSupport", false}, // пока не поддерживаем сниппеты
-            {"documentationFormat", QJsonArray{"plaintext", "markdown"}} // понимаем текст и markdown в документации
-        }},
+                               {"snippetSupport", false}, // пока не поддерживаем сниппеты
+                               {"documentationFormat", QJsonArray{"plaintext", "markdown"}} // понимаем текст и markdown в документации
+                           }},
         {"contextSupport", true} // сообщаем triggerKind при запроса
     };
     // hover
@@ -124,8 +117,6 @@ bool LspManager::startServer(const QString& languageId, const QString& projectRo
 
     sendMessage(message);
     qDebug() << "LSP > Отправлен запрос initialize, ID:" << m_requestId;
-
-    return true; // процесс запущен, initialize отправлен
 }
 
 void LspManager::stopServer()
@@ -238,7 +229,7 @@ void LspManager::sendMessage(const QJsonObject& message)
     // формирование обязательного заголовка
     QByteArray header;
     header.append("Content-Length: ").append(QString::number(jsonContent.size()).toUtf8()).append("\r\n\r\n"); // текст заговлока? размер джсон в байтах,  обязательные символы конца заголовка, перевод строки и возврат каретки x2
-    //header.append(QString::number(jsonContent.size())); // 
+    //header.append(QString::number(jsonContent.size())); //
     //header.append("\r\n\r\n"); //
 
     // отправляем сначала заголовок, а потом само сообщение джсон в стандартный ввод процесса (stding)
@@ -250,7 +241,7 @@ void LspManager::sendMessage(const QJsonObject& message)
         qint64 id = message["id"].toVariant().toLongLong();
         QString method = message["method"].toString();
         if (id > 0 && !method.isEmpty()) { // убедимся что запрос валидный
-            m_pendingRequests.insert(id, method); 
+            m_pendingRequests.insert(id, method);
             qDebug() << "LSP > Запрос поставлен в очередь ожидания: ID" << id << "Метод:" << method;
         }
     }
@@ -270,7 +261,7 @@ void LspManager::processIncomingData(const QByteArray& data)
         if (headerEndIndex == -1) {
             qDebug() << "LSP < Неполный заголовок, ждем данных";
             break;
-        } 
+        }
 
         // заголовок найден и извлекаем его часть до "\r\n\r\n"
         QByteArray headerPart = m_buffer.left(headerEndIndex);
@@ -367,10 +358,10 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
                 exitMsg["jsonrpc"] = "2.0";
                 exitMsg["method"] = "exit";
                 sendMessage(exitMsg);
-            } 
+            }
         } else {
             QJsonObject errorObj = message["error"].toObject();
-            int code = errorObj["code"].toInt(); 
+            int code = errorObj["code"].toInt();
             QString errorMsg = errorObj["message"].toString();
             qWarning() << "LSP < Ошибка в ответе на запрос ID" << id << "Код:" << code << "Сообщение:" << errorMsg;
             // ----------TODO посылать сигнали клиенту что бы показать ошибка
@@ -402,7 +393,7 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
                 qInfo() << "LSP Message (Info):" << text;
             } else {
                 qDebug() << "LSP Message (Log):" << text;
-            } 
+            }
             // ------------- TODO можно показать это соо в статус баре или диалогово мокне
         } else if (method == "client/registerCapability") {
             // сервер динамически просит включить какую-то функцию, пока что ИГНОР
@@ -412,7 +403,7 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
             qDebug() << "LSP < получен $/progress (игнорируется)";
         } else if (method == "window/logMessage") {
             // похоже на showMessage но для логов.
-             qDebug() << "LSP Log:" << params["message"].toString();
+            qDebug() << "LSP Log:" << params["message"].toString();
         }
     } else {
         // тип соо не определен
@@ -423,7 +414,7 @@ void LspManager::parseMessage(const QByteArray& jsonContent)
 // !!! обработчики ответов и уведомлений !!!
 
 // когда сервер успешно ответил на запрос инициализации
-void LspManager::handleInitializeResult(const QJsonObject& result) 
+void LspManager::handleInitializeResult(const QJsonObject& result)
 {
     qInfo() << "LSP < Получен ответ на Initialize";
     // ---------- TODO добавить вывод возможностей сервера, они содержатся в capabilities, чтобы в дальнейшем знать, какие запросы можно отправлять
@@ -443,7 +434,7 @@ void LspManager::handleInitializeResult(const QJsonObject& result)
 }
 
 // когда сервер присылает уведомление 'textDocument/publishDiagnostics'
-void LspManager::handlePublishDiagnostics(const QJsonObject& params) 
+void LspManager::handlePublishDiagnostics(const QJsonObject& params)
 {
     // извлекаем URI к которому относится диагностика
     QString fileUri = params["uri"].toString();
@@ -481,12 +472,12 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
         QJsonValue startVal = range.value("start");
         QJsonValue endVal = range.value("end");
         if (!startVal.isObject() || !endVal.isObject()) {
-             qWarning() << "[LSP_MANAGER_WARNING] 'start' or 'end' field is missing or not an object in range:" << QJsonDocument(range).toJson(QJsonDocument::Compact);
+            qWarning() << "[LSP_MANAGER_WARNING] 'start' or 'end' field is missing or not an object in range:" << QJsonDocument(range).toJson(QJsonDocument::Compact);
             continue;
         }
         QJsonObject start = range["start"].toObject(); // начало диапозона
         QJsonObject end = range["end"].toObject(); // конец диапозона
-        
+
         // создаем структуру LspDiagnostic и заполняем данными из джсон
         LspDiagnostic diag;
         diag.message = diagObj.value("message").toString(); // текст ошибки
@@ -511,7 +502,7 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
         // добавляем заполненную карточку
         diagnosticsList.append(diag);
     }
-    
+
     qDebug() << "LSP < получены диагностики для" << fileUri << ":" << diagnosticsList.size() << "шт";
     // посылаем клиенту, передавая uri файла и список найденных проблем
     emit diagnosticsReceived(fileUri, diagnosticsList);
@@ -519,7 +510,7 @@ void LspManager::handlePublishDiagnostics(const QJsonObject& params)
 
 // когда сервер отвечает на наш запрос автодополнения
 void LspManager::handleCompletionResult(const QJsonValue& resultValue) {
-    QList<LspCompletionItem> completionList; 
+    QList<LspCompletionItem> completionList;
     QJsonArray itemsArray; // сюда массив подсказок из ответа сервера
 
     // сервер может вернуть результаты в разных форматах:
@@ -536,14 +527,14 @@ void LspManager::handleCompletionResult(const QJsonValue& resultValue) {
         }
         // если объект, но не содержит items, itemsArray остается пустым
     } else if (resultValue.isArray()) { // некоторые старые серверы могут возвращать просто массив
-            itemsArray = resultValue.toArray();
-        } else if (!resultValue.isNull()) { // может прийти просто пустой оюъект, если ещё нет подсказок
-            qWarning() << "LSP < Неожиданный тип ответа на completion (не объект, не массив, не null):" << resultValue.type();
-        }
+        itemsArray = resultValue.toArray();
+    } else if (!resultValue.isNull()) { // может прийти просто пустой оюъект, если ещё нет подсказок
+        qWarning() << "LSP < Неожиданный тип ответа на completion (не объект, не массив, не null):" << resultValue.type();
+    }
 
     // проходимся по каждому элементу массива подсказок от сервера
     for (const QJsonValue& val : itemsArray) {
-        QJsonObject itemsObj = val.toObject(); 
+        QJsonObject itemsObj = val.toObject();
         LspCompletionItem item; // создаем структуру дял подсказки
 
         // заполняем поля структуры из джсон-объкт подсказки
@@ -571,7 +562,7 @@ void LspManager::handleCompletionResult(const QJsonValue& resultValue) {
 }
 
 // когда сервер отвечает на наш запрос со всплывашкой (hover)
-void LspManager::handleHoverResult(const QJsonObject& result) 
+void LspManager::handleHoverResult(const QJsonObject& result)
 {
     LspHoverInfo info;
 
@@ -612,7 +603,7 @@ void LspManager::handleHoverResult(const QJsonObject& result)
 }
 
 // когда сервер отвечает на переход к определению
-void LspManager::handleDefinitionResult(const QJsonObject& resultOrArray) 
+void LspManager::handleDefinitionResult(const QJsonObject& resultOrArray)
 {
     QList<LspDefinitionLocation> locations; // список мест определения
 
@@ -810,7 +801,7 @@ QPoint LspManager::editorPosToLspPos(QTextDocument *doc, int editorPos)
         tb = doc->lastBlock();
         if (!tb.isValid()) {
             return QPoint(0, 0); // пустой документ?
-        } 
+        }
         return QPoint(doc->blockCount() - 1, tb.length() - 1); // конец документа (-1, т.к нет \n)
         // return QPoint(-1, -1); // можно вернуть ошибку
     }

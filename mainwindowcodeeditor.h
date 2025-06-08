@@ -1,7 +1,3 @@
-// CodeEditor - A collaborative C++ IDE with LSP, chat, and terminal integration.
-// Copyright (C) 2025 ToMaTiKkk
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 #ifndef MAINWINDOWCODEEDITOR_H
 #define MAINWINDOWCODEEDITOR_H
 
@@ -53,16 +49,16 @@
 
 // расширение->язык
 const QMap<QString, QString> g_extensionToLanguage = {         // первое расширение файла, второе languageId, который ждет лсп сервер по типу (clangd, pylsp....)
-                                                {"cpp", "cpp"},
-                                                {"cc", "cpp"},
-                                                {"c", "cpp"},
-                                                {"h", "cpp"},
-                                                {"py", "python"},
-                                                {"js", "typescript"},
-                                                {"ts", "typescript"},
-                                                {"java", "java"},
-                                                {"go", "go"},
-                                                };
+    {"cpp", "cpp"},
+    {"cc", "cpp"},
+    {"c", "cpp"},
+    {"h", "cpp"},
+    {"py", "python"},
+    {"js", "typescript"},
+    {"ts", "typescript"},
+    {"java", "java"},
+    {"go", "go"},
+    };
 // язык->имя сервера LSP
 const QMap<QString, QStringList> g_defaultLspExecutables = {
     {"cpp", {"clangd"}},
@@ -161,6 +157,7 @@ private slots: // функции, которые будут вызваны в о
     void on_actionTerminal_triggered(); // слот для терминала
 
     // слоты для обработки сигналов от LspManager
+    void onLspManagerDestroyed(); // среагирует на смерть старого менеджера
     void onLspServerReady();
     void onLspServerStopped();
     void onLspServerError(const QString& message);
@@ -198,8 +195,11 @@ private:
     void setupThemeAndNick();     // тема и никнейм
     void setupTerminalArea();     // терминал
     void compileAndRun();         // автозапуск кода
+    void initializeApplication();
+    void setupStatusBarWidgets();
 
     // LSP
+    void performLspStart(const QString& languageId);
     void extracted(QString &languageId, QString &lspExecutable);
     void setupLsp(); // найстрока и запуска
     void setupLspCompletionAndHover();
@@ -209,7 +209,7 @@ private:
     QString getFileUri(const QString& localPath) const; // конвектировать локальный путь в URI
     QString getLocalPath(const QString& fileUri) const; // обратный конвектор
     QString getPrefixBeforeCursor(const QTextCursor& cursor);
-    void createAndStartLsp(const QString& languageId);
+    void restartLspForLanguage(const QString& languageId);
     void onLspSettings();
     bool ensureLspForLanguage(const QString& languageId);
     void updateLspStatus(const QString& text);
@@ -266,11 +266,13 @@ private:
     QPushButton* m_chatButton;
     QPushButton* m_runButton;
     QSystemTrayIcon *m_trayIcon = nullptr;
-    
+
     QToolButton *m_lspStatusLabel; // статус индикации
     QString m_currentLspLanguageId;
     bool m_shouldSaveAfterCreation = false;
     LspManager *m_lspManager = nullptr; // Lsp-менеджер
+    QString m_pendingLspLanguageId; // храним язык, который нужно запустить после удаления старого
+    bool m_isLspRestartPending = false; // флаг, что ждем перезапуска
     CompletionWidget *m_completionWidget = nullptr; // виджет автодоплнения
     QTimer *m_hoverTimer = nullptr; // таймер для отложенного запроса hover
     QPoint m_lastMousePosForHover; // последняя позиция мыши для hover (всплывашка)
