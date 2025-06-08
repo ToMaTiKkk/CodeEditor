@@ -1,0 +1,496 @@
+# Подавляем все "достижимые" утечки, исходящие из библиотек Qt.
+# Это должно убрать 95% шума.
+
+{
+   Qt6CoreReachableLeak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   obj:/usr/lib/libQt6Core.so.6.9.0
+}
+
+{
+   Qt6WidgetsReachableLeak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   obj:/usr/lib/libQt6Widgets.so.6.9.0
+}
+
+{
+   Qt6GuiReachableLeak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   obj:/usr/lib/libQt6Gui.so.6.9.0
+}
+
+# Можно добавить и для QTermWidget, если он сильно шумит
+{
+   QTermWidgetReachableLeak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   obj:*/libqtermwidget6.so*
+}
+
+# --- Утечка при динамической загрузке библиотек (GLIBC) ---
+{
+   GlibcReachableLeak_Dlopen
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:calloc
+   fun:_dl_check_map_versions
+   fun:dl_open_worker_begin
+   fun:_dl_catch_exception
+   fun:dl_open_worker
+   fun:_dl_catch_exception
+   fun:_dl_open
+   fun:dlopen_doit
+   fun:_dl_catch_exception
+   fun:_dl_catch_error
+   fun:_dlerror_run
+   fun:dlopen_implementation
+   fun:dlopen@@GLIBC_2.34
+}
+
+# --- Утечка в Fontconfig при парсинге XML конфигурации ---
+{
+   FontconfigReachableLeak_XmlParse
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:FcEndElement
+   fun:doContent
+   fun:contentProcessor
+   fun:doProlog
+   fun:prologProcessor
+   fun:callProcessor
+   fun:XML_ParseBuffer
+   fun:FcConfigParseAndLoadFromMemoryInternal.lto_priv.0
+   fun:_FcConfigParse.lto_priv.0
+   fun:UnknownInlinedFun
+   fun:_FcConfigParse.lto_priv.0
+   fun:UnknownInlinedFun
+   fun:FcEndElement
+}
+
+# --- Утечка в Fontconfig при загрузке конфига ---
+{
+   FontconfigReachableLeak_InitLoad
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:FcEndElement
+   fun:doContent
+   fun:contentProcessor
+   fun:doProlog
+   fun:prologProcessor
+   fun:callProcessor
+   fun:XML_ParseBuffer
+   fun:FcConfigParseAndLoadFromMemoryInternal.lto_priv.0
+   fun:_FcConfigParse.lto_priv.0
+   fun:UnknownInlinedFun
+   fun:_FcConfigParse.lto_priv.0
+   fun:UnknownInlinedFun
+   fun:FcInitLoadOwnConfig
+}
+
+# --- Утечка при инициализации GLib ---
+{
+   GlibReachableLeak_Init
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:g_malloc
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:glib_init_ctor
+   fun:call_init
+   fun:call_init
+   fun:_dl_init
+   obj:/usr/lib/ld-linux-x86-64.so.2
+}
+
+# --- Утечка при загрузке зависимостей библиотек ---
+{
+   GlibcReachableLeak_DlMapObjectDeps
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:calloc
+   fun:_dl_new_object
+   fun:_dl_map_object_from_fd
+   fun:_dl_map_object
+   fun:openaux
+   fun:_dl_catch_exception
+   fun:_dl_map_object_deps
+   fun:dl_open_worker_begin
+   fun:_dl_catch_exception
+   fun:dl_open_worker
+   fun:_dl_catch_exception
+   fun:_dl_open
+}
+
+# --- Утечка при компиляции раскладки клавиатуры (XKB/Wayland) ---
+{
+   XkbWaylandReachableLeak_CompileKeymap
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:CompileKeycodes
+   fun:UnknownInlinedFun
+   fun:compile_keymap_file
+   fun:text_v1_keymap_new_from_string
+   fun:xkb_keymap_new_from_buffer
+   fun:_ZN15QtWaylandClient19QWaylandInputDevice8Keyboard15keyboard_keymapEjij
+   fun:ffi_call_unix64
+   fun:ffi_call_int.lto_priv.0
+   fun:ffi_call
+   fun:wl_closure_invoke.constprop.0
+   fun:dispatch_event
+   fun:UnknownInlinedFun
+   fun:wl_display_dispatch_queue_pending
+}
+
+# --- Утечка при компиляции символов раскладки (XKB/Wayland) ---
+{
+   XkbWaylandReachableLeak_CompileSymbols
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:realloc
+   fun:UnknownInlinedFun
+   fun:SetSymbolsField
+   fun:UnknownInlinedFun
+   fun:UnknownInlinedFun
+   fun:HandleSymbolsFile.lto_priv.0
+   fun:CompileSymbols
+   fun:UnknownInlinedFun
+   fun:compile_keymap_file
+   fun:text_v1_keymap_new_from_string
+   fun:xkb_keymap_new_from_buffer
+   fun:_ZN15QtWaylandClient19QWaylandInputDevice8Keyboard15keyboard_keymapEjij
+   fun:ffi_call_unix64
+   fun:ffi_call_int.lto_priv.0
+   fun:ffi_call
+   fun:wl_closure_invoke.constprop.0
+}
+
+# --- Утечка при статической инициализации C++ (eh_alloc) ---
+{
+   CppReachableLeak_StaticInit
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:pool
+   fun:__static_initialization_and_destruction_0
+   fun:_GLOBAL__sub_I_eh_alloc.cc
+   fun:call_init
+   fun:call_init
+   fun:_dl_init
+   obj:/usr/lib/ld-linux-x86-64.so.2
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:_Znwm
+fun:_ZN15QtWaylandClient19QWaylandInputDevice7Pointer14pointer_motionEjii
+fun:ffi_call_unix64
+fun:ffi_call_int.lto_priv.0
+fun:ffi_call
+fun:wl_closure_invoke.constprop.0
+fun:dispatch_event
+fun:UnknownInlinedFun
+fun:wl_display_dispatch_queue_pending
+obj:/usr/lib/libQt6WaylandClient.so.6.9.0
+obj:/usr/lib/libQt6Core.so.6.9.0
+fun:_ZN20QEventDispatcherGlib13processEventsE6QFlagsIN10QEventLoop17ProcessEventsFlagEE
+fun:_ZN10QEventLoop4execE6QFlagsINS_17ProcessEventsFlagEE
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:_Znwm
+fun:_ZN15QtWaylandClient19QWaylandInputDevice7Pointer14pointer_motionEjii
+fun:ffi_call_unix64
+fun:ffi_call_int.lto_priv.0
+fun:ffi_call
+fun:wl_closure_invoke.constprop.0
+fun:dispatch_event
+fun:UnknownInlinedFun
+fun:wl_display_dispatch_queue_pending
+fun:_ZN15QtWaylandClient15QWaylandDisplay13flushRequestsEv
+fun:_ZN7QObject5eventEP6QEvent
+fun:_ZN19QApplicationPrivate13notify_helperEP7QObjectP6QEvent
+fun:_ZN16QCoreApplication15notifyInternal2EP7QObjectP6QEvent
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: reachable
+fun:malloc
+fun:CRYPTO_malloc
+fun:UnknownInlinedFun
+fun:UnknownInlinedFun
+fun:namemap_add_name.lto_priv.0
+fun:ossl_namemap_add_names.constprop.0
+fun:construct_evp_method.lto_priv.0
+fun:ossl_method_construct_this.lto_priv.0
+fun:UnknownInlinedFun
+fun:algorithm_do_this.lto_priv.0
+fun:ossl_provider_doall_activated
+fun:UnknownInlinedFun
+fun:ossl_method_construct.constprop.0
+fun:inner_evp_generic_fetch.constprop.0
+fun:UnknownInlinedFun
+fun:EVP_KEYMGMT_fetch
+fun:add_provider_groups
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:realloc
+fun:FcPatternObjectInsertElt
+fun:FcPatternObjectListAdd.isra.0
+fun:FcFontRenderPrepare
+fun:FcFontMatch
+fun:_ZNK26QFontEngineMultiFontConfig26getMatchPatternForFallbackEi
+fun:_ZNK26QFontEngineMultiFontConfig32shouldLoadFontEngineForCharacterEij
+fun:_ZNK16QFontEngineMulti12stringToCMapEPK5QChariP12QGlyphLayoutPi6QFlagsIN11QFontEngine10ShaperFlagEE
+fun:_ZNK11QTextEngine9shapeTextEi
+fun:_ZN9QTextLine13layout_helperEi
+fun:_ZN11QTextLayout9endLayoutEv
+fun:_ZNK18QWidgetLineControl14redoTextLayoutEv
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: reachable
+fun:malloc
+fun:CRYPTO_malloc
+fun:CRYPTO_zalloc
+fun:UnknownInlinedFun
+fun:ossl_sa_set
+fun:UnknownInlinedFun
+fun:UnknownInlinedFun
+fun:ossl_method_store_add
+fun:put_evp_method_in_store.lto_priv.0
+fun:ossl_method_construct_this.lto_priv.0
+fun:UnknownInlinedFun
+fun:algorithm_do_this.lto_priv.0
+fun:ossl_provider_doall_activated
+fun:UnknownInlinedFun
+fun:ossl_method_construct.constprop.0
+fun:inner_evp_generic_fetch.constprop.0
+fun:UnknownInlinedFun
+fun:EVP_KEYEXCH_fetch
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:realloc
+fun:FcPatternObjectInsertElt
+fun:FcPatternObjectListAdd.isra.0
+fun:FcFontRenderPrepare
+fun:FcFontMatch
+fun:_ZNK26QFontEngineMultiFontConfig26getMatchPatternForFallbackEi
+fun:_ZNK26QFontEngineMultiFontConfig32shouldLoadFontEngineForCharacterEij
+fun:_ZNK16QFontEngineMulti10glyphIndexEj
+fun:_ZNK12QFontMetrics17horizontalAdvanceE5QChar
+fun:_ZN7Konsole15TerminalDisplay11updateImageEv.part.0
+obj:/usr/lib/libQt6Core.so.6.9.0
+obj:/usr/lib/libQt6Core.so.6.9.0
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: reachable
+fun:malloc
+fun:CRYPTO_malloc
+fun:asn1_primitive_new
+fun:asn1_item_embed_new
+fun:ASN1_item_new
+fun:UnknownInlinedFun
+fun:asn1_d2i_ex_primitive
+fun:asn1_item_embed_d2i
+fun:asn1_template_noexp_d2i
+fun:asn1_item_embed_d2i
+fun:asn1_template_noexp_d2i
+fun:asn1_item_embed_d2i
+fun:UnknownInlinedFun
+fun:ASN1_item_d2i_ex
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:realloc
+fun:FcPatternObjectInsertElt
+fun:FcPatternObjectListAdd.isra.0
+fun:FcFontRenderPrepare
+fun:FcFontMatch
+fun:_ZNK26QFontEngineMultiFontConfig26getMatchPatternForFallbackEi
+fun:_ZNK26QFontEngineMultiFontConfig32shouldLoadFontEngineForCharacterEij
+fun:_ZNK16QFontEngineMulti12stringToCMapEPK5QChariP12QGlyphLayoutPi6QFlagsIN11QFontEngine10ShaperFlagEE
+fun:_ZNK11QTextEngine9shapeTextEi
+fun:_ZN9QTextLine13layout_helperEi
+obj:/usr/lib/libQt6Gui.so.6.9.0
+fun:ZN8QPainter8drawTextERK5QRectiRK7QStringPS0
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:realloc
+fun:FcPatternObjectInsertElt
+fun:FcPatternObjectListAdd.isra.0
+fun:FcFontRenderPrepare
+fun:FcFontMatch
+fun:_ZNK26QFontEngineMultiFontConfig26getMatchPatternForFallbackEi
+fun:_ZNK26QFontEngineMultiFontConfig32shouldLoadFontEngineForCharacterEij
+fun:_ZNK16QFontEngineMulti12stringToCMapEPK5QChariP12QGlyphLayoutPi6QFlagsIN11QFontEngine10ShaperFlagEE
+fun:_ZNK11QTextEngine9shapeTextEi
+fun:_ZN11QTextEngine9shapeLineERK11QScriptLine
+fun:_ZN8QPainter8drawTextERK7QPointFRK7QStringii
+fun:UnknownInlinedFun
+fun:_ZN7Konsole15TerminalDisplay14drawCharactersER8QPainterRK5QRectRKNSt7__cxx1112basic_stringIwSt11char_traitsIwESaIwEEEPKNS_9CharacterEbb
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:realloc
+fun:FcPatternObjectInsertElt
+fun:FcPatternObjectListAdd.isra.0
+fun:FcFontRenderPrepare
+fun:FcFontMatch
+fun:_ZNK26QFontEngineMultiFontConfig26getMatchPatternForFallbackEi
+fun:_ZNK26QFontEngineMultiFontConfig32shouldLoadFontEngineForCharacterEij
+fun:_ZNK16QFontEngineMulti12stringToCMapEPK5QChariP12QGlyphLayoutPi6QFlagsIN11QFontEngine10ShaperFlagEE
+fun:_ZNK11QTextEngine9shapeTextEi
+fun:_ZN9QTextLine13layout_helperEi
+obj:/usr/lib/libQt6Gui.so.6.9.0
+fun:ZN8QPainter8drawTextERK5QRectiRK7QStringPS0
+}
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: reachable
+fun:malloc
+fun:CRYPTO_malloc
+fun:x509_name_canon.part.0
+fun:UnknownInlinedFun
+fun:x509_name_ex_d2i
+fun:asn1_item_embed_d2i
+fun:asn1_template_noexp_d2i
+fun:asn1_item_embed_d2i
+fun:asn1_template_noexp_d2i
+fun:asn1_item_embed_d2i
+fun:UnknownInlinedFun
+fun:ASN1_item_d2i_ex
+fun:ASN1_item_dup
+obj:/usr/lib/qt6/plugins/tls/libqopensslbackend.so
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: definite
+fun:calloc
+fun:UnknownInlinedFun
+fun:proxy_create
+fun:UnknownInlinedFun
+fun:wl_proxy_marshal_array_flags
+fun:wl_proxy_marshal_flags
+obj:/usr/lib/libQt6WaylandClient.so.6.9.0
+fun:_ZN15QtWaylandClient14QWaylandWindow19initializeWlSurfaceEv
+fun:_ZN15QtWaylandClient14QWaylandWindowC1EP7QWindowPNS_15QWaylandDisplayE
+fun:_ZNK15QtWaylandClient19QWaylandIntegration20createPlatformWindowEP7QWindow
+fun:_ZN14QWindowPrivate6createEb
+fun:_ZN14QWidgetPrivate6createEv
+fun:_ZN7QWidget6createEybb
+fun:_ZN14QWidgetPrivate10setVisibleEb
+}
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: reachable
+fun:malloc
+fun:CRYPTO_malloc
+fun:CRYPTO_zalloc
+fun:ossl_method_store_add
+fun:put_evp_method_in_store.lto_priv.0
+fun:ossl_method_construct_this.lto_priv.0
+fun:UnknownInlinedFun
+fun:algorithm_do_this.lto_priv.0
+fun:UnknownInlinedFun
+fun:ossl_method_construct.constprop.0
+fun:inner_evp_generic_fetch.constprop.0
+fun:UnknownInlinedFun
+fun:UnknownInlinedFun
+fun:drbg_ctr_set_ctx_params_locked
+fun:drbg_ctr_instantiate_wrapper.lto_priv.0
+fun:UnknownInlinedFun
+fun:EVP_RAND_instantiate
+}
+
+{
+<insert_a_suppression_name_here>
+Memcheck:Leak
+match-leak-kinds: indirect
+fun:calloc
+fun:UnknownInlinedFun
+fun:FcValueListDuplicate
+fun:FcFontRenderPrepare
+fun:FcFontMatch
+fun:_ZNK26QFontEngineMultiFontConfig26getMatchPatternForFallbackEi
+fun:_ZNK26QFontEngineMultiFontConfig32shouldLoadFontEngineForCharacterEij
+fun:_ZNK16QFontEngineMulti12stringToCMapEPK5QChariP12QGlyphLayoutPi6QFlagsIN11QFontEngine10ShaperFlagEE
+fun:_ZNK11QTextEngine9shapeTextEi
+fun:_ZN9QTextLine13layout_helperEi
+fun:_ZN11QTextLayout9endLayoutEv
+fun:_ZNK18QWidgetLineControl14redoTextLayoutEv
+fun:_ZN18QWidgetLineControl17updateDisplayTextEb
+}
+
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:realloc
+   fun:FcPatternObjectInsertElt
+   fun:FcPatternObjectListAdd.isra.0
+   fun:FcFontRenderPrepare
+   fun:FcFontMatch
+   fun:_ZNK26QFontEngineMultiFontConfig26getMatchPatternForFallbackEi
+   fun:_ZNK26QFontEngineMultiFontConfig32shouldLoadFontEngineForCharacterEij
+   fun:_ZNK16QFontEngineMulti12stringToCMapEPK5QChariP12QGlyphLayoutPi6QFlagsIN11QFontEngine10ShaperFlagEE
+   fun:_ZNK11QTextEngine9shapeTextEi
+   fun:_ZN9QTextLine13layout_helperEi
+   obj:/usr/lib/libQt6Gui.so.6.9.0
+   fun:_ZN8QPainter8drawTextERK5QRectiRK7QStringPS0_
+}

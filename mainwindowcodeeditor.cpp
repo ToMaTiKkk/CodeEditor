@@ -87,7 +87,7 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     m_findFormat.setForeground(Qt::white);
 
     // запускаем сложную инициализацию сложной логики сразу после завершения работы конструктора с нулевой задержкой (ставит в очередь цикла событий)
-    QTimer::singleShot(0, this, &MainWindowCodeEditor::initializeApplication);
+    QTimer::singleShot(10, this, &MainWindowCodeEditor::initializeApplication);
 
     qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
     qDebug() << "Splitter widget count:" << ui->splitter->count();
@@ -3131,6 +3131,10 @@ void MainWindowCodeEditor::performLspStart(const QString& languageId)
 
     QStringList arguments;
     QString fileName = QFileInfo(execPath).fileName();
+    if (fileName.contains("pyright")) {
+        arguments << "--stdio";
+        qDebug() << "Добавлен аргумент --stdio для pyright";
+    }
     if (fileName.contains("pyright-langserver")) {
         arguments << "--stdio";
         qDebug() << "Добавлен аргумент --stdio для pyright-langserver";

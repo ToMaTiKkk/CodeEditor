@@ -358,7 +358,7 @@ QPushButton:pressed {
     background-color: #007bff;
 }
 QSplitter::handle { /*я не знаю почему, но так на белой не отображается разделитель*/
-        background: rgba(34, 33, 50);
+        background: rgba(34, 33, 50, 1.0);
         width: 3px;
 }
 #chatMessageLabel[messageType="other"] {
