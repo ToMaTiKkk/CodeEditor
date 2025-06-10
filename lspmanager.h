@@ -57,7 +57,7 @@ public:
     // пользователь открыл файл и посылается данный сигнал серверу, ему передается путь файла, содермижоме и номер версии
     void notifyDidOpen(const QString& fileUri, const QString& text, int version = 1);
     // текст в файле изменился, отправляется новая версия
-    void notifyDidChange(const QString& fileUri, const QString& text, int version);
+    void notifyDidChange(const QString& fileUri, int version, const QList<QJsonObject>& changes);
     // пользователь файл закрыл
     void notifyDidClose(const QString& fileUri);
     // пользователь с помощью сочетания клавиш запросил подсказки на данной позиции (строка/символ), targetKind - причина запроса (1 - вызвано вручную, 2 - ввод символа и тд)
@@ -74,7 +74,7 @@ public:
 
     QString executablePath() const { return m_serverExecutablePath; } // путь по которому запущено LSP-ядро
 
-    // сервер сообщает MainWindow что что-то произошло
+// сервер сообщает MainWindow что что-то произошло
 signals:
     // сигналы состояния сервера
     void serverReady();

@@ -181,7 +181,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 }
 
 QSplitter::handle {
-        background: rgba(34, 33, 50, 1.0);
+        background: rgba(34, 33, 50, 0.15);
         width: 3px;
 }
 

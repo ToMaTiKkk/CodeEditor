@@ -89,6 +89,11 @@ MainWindowCodeEditor::MainWindowCodeEditor(QWidget *parent)
     // запускаем сложную инициализацию сложной логики сразу после завершения работы конструктора с нулевой задержкой (ставит в очередь цикла событий)
     QTimer::singleShot(10, this, &MainWindowCodeEditor::initializeApplication);
 
+    m_lspDebounceTimer = new QTimer(this);
+    m_lspDebounceTimer->setSingleShot(true);
+    m_lspDebounceTimer->setInterval(300);
+    connect(m_lspDebounceTimer, &QTimer::timeout, this, &MainWindowCodeEditor::sendPendingLspChanges);
+
     qDebug() << "--- Состояние после ПОЛНОЙ инициализации редактора ---";
     qDebug() << "Splitter widget count:" << ui->splitter->count();
     qDebug() << "Splitter sizes:" << ui->splitter->sizes();
@@ -1498,6 +1503,7 @@ void MainWindowCodeEditor::onOpenFileClicked()
                 loadingFile = true;
                 if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
                 m_codeEditor->setPlainText(fileContent); // установка текста локально
+                m_shadowDocumentText = m_codeEditor->toPlainText();
                 lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
                 lineNumberArea->update(); // принудительно перерисовать область номеров
                 loadingFile = false;
@@ -1655,6 +1661,7 @@ void MainWindowCodeEditor::onNewFileClicked()
 
     // очищения поля редактирование и очищение пути к текущему файлу
     m_codeEditor->clear();
+    m_shadowDocumentText.clear();
     currentFilePath.clear();
     m_currentLspFileUri.clear();
     m_currentDocumentVersion = 0;
@@ -1757,6 +1764,7 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
                 loadingFile = true;
                 if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
                 m_codeEditor->setPlainText(fileContent); // установка текста локально
+                m_shadowDocumentText = m_codeEditor->toPlainText();
                 lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
                 lineNumberArea->update(); // принудительно перерисовать область номеров
                 loadingFile = false;
@@ -1812,6 +1820,7 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
     if (loadingFile) return;
     if (m_mutedClients.contains(m_clientId) && m_mutedClients.value(m_clientId) != -1) return;
     QJsonObject op; // формирование джсон с информацией
+    QString insertedText = m_codeEditor->toPlainText().mid(position, charsAdded); // вырезаем кусок который был добавлен
     if (charsAdded > 0)
     {
         op["client_id"] = m_clientId;
@@ -1835,9 +1844,24 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
     }
 
     if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
-        m_currentDocumentVersion++;
-        QString currentText = m_codeEditor->toPlainText();
-        m_lspManager->notifyDidChange(m_currentLspFileUri, currentText, m_currentDocumentVersion);
+        // вычисляем LSP-координаты ДО ИЗМЕНЕНИЯ, используя теневую копию
+        QPoint startLsp = positionToLspPosition(m_shadowDocumentText, position);
+        QPoint endLsp = positionToLspPosition(m_shadowDocumentText, position + charsRemoved);
+
+        QJsonObject changeEvent;
+        changeEvent["text"] = insertedText;
+        changeEvent["range"] = QJsonObject{
+            {"start", QJsonObject{{"line", startLsp.x()}, {"character", startLsp.y()}}},
+            {"end",   QJsonObject{{"line", endLsp.x()},   {"character", endLsp.y()}}}
+        };
+        changeEvent["rangeLength"] = charsRemoved; // для отладки
+
+        m_pendingLspChange.append(changeEvent);
+        m_lspDebounceTimer->start(); // перезапускаем таймер для отправки изменений
+
+        // обновляем теневую копию чтобы она соответствовала редактору
+        m_shadowDocumentText.remove(position, charsRemoved);
+        m_shadowDocumentText.insert(position, insertedText);
 
         // авто-запрос автодополнения после точки или ->
         QTextCursor cursor = m_codeEditor->textCursor();
@@ -1855,7 +1879,7 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
                         shouldTrigger = true;
                     }
                 } else if (lastChar == QLatin1Char('>')) {
-                    if (cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char('>')) {
+                    if (cursor.position() > 1 && currentText.at(cursor.position() - 2) == QLatin1Char('-')) {
                         shouldTrigger = true;
                     }
                 } else if (lastChar == QLatin1Char('.')) {
@@ -1885,7 +1909,7 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
 
             if (shouldTrigger) {
                 // задержка чтобы не спамить сервер быстрым набором
-                QTimer::singleShot(300, this, &MainWindowCodeEditor::triggerCompletionRequest);
+                QTimer::singleShot(200, this, &MainWindowCodeEditor::triggerCompletionRequest);
                 // singleShot чтобы не блокать ввод!
             } else if (m_completionWidget && m_completionWidget->isVisible()) {
                 // если ввели символ который не должен тригерить запро, пока что просто скроем (условно после пробела, точки с запятой)
@@ -1910,6 +1934,46 @@ void MainWindowCodeEditor::onContentsChange(int position, int charsRemoved, int 
         }
     }
     m_codeEditor->document()->setModified(true);
+}
+
+// отправка буфера в lsp
+void MainWindowCodeEditor::sendPendingLspChanges()
+{
+    if (!m_lspManager || !m_lspManager->isReady() || m_currentLspFileUri.isEmpty() || m_pendingLspChange.isEmpty()) {
+        return;
+    }
+
+    m_currentDocumentVersion++;
+    m_lspManager->notifyDidChange(m_currentLspFileUri, m_currentDocumentVersion, m_pendingLspChange);
+
+    qDebug() << "Debounce: Sent" << m_pendingLspChange.size() << "incremental changes to LSP. Version:" << m_currentDocumentVersion;
+    // очищаем буфер!!!
+    m_pendingLspChange.clear();
+}
+
+// конвертируем асболютную позицию в строке в LSP формат (строка, символ)
+// вовзращает .x() - строка, .y() - символ
+QPoint MainWindowCodeEditor::positionToLspPosition(const QString &text, int pos) const
+{
+    if (pos < 0) {
+        return QPoint(0, 0);
+    }
+    pos = qMin(pos, text.length()); // ограничиваеем позицию размером текста
+
+    int line = 0; // считаем строка
+    int lastNewLinePos = -1; // позиция предыдущего символа \n - перехода строки
+    int nextNewLinePos = text.indexOf('\n'); // самая первая позиция символа
+
+    // проходимся цилом по каждому \n, пока они до pos
+    while (nextNewLinePos != -1 && pos > nextNewLinePos) {
+        line++;
+        lastNewLinePos = nextNewLinePos;
+        nextNewLinePos = text.indexOf('\n', lastNewLinePos + 1);
+    }
+
+    // вычисляем позицию символа, вычитая из абсолютной позицию начала строки
+    int character = pos - (lastNewLinePos + 1);
+    return QPoint(line, character);
 }
 
 // вспомогательный метод для для получения текущего слова перед курсором

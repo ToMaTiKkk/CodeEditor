@@ -82,11 +82,12 @@ void LspManager::onServerProcessStarted()
     capabilities["window"] = windowCap;
 
     QJsonObject textDocumentCap;
-    // синхра: сообщаем, что будем слать полный текст при изменении (SyncKind.Full)
+    // синхра: сообщаем, что будем слать инкрементальный текст при изменении и уведы о закрытии и открытии
+    textDocumentCap["textDocumentSync"] = QJsonObject {
+        {"openClose", true}, // уведы didOpen, didClose
+        {"change", 2} // инкрементальное, если 1 - полный
+    };
     textDocumentCap["synchronization"] = QJsonObject {
-        {"dynamicRegistration", false}, // пока что нет поддержки динамической регистрации
-        {"willSave", false}, // не уведомляем перед сохранением
-        {"willSaveWaitUntil", false}, // не ждем ответа перед сохранением
         {"didSave", true}, // уведомляем ПОСЛЕ сохранения
     };
     // автодополнение: сообщаем, что поддерживается бащовое автодополнение
@@ -666,23 +667,23 @@ void LspManager::notifyDidOpen(const QString& fileUri, const QString& text, int 
 }
 
 // уведомляем сервак, что файл был изменен
-void LspManager::notifyDidChange(const QString& fileUri, const QString& text, int version)
+void LspManager::notifyDidChange(const QString& fileUri, int version, const QList<QJsonObject>& changes)
 {
-    if (!m_isServerReady) return;
+    if (!m_isServerReady || changes.isEmpty()) {
+        return;
+    }
 
     QJsonObject params;
-    QJsonObject textDocument;
-    textDocument["uri"] = fileUri;
-    textDocument["version"] = version;
-    params["textDocument"] = textDocument;
+    params["textDocument"] = QJsonObject{
+        {"uri", fileUri},
+        {"version", version}
+    };
 
-    // сообщение об измнениях, отправляем ВЕСЬ новый текст файла целиком
-    // --------------TODO сделать диффиренцированное сохранения
-    QJsonArray changes; // массив изменений
-    QJsonObject changeEvent;
-    changeEvent["text"] = text;
-    changes.append(changeEvent);
-    params["contentChanges"] = changes; // добавляем массив изменений в параметры
+    QJsonArray contentChangesArray;
+    for (const auto& change : changes) {
+        contentChangesArray.append(change);
+    }
+    params["contentChanges"] = contentChangesArray;
 
     // собираем и отправляем уведомление
     QJsonObject message;
@@ -791,25 +792,18 @@ void LspManager::requestDefinition(const QString& fileUri, int line, int charact
 QPoint LspManager::editorPosToLspPos(QTextDocument *doc, int editorPos)
 {
     if (!doc || editorPos < 0) {
-        return QPoint(-1, -1); // некорректный ввод
+        return QPoint(-1, -1);
     }
 
-    // находим блок текста (Строку), которая содержит editorPos
-    QTextBlock tb = doc->findBlock(editorPos);
+    QTextBlock tb = doc->findBlock(editorPos); // каждый блок - строка
     if (!tb.isValid()) {
-        // если позиция за пределами документа, то вернем позицию конца последней строки
-        tb = doc->lastBlock();
-        if (!tb.isValid()) {
-            return QPoint(0, 0); // пустой документ?
-        }
-        return QPoint(doc->blockCount() - 1, tb.length() - 1); // конец документа (-1, т.к нет \n)
-        // return QPoint(-1, -1); // можно вернуть ошибку
+        return QPoint(-1, -1);
     }
 
-    int line = tb.blockNumber(); // номер строки
-    int character = editorPos - tb.position(); // позиция символа нутри строки
+    int line = tb.blockNumber();
+    // cмещение в UTF-16 кодовых единицах от начала строки (QT так и работает с UTF-16, LSP это и нужно)
+    int character = editorPos - tb.position();
 
-    // ------- TODO табы пока что не учитываются
     return QPoint(line, character);
 }
 
@@ -817,29 +811,24 @@ QPoint LspManager::editorPosToLspPos(QTextDocument *doc, int editorPos)
 int LspManager::lspPosToEditorPos(QTextDocument *doc, int line, int character)
 {
     if (!doc || line < 0 || character < 0) {
-        return -1; // некорректный ввод
+        return -1;
     }
 
     QTextBlock tb = doc->findBlockByNumber(line);
     if (!tb.isValid()) {
-        // запрашиваем строка не существует (может слишком большая)
-        // можно вернуть конец документа или -1
-        // return doc->characterCount() - 1; // позиция последнего символа
+        // Строка с таким номером не найдена (возможно, вышло за пределы документа или строка уже удалена)
         return -1;
     }
-    int lineStartPosition = tb.position(); // начальная позиция строки в документе
-    int posInLine = character; // символ внутри строки
 
-    // ------- TODO табы и сложные символы обрабатывать, потому character - смещение от начала строки, а он может быть больше длины строки и пока что возвращаем символ конца строки
-    if (posInLine >= tb.length()) {
-        return qMin(lineStartPosition + posInLine, doc->characterCount() - 1);
+    const int lineStartPosition = tb.position(); // получение абсолютной позиции начала строки во всем документе
+    const QString lineText = tb.text(); // текст строки без \n в конце
+
+    // чтобы программа не упала, мы прижимаем несуществующий символ к концу строки
+    // пример 'int x = ;', указывать после =, но перед ; условно 6 символ, когда строка в 5 'int x ='
+    if (character > lineText.length()) {
+        qWarning() << "LSP character position" << character << "is out of bounds for line" << line << "(length" << lineText.length() << "). Clamping";
+        character = lineText.length();
     }
 
-    QString blockText = tb.text(); // Получим текст строки для лога
-    qDebug() << "[lspPosToEditorPos] Input line:" << line << "char:" << character
-             << " -> Found block:" << tb.blockNumber() << "startPos:" << lineStartPosition
-             << "length:" << tb.length() << "text: '" << blockText.left(20) << "...'" // Показать начало текста
-             << " -> Calculated EditorPos:" << (lineStartPosition + character);
-
-    return lineStartPosition + posInLine;
+    return lineStartPosition + character;
 }

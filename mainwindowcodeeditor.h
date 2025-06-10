@@ -48,7 +48,7 @@
 // #include <QListWidget>
 
 // расширение->язык
-const QMap<QString, QString> g_extensionToLanguage = {         // первое расширение файла, второе languageId, который ждет лсп сервер по типу (clangd, pylsp....)
+const QMap<QString, QString> g_extensionToLanguage = { // первое расширение файла, второе languageId, который ждет лсп сервер по типу (clangd, pylsp....)
     {"cpp", "cpp"},
     {"cc", "cpp"},
     {"c", "cpp"},
@@ -172,6 +172,7 @@ private slots: // функции, которые будут вызваны в о
     //void onDiagnosticItemActivated(QListWidgetItem* item);
     void nextDiagnostic();
     void prevDiagnostic();
+    void sendPendingLspChanges();
 
     void showFindPanel(); // по сути она еще и закрывает, не хочу делать отдельную фукнцию)))
     void findNext();
@@ -214,6 +215,7 @@ private:
     bool ensureLspForLanguage(const QString& languageId);
     void updateLspStatus(const QString& text);
     QString findFirstExecutable(const QStringList& names);
+    QPoint positionToLspPosition(const QString& text, int pos) const;
 
     // переопределение событий для hover и хоткеев
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -290,6 +292,9 @@ private:
     int m_currentDocumentVersion = 0; // счетчик версий для лсп
     QString m_projectRootPath; // путь к корневой папке проекта для LSP
     QMap<QString, QList<LspDiagnostic>> m_diagnostics; // хранение диагностик по файлам
+    QTimer* m_lspDebounceTimer;
+    QList<QJsonObject> m_pendingLspChange; // буфер для микро патчей
+    QString m_shadowDocumentText;
 
     int m_pendingSaveDays = 0;
     //новое разделение окон
