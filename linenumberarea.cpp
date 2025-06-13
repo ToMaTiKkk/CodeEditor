@@ -9,7 +9,7 @@
 #include <QScrollBar>
 #include <QToolTip>
 
-LineNumberArea::LineNumberArea(QPlainTextEdit *editor) : QWidget(editor), codeEditor(editor), m_currentDigits(1) // при пердачи редактора как родителя - значит нумерация будет внутри редактора
+LineNumberArea::LineNumberArea(CodePlainTextEdit *editor) : QWidget(editor), codeEditor(editor), m_currentDigits(1) // при пердачи редактора как родителя - значит нумерация будет внутри редактора
 {
     updateLineNumberAreaWidth(); // рассчитать и установить начальную ширину, даже если 0 строк
 
@@ -83,23 +83,31 @@ void LineNumberArea::paintEvent(QPaintEvent *event)
     painter.drawLine(width() - 0.3, 0, width() - 0.3, height());
     
     // получение первого видимого блока-строки
-    QTextCursor cursor = codeEditor->cursorForPosition(QPoint(0, 0));
-    QTextBlock block = cursor.block();
+    QTextBlock block = codeEditor->getFirstVisibleBlock();
     int blockNumber = block.blockNumber();
-    QRectF rect = codeEditor->cursorRect(cursor);
-    int top = rect.top();
-    int bottom = top + rect.height();
+    int top = qRound(codeEditor->getBlockBoundingGeometry(block).translated(codeEditor->getContentOffset()).top());
+    int bottom = top + qRound(codeEditor->getBlockBoundingRect(block).height());
     int currentBlockNumber = codeEditor->textCursor().blockNumber(); // получаем номер текущего блока, где курсор
 
     // рисуем номера видимых блоков, проходимся по кождому блоку и если их верхняя граница внутри или выше границы области перерисовки
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
+            int blockHeight = qRound(codeEditor->getBlockBoundingRect(block).height());
             // рисуем маркер диагностики если он есть
             if (m_diagnostics.contains(blockNumber)) {
                 int severity = m_diagnostics.value(blockNumber);
-                QColor color = (severity == 1 ? Qt::red : severity == 2 ? QColor(255, 165, 0) : Qt::blue);
-                QRect marker(0, top, m_markerAreaWidth, codeEditor->fontMetrics().height());
-                painter.fillRect(marker, color);
+                QColor color;
+                if (severity == 1) {
+                    color = QColor(255, 0, 0, 180); // красный, но не 100% непрозрачный
+                } else if (severity == 2) {
+                    color = QColor(255, 165, 0, 180); // янтарый
+                } else {
+                    color = QColor(0, 123, 255, 160); // синий для инфо
+                }
+                // вертикальная линий
+                painter.setPen(QPen(color, 2));
+                // рисуем линию по центру маркера на всю ширину строка
+                painter.drawLine(m_markerAreaWidth / 2, top, m_markerAreaWidth / 2, top + blockHeight);
             }
             
             // рисуем сам номер строки
@@ -121,20 +129,14 @@ void LineNumberArea::paintEvent(QPaintEvent *event)
             } else {
                 painter.setPen(palette().windowText().color());
             }
-            painter.drawText(0, top, width() - 5, codeEditor->fontMetrics().height(), Qt::AlignRight | Qt::AlignVCenter, number); // рисуем правее, также вертикально выравнивание по центру
+            painter.drawText(0, top, width() - 5, blockHeight, Qt::AlignRight | Qt::AlignVCenter, number); // рисуем правее, также вертикально выравнивание по центру
         }
 
         // переходим к следующему блоку
         block = block.next();
-        if (block.isValid()) {
-            cursor.setPosition(block.position()); // перемещаем курсор на новый блок
-            rect = codeEditor->cursorRect(cursor);
-            top = bottom;
-            bottom = top + rect.height();
-            ++blockNumber;
-        } else {
-            break;
-        }
+        top = bottom;
+        bottom = top + qRound(codeEditor->getBlockBoundingRect(block).height());
+        ++blockNumber;
     }
 }
 

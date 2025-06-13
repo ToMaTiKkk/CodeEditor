@@ -1094,6 +1094,10 @@ void MainWindowCodeEditor::updateDiagnosticsView()
     QList<QTextEdit::ExtraSelection> extraSelections; // список подчеркивания
     // берем диагностики для ТЕКУЩЕГо файла из хранилища
     const QList<LspDiagnostic>& currentFileDiagnostics = m_diagnostics.value(QUrl(m_currentLspFileUri).toString());
+    const int MAX_DIAGNOSTICS_TO_SHOW = 50; // больше данного числа диагностик не отображаем
+    int diagnosticsShownCount = 0;
+    QSet<int> processedLines; // отслеживание уже обработанных строк
+    // будет отображать только первая ошибка на данной строке, а не все разом
 
     //qDebug() << "[UPDATE_DIAG_VIEW] Diagnostics count found in map:" << currentFileDiagnostics.count();
 
@@ -1102,60 +1106,78 @@ void MainWindowCodeEditor::updateDiagnosticsView()
                  << "', line:" << diag.startLine << ", char:" << diag.startChar
                  << "-> line:" << diag.endLine << ", char:" << diag.endChar
                  << ", severity:" << diag.severity;
-
-        QTextEdit::ExtraSelection selection;
-
-        // устанавливаем цвет и стиль подчеркивания
-        QColor color;
-        QTextCharFormat::UnderlineStyle style = QTextCharFormat::WaveUnderline; // оставим волнистую или выберем другую
-        QColor backgroundColor = Qt::transparent; // по умолчанию прозрачный
-        if (diag.severity == 1){
-            color = QColor(255, 80, 80); // Error
-            backgroundColor = QColor(255, 0, 0, 20); // красный с низкой прозрачностью
-        } else if (diag.severity == 2) {
-            color = QColor(255, 190, 0); // Warning (оранж)
-            backgroundColor = QColor(255, 190, 0, 20);
-        } else if (diag.severity == 3) {
-            color = QColor(100, 150, 255); // Info
-            style = QTextCharFormat::DotLine;
-        } else {
-            color = Qt::gray;
-            style = QTextCharFormat::DotLine;
+        if (diagnosticsShownCount >= MAX_DIAGNOSTICS_TO_SHOW) {
+            break;
         }
 
-        selection.format.setBackground(backgroundColor);
-        selection.format.setUnderlineColor(color);
-        selection.format.setUnderlineStyle(style);
-        selection.format.setProperty(QTextFormat::FullWidthSelection, true); // Попробуем на всякий случай
+        if (processedLines.contains(diag.startLine)) {
+            continue;
+        }
+
+        QTextEdit::ExtraSelection selection;
+        // устанавливаем цвет и стиль подчеркивания
+        QColor underlineColor;
+        QColor backgroundColor;
+        if (diag.severity == 1){
+            underlineColor = QColor(231, 90, 90); // Error
+            backgroundColor = m_isDarkTheme ? QColor(80, 25, 30, 60) : QColor(255, 220, 220, 120); // красный с высокой прозрачностью
+        } else if (diag.severity == 2) {
+            underlineColor = QColor(220, 165, 50); // Warning (оранж)
+            backgroundColor = m_isDarkTheme ? QColor(70, 60, 25, 67) : QColor(255, 240, 200, 150);
+        } else if (diag.severity >= 3) {
+            underlineColor = QColor(100, 150, 255); // Info
+            backgroundColor = QTextCharFormat::DotLine; // фон не мяняем, не перегружаем интерфейс
+        }
+
+        selection.format.setUnderlineColor(underlineColor);
+        selection.format.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+
+        // фоновая подсветка строки
+        QTextEdit::ExtraSelection backgroundSelection;
+        backgroundSelection.format.setBackground(backgroundColor);
+        backgroundSelection.format.setProperty(QTextFormat::FullWidthSelection, true); // выделение во всю ширину строки
 
         // КОНВЕРТАЦИЯ устанавливаем курсор на диапозон диагностики
         int startPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), diag.startLine, diag.startChar);
         int endPos = m_lspManager->lspPosToEditorPos(m_codeEditor->document(), diag.endLine, diag.endChar);
 
         // проверяем корректность позиций
-        if (startPos != -1 && endPos != -1 && startPos <= endPos) {
-            QTextCursor cursor(m_codeEditor->document());
-            cursor.setPosition(startPos);
-            if (startPos == endPos && endPos < m_codeEditor->document()->characterCount() -1) {
-                qDebug() << "[UPDATE_DIAG_VIEW]   Zero-length range, extending endPos by 1 (tentative).";
-                endPos++; // если сервер дает что начало равно концу для одного символа
-            }
+        if (startPos == -1 || endPos == -1 || startPos > endPos) {
+            qWarning() << "[UPDATE_DIAG_VIEW] Invalid range for diagnostics, skipping:" << diag.message;
+            continue; // пропускаем диагностику
+        }
 
-            // выделяем текст от начала до конца
-            cursor.setPosition(endPos, QTextCursor::KeepAnchor);
-            if (cursor.isNull()) {
-                qWarning() << "[UPDATE_DIAG_VIEW]   Failed to create valid cursor for positions:" << startPos << "->" << endPos;
-            } else {
-                selection.cursor = cursor;
-                // сообщение для тултипа
-                QString tooltipMessage = QString("[%1] %2").arg(diag.severity).arg(diag.message);
-                // сохраняем как пользовательское свойство с уникальным айди
-                selection.format.setProperty(QTextFormat::UserProperty + 1, tooltipMessage);
-                qDebug() << "[UPDATE_DIAG_VIEW]   Added ExtraSelection with range:" << selection.cursor.selectionStart() << "->" << selection.cursor.selectionEnd() << "and stored message:" << tooltipMessage;;
-                extraSelections.append(selection);
+        // курсоры для обоих выделений
+        QTextCursor cursor(m_codeEditor->document());
+
+        // курсора для фона строки
+        QTextBlock block = m_codeEditor->document()->findBlockByLineNumber(diag.startLine);
+        if (block.isValid() && (diag.severity == 1 || diag.severity == 2)) {
+            cursor.setPosition(block.position());
+            backgroundSelection.cursor = cursor;
+            extraSelections.append(backgroundSelection); // добавление фона в список
+        }
+
+        // курсор для подчеркиваний
+        if (startPos == endPos) {
+            cursor.setPosition(startPos);
+            cursor.select(QTextCursor::WordUnderCursor);
+            if (!cursor.hasSelection() && startPos < m_codeEditor->document()->characterCount()) {
+                cursor.setPosition(startPos + 1, QTextCursor::KeepAnchor);
             }
         } else {
-            qWarning() << "Не удалось отобразить диагностику: неверный диапозон" << diag.startLine << diag.startChar << "-" << diag.endLine << diag.endChar;
+            cursor.setPosition(startPos);
+            cursor.setPosition(endPos, QTextCursor::KeepAnchor);
+        }
+
+        if (cursor.hasSelection()) {
+            selection.cursor = cursor;
+            // сообщение тултипа только для подчеркивания, на фоне не сработает
+            QString tooltipMessage = QString("[%1] %2").arg(diag.severity == 1 ? "Ошибка" : "Предупреждение").arg(diag.message);
+            selection.format.setProperty(QTextFormat::UserProperty + 1, tooltipMessage);
+            extraSelections.append(selection); // подчеркивание тоже в список
+            processedLines.insert(diag.startLine);
+            diagnosticsShownCount++;
         }
     }
 
@@ -1183,12 +1205,17 @@ void MainWindowCodeEditor::updateDiagnosticsView()
 
     // считаем колво ошибок и предупред
     int errCount = 0, warnCount = 0;
-    for (const LspDiagnostic& d : diags) {
+    for (const LspDiagnostic& d : currentFileDiagnostics) {
         if (d.severity == 1) ++errCount;
         else if (d.severity == 2) ++warnCount;
     }
+    QString statusText = tr("Ошибок: %1, Предупр.: %2").arg(errCount).arg(warnCount);
+    if (currentFileDiagnostics.size() > diagnosticsShownCount) {
+        statusText += " (+)"; // если показаны не все, допустим на одной строке несколько, но мы показываем только первый
+    }
     // обновляем кнопку индикатора
-    m_diagnosticsStatusBtn->setText(tr("Ошибок: %1 Предупр.: %2").arg(errCount).arg(warnCount));
+    m_diagnosticsStatusBtn->setText(statusText);
+     m_diagnosticsStatusBtn->setToolTip(tr("Нажмите F2 / Shift+F2 для перехода между ошибками.\n(+) означает, что показаны не все проблемы."));
     m_diagnosticsStatusBtn->setEnabled(errCount + warnCount > 0);
 }
 
@@ -2494,6 +2521,8 @@ void MainWindowCodeEditor::applyCurrentTheme()
         QString terminalSchemePath = m_isDarkTheme ? ":/styles/Dark.colorscheme" : ":/styles/Light.colorscheme";
         m_terminalWidget->applyColorScheme(terminalSchemePath);
     }
+
+    updateDiagnosticsView();
 }
 
 void MainWindowCodeEditor::onToolButtonClicked()

@@ -5,6 +5,7 @@
 #ifndef LINENUMBERAREA_H
 #define LINENUMBERAREA_H
 
+#include "codeplaintextedit.h"
 #include <QWidget>
 #include <QPlainTextEdit>
 #include <QPalette>
@@ -15,7 +16,7 @@ class LineNumberArea : public QWidget
     Q_OBJECT
 
 public:
-    LineNumberArea(QPlainTextEdit *editor); // привязка к конкретному редактору
+    explicit LineNumberArea(CodePlainTextEdit *editor); // привязка к конкретному редактору
 
     // ширина области (цифры + отступы + маркеры)
     int calculateWidth(int digits) const;
@@ -31,7 +32,7 @@ public slots:
     void updateLineNumberArea(const QRect &rect, int dy); // при скролле или измнении текста в редакторе перерисовка
 
 private:
-    QPlainTextEdit *codeEditor;
+    CodePlainTextEdit *codeEditor;
     int m_currentDigits; // хранение количества цифр, под которое рассчитана ширина
 
     // номер строки -> уровень срьезности (1 - ошибка, 2 - предупреждение, 3 - инфо)

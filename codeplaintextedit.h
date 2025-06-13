@@ -16,6 +16,11 @@ class CodePlainTextEdit : public QPlainTextEdit
 public:
     explicit CodePlainTextEdit(QWidget *parent = nullptr);
 
+    QRectF getBlockBoundingRect(const QTextBlock &block) const; // получение геометрии блока
+    QTextBlock getFirstVisibleBlock() const;
+    QRectF getBlockBoundingGeometry(const QTextBlock &block) const;
+    QPointF getContentOffset() const;
+
 protected:
     void keyPressEvent(QKeyEvent *event) override;
     void wheelEvent(QWheelEvent* event) override;

@@ -198,3 +198,23 @@ void CodePlainTextEdit::smoothScrollBy(int deltaY_pixels)
     anim->setEasingCurve(QEasingCurve::OutCubic); // сглаженная кривая
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
+
+QRectF CodePlainTextEdit::getBlockBoundingRect(const QTextBlock &block) const
+{
+    return this->blockBoundingRect(block);
+}
+
+QTextBlock CodePlainTextEdit::getFirstVisibleBlock() const
+{
+    return this->firstVisibleBlock();
+}
+
+QRectF CodePlainTextEdit::getBlockBoundingGeometry(const QTextBlock &block) const
+{
+    return this->blockBoundingGeometry(block);
+}
+
+QPointF CodePlainTextEdit::getContentOffset() const
+{
+    return this->contentOffset();
+}

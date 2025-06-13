@@ -5,6 +5,7 @@
 #ifndef LINEHIGHLIGHTWIDGET_H
 #define LINEHIGHLIGHTWIDGET_H
 
+#include "codeplaintextedit.h"
 #include <QWidget>
 #include <QColor>
 
