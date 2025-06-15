@@ -75,6 +75,8 @@ set(PROJECT_SOURCES
         codeplaintextedit.h
         lspsettingsdialog.cpp
         lspsettingsdialog.h
+        largefileloader.h
+        largefileloader.cpp
 )
 
 if(QT_VERSION_MAJOR GREATER_EQUAL 6)

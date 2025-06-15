@@ -10,6 +10,7 @@
 #include "completionwidget.h"
 #include "diagnostictooltip.h"
 #include "codeplaintextedit.h"
+#include "largefileloader.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -94,6 +95,8 @@ public:
 private slots: // функции, которые будут вызваны в ответ на определенные события
 
     void onOpenFileClicked(); // вызывается при вызове пункта мен дл открытия файлы
+    void onFileLoadingFinished(bool success, const QString &errorString);
+    void onFileLoadingProgress(int percentage);
     void onSaveFileClicked(); // сохранение файла
     void onSaveAsFileClicked(); // сохрание под новым именем
     void onExitClicked(); // для выхода из приложения
@@ -224,7 +227,7 @@ private:
     // void handleEditorMousePressEvent(QMouseEvent *event); // для Ctrl+Click
 
     QString currentFilePath; // хранение пути к текущему открытому файлу, используется, чтобы знать куда записывать изменения
-
+    LargeFileLoader *m_fileLoader;
     QFileSystemModel *fileSystemModel; // добавление указателя на QFileSystemmodel (древовидный вид файловый системы слева)
     QWebSocket *socket = nullptr;
     CppHighlighter *highlighter;
