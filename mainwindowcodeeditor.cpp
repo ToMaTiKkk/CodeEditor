@@ -237,6 +237,11 @@ void MainWindowCodeEditor::setupCodeEditorArea()
     actPrev->setShortcut(QKeySequence(Qt::ShiftModifier | Qt::Key_F2));
     connect(actPrev, &QAction::triggered, this, &MainWindowCodeEditor::prevDiagnostic);
     addAction(actPrev);
+
+    // подключение загрузки больших файлов
+    m_fileLoader = new LargeFileLoader(m_codeEditor, this);
+    connect(m_fileLoader, &LargeFileLoader::loadingFinished, this, &MainWindowCodeEditor::onFileLoadingFinished);
+    connect(m_fileLoader, &LargeFileLoader::progressChanged, this, &MainWindowCodeEditor::onFileLoadingProgress);
 }
 
 void MainWindowCodeEditor::setupLsp()
@@ -1502,76 +1507,119 @@ void MainWindowCodeEditor::onSaveSessionClicked() {
     }
 }
 
+void MainWindowCodeEditor::onFileLoadingProgress(int percentage)
+{
+    statusBar()->showMessage(tr("Загрузка файла: %1%").arg(percentage));
+}
+
+void MainWindowCodeEditor::onFileLoadingFinished(bool success, const QString &errorString)
+{
+    statusBar()->clearMessage(); // убираем прогресс в статус баре
+    loadingFile = false;
+
+    if (!success) {
+        QMessageBox *message = new QMessageBox(this);
+        message->setWindowTitle(tr("ОШИБКА"));
+        message->setText("Невозможно открыть файл: " + errorString);
+        message->show();
+
+        // избавляемся от мусора
+        currentFilePath.clear();
+        m_codeEditor->clear();
+        m_shadowDocumentText.clear();
+        return;
+    }
+
+    m_shadowDocumentText = m_fileLoader->loadedText();
+    lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
+    lineNumberArea->update(); // принудительно перерисовать область номеров
+    highlighter->rehighlight();
+    m_codeEditor->moveCursor(QTextCursor::Start);
+
+    // переопределяем язык по расширени и перезапускаем севрер
+    QSettings settings("ToMaTiK_Inc", "BAM_IDE");
+    QString ext = QFileInfo(currentFilePath).suffix().toLower();
+    // если в мэпе нет, то по умолчанию предпочтительный используем PrefferedLanguageID
+    QString languageId = g_extensionToLanguage.value(ext, settings.value("LSP/PrefferedLanguage", "cpp").toString());
+
+    const qint64 LSP_SIZE_LIMIT_BYTES = 5 * 1024 * 1024; // 5 Мб лимит на открытый файл, если больше, то лсп не работает
+    const qint64 HIGHLIGHTER_SIZE_LIMIT_BYTES = 2 * 1024 * 1024;
+    bool isFileTooLarge = m_shadowDocumentText.toUtf8().size() >= LSP_SIZE_LIMIT_BYTES;
+
+    // если для этого языка в принципе не найден или не доступен анализ
+    if (!ensureLspForLanguage(languageId)) {
+        return;
+    }
+
+    if (isFileTooLarge) {
+        qWarning() << "Файл" << currentFilePath << "слишком большой (" << m_shadowDocumentText.toUtf8().size() << "байт), LSP-анализ для него отключен";
+        updateLspStatus(tr("LSP[%1]: Файл слишком большой").arg(languageId));
+        m_currentLspFileUri.clear(); // очищаем чтобы не слать запросы
+
+        if (m_lspManager && m_lspManager->isReady()) {
+            restartLspForLanguage(""); // останавливаем уже запущенный lsp
+        }
+        return;
+    }
+
+    if (m_shadowDocumentText.toUtf8().size() >= HIGHLIGHTER_SIZE_LIMIT_BYTES) {
+        qDebug() << "Файл слишком большой для подсветки синтаксиса, отключаем";
+        highlighter->setDocument(nullptr);
+    } else {
+        highlighter->setDocument(m_codeEditor->document()); // подключаемся на всякий обратно
+        highlighter->rehighlight();
+    }
+    restartLspForLanguage(languageId);
+    // LSP открываем новый файл
+    m_currentLspFileUri = getFileUri(currentFilePath);
+    m_currentDocumentVersion = 1;
+    if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+        qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
+        m_lspManager->notifyDidOpen(m_currentLspFileUri, m_shadowDocumentText, m_currentDocumentVersion);
+    }
+
+    // ОТправка соо на сервер с полным содержимым файла
+    QJsonObject fileUpdate;
+    fileUpdate["type"] = "file_content_update";
+    fileUpdate["text"] = m_shadowDocumentText;
+    fileUpdate["client_id"] = m_clientId;
+    fileUpdate["username"] = m_username;
+    QJsonDocument doc(fileUpdate);
+    QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    if (socket && socket->state() == QAbstractSocket::ConnectedState)
+    {
+        socket->sendTextMessage(message);
+        qDebug() << "Отправлено сообщение о загрузку файла на сервер";
+    }
+    statusBar()->showMessage("Открыт файл: " + currentFilePath, 3000);
+}
+
 void MainWindowCodeEditor::onOpenFileClicked()
 {
     if (!maybeSave()) {
         return; // нажали отмену
     }
 
-    QString fileName = QFileDialog::getOpenFileName(this, "Открытить файл"); // открытие диалогового окна для выбора файла
-    if (!fileName.isEmpty()) {
-        QFile file(fileName); // при непустом файле создается объект для работы с файлом
-        QString fileContent;
-        if (file.open(QFile::ReadOnly | QFile::Text)) { // открытие файла для чтения в текстовом режиме
-            // LSP закрываем предыдущий файл
-            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
-                m_lspManager->notifyDidClose(m_currentLspFileUri);
-            }
-            m_diagnostics.clear();
-            updateDiagnosticsView();
-
-            // считывание всего текста из файла и устанавливание в редактор CodeEditor
-            QTextStream in(&file);
-            fileContent = in.readAll();
-            file.close();
-            currentFilePath = fileName; // сохраняем локальный путь
-            {
-                QSignalBlocker blocker(m_codeEditor->document());
-                loadingFile = true;
-                if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
-                m_codeEditor->setPlainText(fileContent); // установка текста локально
-                m_shadowDocumentText = m_codeEditor->toPlainText();
-                lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
-                lineNumberArea->update(); // принудительно перерисовать область номеров
-                loadingFile = false;
-            }
-            highlighter->rehighlight();
-
-            // переопределяем язык по расширени и перезапускаем севрер
-            QSettings settings("ToMaTiK_Inc", "BAM_IDE");
-            QString ext = QFileInfo(currentFilePath).suffix().toLower();
-            // если в мэпе нет, то по умолчанию предпочтительный используем PrefferedLanguageID
-            QString languageId = g_extensionToLanguage.value(ext, settings.value("LSP/PrefferedLanguage", "cpp").toString());
-
-            if (ensureLspForLanguage(languageId)) {
-                restartLspForLanguage(languageId);
-
-                // LSP открываем новый файл
-                m_currentLspFileUri = getFileUri(currentFilePath);
-                m_currentDocumentVersion = 1;
-                if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
-                    qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
-                    m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
-                }
-            }
-
-            // ОТправка соо на сервер с полным содержимым файла
-            QJsonObject fileUpdate;
-            fileUpdate["type"] = "file_content_update";
-            fileUpdate["text"] = fileContent;
-            fileUpdate["client_id"] = m_clientId;
-            fileUpdate["username"] = m_username;
-            QJsonDocument doc(fileUpdate);
-            QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-            if (socket && socket->state() == QAbstractSocket::ConnectedState)
-            {
-                socket->sendTextMessage(message);
-                qDebug() << "Отправлено сообщение о загрузку файла на сервер";
-            }
-        } else {
-            QMessageBox::critical(this, "ОШИБКА", "Невозможно открыть файл");
-        }
+    QString fileName = QFileDialog::getOpenFileName(this, "Открыть файл"); // открытие диалогового окна для выбора файла
+    if (fileName.isEmpty()) {
+        return;
     }
+
+    // LSP закрываем предыдущий файл
+    if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+        m_lspManager->notifyDidClose(m_currentLspFileUri);
+    }
+    m_diagnostics.clear();
+    updateDiagnosticsView();
+    highlighter->setDocument(nullptr);
+    m_codeEditor->clear();
+    m_shadowDocumentText.clear();
+
+    currentFilePath = fileName;
+    loadingFile = true; // блокируем contentsChange
+
+    qDebug() << "Запуск асинхронной загрузки для файла:" << fileName;
+    m_fileLoader->loadFile(currentFilePath);
 }
 
 void MainWindowCodeEditor::onSaveFileClicked()
@@ -1685,7 +1733,7 @@ void MainWindowCodeEditor::onNewFileClicked()
     }
     m_diagnostics.clear();
     updateDiagnosticsView();
-
+    highlighter->setDocument(nullptr);
     // очищения поля редактирование и очищение пути к текущему файлу
     m_codeEditor->clear();
     m_shadowDocumentText.clear();
@@ -1772,73 +1820,32 @@ void MainWindowCodeEditor::onFileSystemTreeViewDoubleClicked(const QModelIndex &
         if (!maybeSave()) {
             return; // нажали отмену
         }
+
         QString filePath = fileInfo.absoluteFilePath(); // если это файл, вы получаем полный путь
         QFile file(filePath);
-        if (file.open(QFile::ReadOnly | QFile::Text)) {
-            // LSP закрываем предыдущий файл
-            if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
-                m_lspManager->notifyDidClose(m_currentLspFileUri);
-            }
-            m_diagnostics.clear();
-            updateDiagnosticsView();
-
-            QTextStream in(&file);
-            QString fileContent = in.readAll();
-            file.close();
-            currentFilePath = filePath;
-            {
-                QSignalBlocker blocker(m_codeEditor->document());
-                loadingFile = true;
-                if (m_mutedClients.contains(m_clientId)) return; // если замьючен, то локально текст не обновится
-                m_codeEditor->setPlainText(fileContent); // установка текста локально
-                m_shadowDocumentText = m_codeEditor->toPlainText();
-                lineNumberArea->updateLineNumberAreaWidth(); // пересчитать ширину
-                lineNumberArea->update(); // принудительно перерисовать область номеров
-                loadingFile = false;
-            }
-            highlighter->rehighlight();
-
-            // переопределяем язык по расширени и перезапускаем севрер
-            QSettings settings("ToMaTiK_Inc", "BAM_IDE");
-            QString ext = QFileInfo(currentFilePath).suffix().toLower(); // расширение файла берем
-            // если в мэпе нет, то по умолчанию предпочтительный используем PrefferedLanguageID
-            QString languageId = g_extensionToLanguage.value(ext, settings.value("LSP/PrefferedLanguage", "cpp").toString());
-
-            if (ensureLspForLanguage(languageId)) {
-                restartLspForLanguage(languageId);
-
-                // LSP открываем новый файл
-                m_currentLspFileUri = getFileUri(currentFilePath);
-                m_currentDocumentVersion = 1;
-                if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
-                    qDebug() << ">>> Вызов notifyDidOpen для:" << m_currentLspFileUri;
-                    m_lspManager->notifyDidOpen(m_currentLspFileUri, fileContent, m_currentDocumentVersion);
-                }
-            }
-
-            if (m_currentLspLanguageId == languageId && m_lspManager) {
-                updateLspStatus(tr("LSP[%1]: %2").arg(languageId, m_lspManager->executablePath()));
-            } else {
-                updateLspStatus(tr("LSP[%1]: %2").arg(languageId, tr("Отключён")));
-            }
-
-            // ОТправка соо на сервер с полным содержимым файла
-            QJsonObject fileUpdate;
-            fileUpdate["type"] = "file_content_update";
-            fileUpdate["text"] = fileContent;
-            fileUpdate["client_id"] = m_clientId;
-            fileUpdate["username"] = m_username;
-            QJsonDocument doc(fileUpdate);
-            QString message = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-            if (socket && socket->state() == QAbstractSocket::ConnectedState)
-            {
-                socket->sendTextMessage(message);
-                qDebug() << "Отправлено сообщение о загрузку файла на сервер";
-            }
-            statusBar()->showMessage("Открыт файл: " + filePath);
-        } else {
-            QMessageBox::critical(this, "ОШИБКА", "Невозможно открыть файл: " + filePath);
+        if (!file.open(QFile::ReadOnly | QFile::Text)) {
+            QMessageBox *message = new QMessageBox(this);
+            message->setWindowTitle(tr("ОШИБКА"));
+            message->setText("Невозможно открыть файл: " + filePath);
+            message->show();
+            return;
         }
+        file.close();
+
+        // LSP закрываем предыдущий файл
+        if (m_lspManager && m_lspManager->isReady() && !m_currentLspFileUri.isEmpty()) {
+            m_lspManager->notifyDidClose(m_currentLspFileUri);
+        }
+        m_diagnostics.clear();
+        updateDiagnosticsView();
+        m_codeEditor->clear();
+        m_shadowDocumentText.clear();
+
+        currentFilePath = filePath;
+        loadingFile = true; // блокируем contentsChange
+
+        qDebug() << "Запуск асинхронной загрузки для файла:" << filePath;
+        m_fileLoader->loadFile(currentFilePath);
     }
 }
 
