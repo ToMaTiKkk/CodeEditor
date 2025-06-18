@@ -5,12 +5,14 @@
 #include "cursorwidget.h"
 #include "linehighlightwidget.h"
 #include "cpphighlighter.h"
-#include "linenumberarea.h"
+//#include "linenumberarea.h"
 #include "lspmanager.h"
 #include "completionwidget.h"
 #include "diagnostictooltip.h"
 #include "codeplaintextedit.h"
 #include "largefileloader.h"
+#include "documentmodel.h"
+#include "virtualcodeeditor.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -190,7 +192,7 @@ private:
 
     // настройки
     void setupMainWindow();       // основные настройки окна
-    void setupCodeEditorArea();   // редактора и нумерации
+    //void setupCodeEditorArea();   // редактора и нумерации
     void setupChatWidget();       // чата
     void setupUserFeatures();     // меню пользователей, таймера и тп
     void setupMenuBarActions();   // подключение сигналов меню
@@ -234,8 +236,10 @@ private:
     bool loadingFile = false;
     bool m_isDarkTheme;
     bool m_isAdmin;
-    LineNumberArea *lineNumberArea;
-    CodePlainTextEdit *m_codeEditor;
+    //LineNumberArea *lineNumberArea;
+    //CodePlainTextEdit *m_codeEditor;
+    DocumentModel* m_documentModel;
+    VirtualCodeEditor* m_codeEditor; // Переименовываем наш
     bool maybeSave();
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)

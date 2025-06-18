@@ -77,6 +77,10 @@ set(PROJECT_SOURCES
         lspsettingsdialog.h
         largefileloader.h
         largefileloader.cpp
+        virtualcodeeditor.cpp
+        virtualcodeeditor.h
+        documentmodel.cpp
+        documentmodel.h
 )
 
 if(QT_VERSION_MAJOR GREATER_EQUAL 6)
