@@ -9,8 +9,10 @@
 #include "lspmanager.h"
 #include "completionwidget.h"
 #include "diagnostictooltip.h"
-#include "codeplaintextedit.h"
+//#include "codeplaintextedit.h"
 #include "largefileloader.h"
+#include "documentmodel.h"
+#include "virtualcodeeditor.h"
 #include <QMainWindow>
 #include <QFileSystemModel>
 #include <QtWebSockets/QWebSocket>
@@ -234,8 +236,10 @@ private:
     bool loadingFile = false;
     bool m_isDarkTheme;
     bool m_isAdmin;
-    LineNumberArea *lineNumberArea;
-    CodePlainTextEdit *m_codeEditor;
+    //LineNumberArea *lineNumberArea;
+    //CodePlainTextEdit *m_codeEditor;
+    DocumentModel *m_documentModel;
+    VirtualCodeEditor *m_codeEditor;
     bool maybeSave();
     QMenu *m_userListMenu; // добавление для списка пользователей
     QAction *m_currentUserAction; // текущий выбранный пункт меню пользователя (для контекстного меню списка пользователей в сессии)

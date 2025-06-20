@@ -1,11 +1,15 @@
+// CodeEditor - A collaborative C++ IDE with LSP, chat, and terminal integration.
+// Copyright (C) 2025 ToMaTiKkk
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "largefileloader.h"
 #include <QTextStream>
 #include <QSignalBlocker>
 #include <QCoreApplication>
 
-LargeFileLoader::LargeFileLoader(QPlainTextEdit *editor, QObject *parent)
+LargeFileLoader::LargeFileLoader(DocumentModel *model, QObject *parent)
     : QObject(parent)
-    , m_editor(editor)
+    , m_model(model)
     , m_textStream(nullptr)
     , m_fileSize(0)
 {
@@ -18,8 +22,11 @@ void LargeFileLoader::loadFile(const QString &filePath)
 {
     if (m_file.isOpen()) {
         m_file.close();
-        delete m_textStream;
-        m_textStream = nullptr;
+    }
+
+    // перед загрузкой всегда очищаем модель
+    if (m_model) {
+        m_model->clear();
     }
 
     m_file.setFileName(filePath);
@@ -30,35 +37,34 @@ void LargeFileLoader::loadFile(const QString &filePath)
     }
 
     m_fileSize = m_file.size();
-    m_textStream = new QTextStream(&m_file);
 
-    m_loadedText.clear();
-    m_editor->clear();
-    m_editor->document()->blockSignals(true); // блокируем отправку сигналов в лсп в contentsChange
     m_timer.start(); // первый чанк запускаем
 }
 
 void LargeFileLoader::loadNextChunk()
 {
     if (!m_file.isOpen() || m_file.atEnd()) {
-        m_editor->document()->blockSignals(false);
-        m_file.close();
-        delete m_textStream;
-        m_textStream = nullptr;
+        if (m_file.isOpen()) {
+            m_file.close();
+        }
+        // успешная загрузка
         emit loadingFinished(true, "");
         return;
     }
 
-    QString chunk = m_textStream->read(m_chunkSize);
-    // вставка в конец документа
-    QTextCursor cursor(m_editor->document());
-    cursor.movePosition(QTextCursor::End);
-    cursor.insertText(chunk);
-    m_loadedText.append(chunk);
+    QByteArray chunkBytes = m_file.read(m_chunkSize);
+    QString chunk = QString::fromUtf8(chunkBytes);
+
+    // чанк в модель добавляем
+    if (m_model) {
+        m_model->appendChunk(chunk);
+    }
 
     // обновление прогресса загрузки
     qint64 currentPos = m_file.pos();
-    emit progressChanged(static_cast<int>((currentPos * 100) / m_fileSize));
+    if (m_fileSize > 0){
+        emit progressChanged(static_cast<int>((currentPos * 100) / m_fileSize));
+    }
 
     // даем UI время на обработку событий (перерисовку и тп) чтобы не было зависаний
     QCoreApplication::processEvents();
@@ -67,5 +73,5 @@ void LargeFileLoader::loadNextChunk()
 
 QString LargeFileLoader::loadedText() const
 {
-    return m_loadedText;
+    return "This method not supported!!! Need delete. Get data from DocumentModel";
 }
